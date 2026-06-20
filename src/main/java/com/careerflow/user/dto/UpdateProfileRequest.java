@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 public class UpdateProfileRequest {
@@ -29,4 +31,8 @@ public class UpdateProfileRequest {
     private String githubUrl;
     private String portfolioUrl;
     private String bio;
+
+    private List<EducationDto> education;
+    private List<ExperienceDto> experience;
+    private List<ProjectDto> projects;
 }

@@ -3,24 +3,29 @@ package com.careerflow.user;
 import com.careerflow.config.FileStorageService;
 import com.careerflow.document.Document;
 import com.careerflow.document.DocumentDto;
+import com.careerflow.document.DocumentRepository;
 import com.careerflow.exception.BadRequestException;
-import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.user.dto.*;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.file.Files;
+import java.net.MalformedURLException;
 import java.nio.file.Paths;
-import java.util.Base64;
 
 @Slf4j
 @Service
@@ -36,17 +41,49 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final FileStorageService fileStorageService;
+    private final DocumentRepository documentRepository;
 
     public UserProfileResponse getMyProfile() {
         return toProfileResponse(getCurrentUser());
     }
 
-    public UserProfileResponse saveProfile(UpdateProfileRequest request,
-                                           MultipartFile resume,
-                                           MultipartFile coverLetter) {
+    public ResponseEntity<Resource> downloadDocument(Long documentId) {
         User user = getCurrentUser();
-        applyProfileFields(user, request, resume, coverLetter, null);
-        return toProfileResponse(userRepository.save(user));
+
+        boolean owned = (user.getResume() != null && documentId.equals(user.getResume().getId()))
+                || (user.getCoverLetter() != null && documentId.equals(user.getCoverLetter().getId()));
+
+        if (!owned) {
+            throw new ResourceNotFoundException("Document not found");
+        }
+
+        Document doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found"));
+
+        try {
+            Resource resource = new UrlResource(Paths.get(doc.getStoredPath()).toUri());
+            if (!resource.exists() || !resource.isReadable()) {
+                throw new ResourceNotFoundException("File not found on server");
+            }
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(doc.getContentType()))
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=\"" + doc.getOriginalName() + "\"")
+                    .body(resource);
+        } catch (MalformedURLException e) {
+            throw new ResourceNotFoundException("File not found on server");
+        }
+    }
+
+    public ProfileUpdateResponse saveProfile(UpdateProfileRequest request,
+                                             MultipartFile resume,
+                                             MultipartFile coverLetter) {
+        User user = getCurrentUser();
+        Map<String, FieldChange> changes = new LinkedHashMap<>();
+        applyProfileFields(user, request, resume, coverLetter, changes);
+        applyListFields(user, request, changes);
+        userRepository.save(user);
+        return new ProfileUpdateResponse(changes);
     }
 
     public ProfileUpdateResponse updateProfile(UpdateProfileRequest request,
@@ -55,8 +92,56 @@ public class UserService {
         User user = getCurrentUser();
         Map<String, FieldChange> changes = new LinkedHashMap<>();
         applyProfileFields(user, request, resume, coverLetter, changes);
+        appendListFields(user, request, changes);
         userRepository.save(user);
         return new ProfileUpdateResponse(changes);
+    }
+
+    // POST — replaces the entire list
+    private void applyListFields(User user, UpdateProfileRequest request,
+                                 Map<String, FieldChange> changes) {
+        if (request == null) return;
+
+        if (request.getEducation() != null) {
+            track(changes, "education", user.getEducation(), request.getEducation());
+            user.setEducation(request.getEducation());
+        }
+        if (request.getExperience() != null) {
+            track(changes, "experience", user.getExperience(), request.getExperience());
+            user.setExperience(request.getExperience());
+        }
+        if (request.getProjects() != null) {
+            track(changes, "projects", user.getProjects(), request.getProjects());
+            user.setProjects(request.getProjects());
+        }
+    }
+
+    // PATCH — appends new entries to existing lists
+    private void appendListFields(User user, UpdateProfileRequest request,
+                                  Map<String, FieldChange> changes) {
+        if (request == null) return;
+
+        if (request.getEducation() != null) {
+            List<EducationDto> merged = new ArrayList<>(
+                    user.getEducation() != null ? user.getEducation() : List.of());
+            merged.addAll(request.getEducation());
+            track(changes, "education", user.getEducation(), request.getEducation());
+            user.setEducation(merged);
+        }
+        if (request.getExperience() != null) {
+            List<ExperienceDto> merged = new ArrayList<>(
+                    user.getExperience() != null ? user.getExperience() : List.of());
+            merged.addAll(request.getExperience());
+            track(changes, "experience", user.getExperience(), request.getExperience());
+            user.setExperience(merged);
+        }
+        if (request.getProjects() != null) {
+            List<ProjectDto> merged = new ArrayList<>(
+                    user.getProjects() != null ? user.getProjects() : List.of());
+            merged.addAll(request.getProjects());
+            track(changes, "projects", user.getProjects(), request.getProjects());
+            user.setProjects(merged);
+        }
     }
 
     private void applyProfileFields(User user, UpdateProfileRequest request,
@@ -137,67 +222,6 @@ public class UserService {
         if (changes != null) changes.put(field, new FieldChange(from, to));
     }
 
-    public EducationDto addEducation(EducationDto dto) {
-        User user = getCurrentUser();
-        List<EducationDto> list = user.getEducation() != null
-                ? new java.util.ArrayList<>(user.getEducation()) : new java.util.ArrayList<>();
-
-        list.stream()
-                .filter(e -> java.util.Objects.equals(e.getInstitution(), dto.getInstitution())
-                        && java.util.Objects.equals(e.getDegree(), dto.getDegree())
-                        && java.util.Objects.equals(e.getFieldOfStudy(), dto.getFieldOfStudy()))
-                .findFirst()
-                .ifPresent(existing -> {
-                    throw new DuplicateResourceException(
-                            "Education entry already exists for " + dto.getDegree() + " at " + dto.getInstitution());
-                });
-
-        list.add(dto);
-        user.setEducation(list);
-        userRepository.save(user);
-        return dto;
-    }
-
-    public ExperienceDto addExperience(ExperienceDto dto) {
-        User user = getCurrentUser();
-        List<ExperienceDto> list = user.getExperience() != null
-                ? new java.util.ArrayList<>(user.getExperience()) : new java.util.ArrayList<>();
-
-        list.stream()
-                .filter(e -> java.util.Objects.equals(e.getCompany(), dto.getCompany())
-                        && java.util.Objects.equals(e.getRole(), dto.getRole())
-                        && java.util.Objects.equals(e.getStartDate(), dto.getStartDate()))
-                .findFirst()
-                .ifPresent(existing -> {
-                    throw new DuplicateResourceException(
-                            "Experience entry already exists for " + dto.getRole() + " at " + dto.getCompany());
-                });
-
-        list.add(dto);
-        user.setExperience(list);
-        userRepository.save(user);
-        return dto;
-    }
-
-    public ProjectDto addProject(ProjectDto dto) {
-        User user = getCurrentUser();
-        List<ProjectDto> list = user.getProjects() != null
-                ? new java.util.ArrayList<>(user.getProjects()) : new java.util.ArrayList<>();
-
-        list.stream()
-                .filter(p -> java.util.Objects.equals(p.getName(), dto.getName()))
-                .findFirst()
-                .ifPresent(existing -> {
-                    throw new DuplicateResourceException(
-                            "Project '" + dto.getName() + "' already exists");
-                });
-
-        list.add(dto);
-        user.setProjects(list);
-        userRepository.save(user);
-        return dto;
-    }
-
     private User getCurrentUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
@@ -231,19 +255,7 @@ public class UserService {
                 .originalName(doc.getOriginalName())
                 .contentType(doc.getContentType())
                 .fileSize(doc.getFileSize())
-                .content(encodeFile(doc.getStoredPath()))
                 .uploadedAt(doc.getUploadedAt())
                 .build();
-    }
-
-    private String encodeFile(String filePath) {
-        if (filePath == null) return null;
-        try {
-            byte[] bytes = Files.readAllBytes(Paths.get(filePath));
-            return Base64.getEncoder().encodeToString(bytes);
-        } catch (Exception e) {
-            log.warn("Could not read file at path {}: {}", filePath, e.getMessage());
-            return null;
-        }
     }
 }
