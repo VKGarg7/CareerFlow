@@ -1,6 +1,6 @@
 spring.application.name=careerflow
 spring.security.user.name=admin
-spring.security.user.password=admin123
+spring.security.user.password=your_admin_password
 
 
 # Server
@@ -9,7 +9,7 @@ server.port=8080
 # Database
 spring.datasource.url=jdbc:postgresql://localhost:5432/careerflow
 spring.datasource.username=postgres
-spring.datasource.password=Vansh#147
+spring.datasource.password=your_postgres_password
 spring.datasource.driver-class-name=org.postgresql.Driver
 
 # JPA
