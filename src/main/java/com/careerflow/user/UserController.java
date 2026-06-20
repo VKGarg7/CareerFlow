@@ -42,8 +42,15 @@ public class UserController {
     @PatchMapping(value = "/profile/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProfileUpdateResponse> updateDocuments(
             @RequestPart(required = false) MultipartFile resume,
-            @RequestPart(required = false) MultipartFile coverLetter) {
-        return ResponseEntity.ok(userService.updateProfile(null, resume, coverLetter));
+            @RequestPart(required = false) MultipartFile coverLetter,
+            @RequestParam(required = false) Long deleteDocumentId) {
+        return ResponseEntity.ok(userService.updateDocuments(resume, coverLetter, deleteDocumentId));
+    }
+
+    @DeleteMapping("/profile")
+    public ResponseEntity<Void> deleteProfile() {
+        userService.deleteProfile();
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/documents/{id}")

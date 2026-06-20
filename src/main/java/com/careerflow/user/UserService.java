@@ -47,6 +47,11 @@ public class UserService {
         return toProfileResponse(getCurrentUser());
     }
 
+    public void deleteProfile() {
+        User user = getCurrentUser();
+        userRepository.delete(user);
+    }
+
     public ResponseEntity<Resource> downloadDocument(Long documentId) {
         User user = getCurrentUser();
 
@@ -73,6 +78,44 @@ public class UserService {
         } catch (MalformedURLException e) {
             throw new ResourceNotFoundException("File not found on server");
         }
+    }
+
+    public ProfileUpdateResponse updateDocuments(MultipartFile resume,
+                                                MultipartFile coverLetter,
+                                                Long deleteDocumentId) {
+        User user = getCurrentUser();
+        Map<String, FieldChange> changes = new LinkedHashMap<>();
+
+        if (deleteDocumentId != null) {
+            if (user.getResume() != null && deleteDocumentId.equals(user.getResume().getId())) {
+                track(changes, "resume", user.getResume().getOriginalName(), null);
+                documentRepository.deleteById(deleteDocumentId);
+                user.setResume(null);
+            } else if (user.getCoverLetter() != null && deleteDocumentId.equals(user.getCoverLetter().getId())) {
+                track(changes, "coverLetter", user.getCoverLetter().getOriginalName(), null);
+                documentRepository.deleteById(deleteDocumentId);
+                user.setCoverLetter(null);
+            } else {
+                throw new ResourceNotFoundException("Document not found");
+            }
+        }
+
+        if (resume != null && !resume.isEmpty()) {
+            String oldName = user.getResume() != null ? user.getResume().getOriginalName() : null;
+            Document doc = fileStorageService.storeDocument(resume, "resumes");
+            track(changes, "resume", oldName, resume.getOriginalFilename());
+            user.setResume(doc);
+        }
+
+        if (coverLetter != null && !coverLetter.isEmpty()) {
+            String oldName = user.getCoverLetter() != null ? user.getCoverLetter().getOriginalName() : null;
+            Document doc = fileStorageService.storeDocument(coverLetter, "cover-letters");
+            track(changes, "coverLetter", oldName, coverLetter.getOriginalFilename());
+            user.setCoverLetter(doc);
+        }
+
+        userRepository.save(user);
+        return new ProfileUpdateResponse(changes);
     }
 
     public ProfileUpdateResponse saveProfile(UpdateProfileRequest request,
