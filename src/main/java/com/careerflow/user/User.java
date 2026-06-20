@@ -1,5 +1,6 @@
 package com.careerflow.user;
 
+import com.careerflow.document.Document;
 import com.careerflow.user.dto.EducationDto;
 import com.careerflow.user.dto.ExperienceDto;
 import com.careerflow.user.dto.ProjectDto;
@@ -39,8 +40,14 @@ public class User {
     private String linkedinUrl;
     private String githubUrl;
     private String portfolioUrl;
-    private String resumePath;
-    private String coverLetterPath;
+
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "resume_id")
+    private Document resume;
+
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "cover_letter_id")
+    private Document coverLetter;
 
     @Column(columnDefinition = "TEXT")
     private String bio;

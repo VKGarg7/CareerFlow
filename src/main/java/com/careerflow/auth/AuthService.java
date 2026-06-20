@@ -148,6 +148,10 @@ public class AuthService {
         }
 
         User user = resetToken.getUser();
+
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword()))
+            throw new BadRequestException("New password must be different from the current password");
+
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
@@ -166,6 +170,9 @@ public class AuthService {
 
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword()))
             throw new BadRequestException("Current password is incorrect");
+
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword()))
+            throw new BadRequestException("New password must be different from the current password");
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);

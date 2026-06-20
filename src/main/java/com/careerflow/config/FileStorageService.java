@@ -1,5 +1,6 @@
 package com.careerflow.config;
 
+import com.careerflow.document.Document;
 import com.careerflow.exception.BadRequestException;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,22 +24,28 @@ public class FileStorageService {
         Files.createDirectories(Paths.get(uploadDir));
     }
 
-    public String store(MultipartFile file, String subfolder) {
-        String originalFilename = file.getOriginalFilename();
-        String extension = originalFilename != null && originalFilename.contains(".")
+    public Document storeDocument(MultipartFile file, String subfolder) {
+        String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
+        String extension = originalFilename.contains(".")
                 ? originalFilename.substring(originalFilename.lastIndexOf("."))
                 : "";
 
-        String filename = UUID.randomUUID() + extension;
+        String storedFilename = UUID.randomUUID() + extension;
         Path dir = Paths.get(uploadDir, subfolder);
+        Path filePath = dir.resolve(storedFilename);
 
         try {
             Files.createDirectories(dir);
-            Files.copy(file.getInputStream(), dir.resolve(filename));
+            Files.copy(file.getInputStream(), filePath);
         } catch (IOException e) {
             throw new BadRequestException("Failed to store file: " + e.getMessage());
         }
 
-        return subfolder + "/" + filename;
+        return Document.builder()
+                .originalName(originalFilename)
+                .storedPath(filePath.toString())
+                .fileSize(file.getSize())
+                .contentType(file.getContentType())
+                .build();
     }
 }

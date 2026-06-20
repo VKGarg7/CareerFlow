@@ -1,6 +1,7 @@
 package com.careerflow.user;
 
 import com.careerflow.user.dto.*;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -37,7 +38,7 @@ public class UserController {
     }
 
     @PatchMapping(value = "/profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<UserProfileResponse> updateProfile(
+    public ResponseEntity<ProfileUpdateResponse> updateProfile(
             @RequestParam(required = false) String firstName,
             @RequestParam(required = false) String lastName,
             @RequestParam(required = false) String email,
@@ -48,23 +49,23 @@ public class UserController {
             @RequestParam(required = false) String bio,
             @RequestPart(required = false) MultipartFile resume,
             @RequestPart(required = false) MultipartFile coverLetter) {
-        return ResponseEntity.ok(userService.saveProfile(
+        return ResponseEntity.ok(userService.updateProfile(
                 buildRequest(firstName, lastName, email, phoneNumber, linkedinUrl, githubUrl, portfolioUrl, bio),
                 resume, coverLetter));
     }
 
     @PostMapping("/education")
-    public ResponseEntity<UserProfileResponse> addEducation(@RequestBody EducationDto dto) {
+    public ResponseEntity<EducationDto> addEducation(@Valid @RequestBody EducationDto dto) {
         return ResponseEntity.ok(userService.addEducation(dto));
     }
 
     @PostMapping("/experience")
-    public ResponseEntity<UserProfileResponse> addExperience(@RequestBody ExperienceDto dto) {
+    public ResponseEntity<ExperienceDto> addExperience(@Valid @RequestBody ExperienceDto dto) {
         return ResponseEntity.ok(userService.addExperience(dto));
     }
 
     @PostMapping("/projects")
-    public ResponseEntity<UserProfileResponse> addProject(@RequestBody ProjectDto dto) {
+    public ResponseEntity<ProjectDto> addProject(@Valid @RequestBody ProjectDto dto) {
         return ResponseEntity.ok(userService.addProject(dto));
     }
 
