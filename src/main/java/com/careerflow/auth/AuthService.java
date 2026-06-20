@@ -9,8 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -39,12 +39,9 @@ public class AuthService {
             throw new BadRequestException("An account with this email already exists");
         }
 
-        String fullName = request.getLastName() != null && !request.getLastName().isBlank()
-                ? request.getFirstName() + " " + request.getLastName()
-                : request.getFirstName();
-
         User user = User.builder()
-                .fullName(fullName)
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
                 .email(request.getEmail().toLowerCase())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .build();
@@ -53,7 +50,8 @@ public class AuthService {
 
         return RegisterResponse.builder()
                 .id(saved.getId())
-                .fullName(saved.getFullName())
+                .firstName(saved.getFirstName())
+                .lastName(saved.getLastName())
                 .email(saved.getEmail())
                 .message("Account created successfully")
                 .build();
@@ -67,7 +65,7 @@ public class AuthService {
                             request.getPassword()
                     )
             );
-        } catch (BadCredentialsException e) {
+        } catch (AuthenticationException e) {
             throw new BadRequestException("Invalid email or password");
         }
 
@@ -78,7 +76,8 @@ public class AuthService {
 
         return LoginResponse.builder()
                 .id(user.getId())
-                .fullName(user.getFullName())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
                 .email(user.getEmail())
                 .token(token)
                 .build();
