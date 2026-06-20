@@ -18,6 +18,10 @@ spring.jpa.show-sql=true
 spring.jpa.properties.hibernate.format_sql=true
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
 
+# JWT
+jwt.secret=your_hex_encoded_256bit_secret
+jwt.expiration-ms=86400000
+
 # Actuator
 management.endpoints.web.exposure.include=health,info
 management.endpoint.health.show-details=always

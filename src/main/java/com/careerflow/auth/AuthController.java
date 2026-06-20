@@ -1,5 +1,7 @@
 package com.careerflow.auth;
 
+import com.careerflow.auth.dto.LoginRequest;
+import com.careerflow.auth.dto.LoginResponse;
 import com.careerflow.auth.dto.RegisterRequest;
 import com.careerflow.auth.dto.RegisterResponse;
 import jakarta.validation.Valid;
@@ -21,5 +23,10 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        return ResponseEntity.ok(authService.login(request));
     }
 }
