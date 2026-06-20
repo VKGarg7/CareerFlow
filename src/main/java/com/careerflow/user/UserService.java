@@ -1,4 +1,4 @@
-﻿package com.careerflow.user;
+package com.careerflow.user;
 
 import com.careerflow.config.FileStorageService;
 import com.careerflow.exception.BadRequestException;
@@ -68,15 +68,6 @@ public class UserService {
         return toProfileResponse(userRepository.save(user));
     }
 
-    public UserProfileResponse removeEducation(int index) {
-        User user = getCurrentUser();
-        List<EducationDto> list = new java.util.ArrayList<>(user.getEducation());
-        if (index < 0 || index >= list.size()) throw new BadRequestException("Invalid index");
-        list.remove(index);
-        user.setEducation(list);
-        return toProfileResponse(userRepository.save(user));
-    }
-
     public UserProfileResponse addExperience(ExperienceDto dto) {
         User user = getCurrentUser();
         List<ExperienceDto> list = user.getExperience() != null ? new java.util.ArrayList<>(user.getExperience()) : new java.util.ArrayList<>();
@@ -85,28 +76,10 @@ public class UserService {
         return toProfileResponse(userRepository.save(user));
     }
 
-    public UserProfileResponse removeExperience(int index) {
-        User user = getCurrentUser();
-        List<ExperienceDto> list = new java.util.ArrayList<>(user.getExperience());
-        if (index < 0 || index >= list.size()) throw new BadRequestException("Invalid index");
-        list.remove(index);
-        user.setExperience(list);
-        return toProfileResponse(userRepository.save(user));
-    }
-
     public UserProfileResponse addProject(ProjectDto dto) {
         User user = getCurrentUser();
         List<ProjectDto> list = user.getProjects() != null ? new java.util.ArrayList<>(user.getProjects()) : new java.util.ArrayList<>();
         list.add(dto);
-        user.setProjects(list);
-        return toProfileResponse(userRepository.save(user));
-    }
-
-    public UserProfileResponse removeProject(int index) {
-        User user = getCurrentUser();
-        List<ProjectDto> list = new java.util.ArrayList<>(user.getProjects());
-        if (index < 0 || index >= list.size()) throw new BadRequestException("Invalid index");
-        list.remove(index);
         user.setProjects(list);
         return toProfileResponse(userRepository.save(user));
     }

@@ -3,6 +3,7 @@ package com.careerflow.auth;
 import com.careerflow.auth.dto.*;
 import com.careerflow.config.JwtUtil;
 import com.careerflow.exception.BadRequestException;
+import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.user.User;
 import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -152,6 +154,23 @@ public class AuthService {
         passwordResetTokenRepository.delete(resetToken);
 
         return Map.of("message", "Password reset successfully");
+    }
+
+    public Map<String, String> changePassword(ChangePasswordRequest request) {
+        if (!request.getNewPassword().equals(request.getConfirmPassword()))
+            throw new BadRequestException("Passwords do not match");
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword()))
+            throw new BadRequestException("Current password is incorrect");
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        return Map.of("message", "Password changed successfully");
     }
 
     @Scheduled(cron = "0 0 * * * *")

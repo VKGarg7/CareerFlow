@@ -1,4 +1,4 @@
-﻿package com.careerflow.user.dto;
+package com.careerflow.user.dto;
 
 import lombok.Builder;
 import lombok.Getter;
