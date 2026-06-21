@@ -29,6 +29,7 @@ export default function Layout({ children }) {
           <span className="text-xl font-bold text-blue-600">CareerFlow</span>
           <nav className="flex gap-1">
             {navLink('/dashboard', 'Dashboard')}
+            {navLink('/companies', 'Companies')}
             {navLink('/profile', 'Profile')}
           </nav>
         </div>
