@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
+@SuppressWarnings("null")
 @Service
 @RequiredArgsConstructor
 public class AuthService {
