@@ -25,7 +25,8 @@ public class FileStorageService {
     }
 
     public Document storeDocument(MultipartFile file, String subfolder) {
-        String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
+        String raw = file.getOriginalFilename();
+        String originalFilename = (raw != null && !raw.isBlank()) ? raw : "file";
         String extension = originalFilename.contains(".")
                 ? originalFilename.substring(originalFilename.lastIndexOf("."))
                 : "";

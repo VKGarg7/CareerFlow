@@ -28,6 +28,7 @@ import java.net.MalformedURLException;
 import java.nio.file.Paths;
 
 @Slf4j
+@SuppressWarnings("null")
 @Service
 @RequiredArgsConstructor
 public class UserService {
