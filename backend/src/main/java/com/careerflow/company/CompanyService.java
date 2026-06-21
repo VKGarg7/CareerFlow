@@ -2,20 +2,28 @@ package com.careerflow.company;
 
 import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
+import com.careerflow.company.dto.CompanyUpdateRequest;
+import com.careerflow.exception.BadRequestException;
+import com.careerflow.exception.ConflictException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.user.User;
 import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 
 @SuppressWarnings("null")
 @Service
 @RequiredArgsConstructor
 public class CompanyService {
+
+    private static final Set<String> SORTABLE_FIELDS =
+            Set.of("name", "industry", "location", "status", "createdAt", "updatedAt");
 
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -37,16 +45,22 @@ public class CompanyService {
         return toResponse(companyRepository.save(company));
     }
 
-    public List<CompanyResponse> getMyCompanies(Long id) {
+    public List<CompanyResponse> getMyCompanies(Long id, String search, String sortBy, String order) {
         User user = getCurrentUser();
         if (id != null) {
             return List.of(toResponse(findOwned(id, user.getId())));
         }
-        return companyRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId())
-                .stream().map(this::toResponse).toList();
+        if (!SORTABLE_FIELDS.contains(sortBy))
+            throw new BadRequestException("Invalid sortBy field. Allowed: " + SORTABLE_FIELDS);
+        Sort sort = Sort.by("asc".equalsIgnoreCase(order) ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
+        boolean hasSearch = search != null && !search.isBlank();
+        List<Company> results = hasSearch
+                ? companyRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), sort)
+                : companyRepository.findAllByUserId(user.getId(), sort);
+        return results.stream().map(this::toResponse).toList();
     }
 
-    public CompanyResponse updateCompany(Long id, CompanyRequest request) {
+    public CompanyResponse updateCompany(Long id, CompanyUpdateRequest request) {
         User user = getCurrentUser();
         Company company = findOwned(id, user.getId());
 
@@ -65,9 +79,14 @@ public class CompanyService {
         return toResponse(companyRepository.save(company));
     }
 
-    public void deleteCompany(Long id) {
+    public void deleteCompany(Long id, boolean force) {
         User user = getCurrentUser();
         Company company = findOwned(id, user.getId());
+        boolean hasApplications = false;
+        if (hasApplications && !force)
+            throw new ConflictException(
+                    "Company '" + company.getName() + "' has existing applications. " +
+                    "Pass force=true to delete it along with all associated applications.");
         companyRepository.delete(company);
     }
 

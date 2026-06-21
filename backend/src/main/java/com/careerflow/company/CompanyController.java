@@ -2,6 +2,7 @@ package com.careerflow.company;
 
 import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
+import com.careerflow.company.dto.CompanyUpdateRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -24,20 +25,25 @@ public class CompanyController {
 
     @GetMapping
     public ResponseEntity<List<CompanyResponse>> getMyCompanies(
-            @RequestParam(required = false) Long id) {
-        return ResponseEntity.ok(companyService.getMyCompanies(id));
+            @RequestParam(required = false) Long id,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String order) {
+        return ResponseEntity.ok(companyService.getMyCompanies(id, search, sortBy, order));
     }
 
     @PatchMapping("/{id}")
     public ResponseEntity<CompanyResponse> updateCompany(
             @PathVariable Long id,
-            @RequestBody CompanyRequest request) {
+            @Valid @RequestBody CompanyUpdateRequest request) {
         return ResponseEntity.ok(companyService.updateCompany(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteCompany(@PathVariable Long id) {
-        companyService.deleteCompany(id);
+    public ResponseEntity<Void> deleteCompany(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean force) {
+        companyService.deleteCompany(id, force);
         return ResponseEntity.noContent().build();
     }
 }
