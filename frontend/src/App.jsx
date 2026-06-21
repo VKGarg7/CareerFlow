@@ -6,6 +6,7 @@ import ResetPassword from './pages/ResetPassword'
 import ChangePassword from './pages/ChangePassword'
 import Dashboard from './pages/Dashboard'
 import Profile from './pages/Profile'
+import Companies from './pages/Companies'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -34,6 +35,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <Profile />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/companies"
+          element={
+            <PrivateRoute>
+              <Companies />
             </PrivateRoute>
           }
         />

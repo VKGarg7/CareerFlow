@@ -32,13 +32,6 @@ public class UserController {
         return ResponseEntity.ok(userService.updateProfile(data, null, null));
     }
 
-    @PostMapping(value = "/profile/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ProfileUpdateResponse> uploadDocuments(
-            @RequestPart(required = false) MultipartFile resume,
-            @RequestPart(required = false) MultipartFile coverLetter) {
-        return ResponseEntity.ok(userService.saveProfile(null, resume, coverLetter));
-    }
-
     @PatchMapping(value = "/profile/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProfileUpdateResponse> updateDocuments(
             @RequestPart(required = false) MultipartFile resume,
