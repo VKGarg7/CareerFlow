@@ -27,3 +27,9 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Uploaded files
+uploads/
+
+# Sensitive config
+backend/src/main/resources/application.properties
