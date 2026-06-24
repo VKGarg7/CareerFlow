@@ -1,5 +1,6 @@
 package com.careerflow.user;
 
+import com.careerflow.common.SecurityUtils;
 import com.careerflow.config.FileStorageService;
 import com.careerflow.document.Document;
 import com.careerflow.document.DocumentDto;
@@ -20,7 +21,6 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -43,6 +43,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final FileStorageService fileStorageService;
     private final DocumentRepository documentRepository;
+    private final SecurityUtils securityUtils;
 
     public UserProfileResponse getMyProfile() {
         return toProfileResponse(getCurrentUser());
@@ -267,9 +268,7 @@ public class UserService {
     }
 
     private User getCurrentUser() {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return securityUtils.getCurrentUser();
     }
 
     private UserProfileResponse toProfileResponse(User user) {
