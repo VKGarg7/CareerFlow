@@ -7,6 +7,7 @@ import lombok.Getter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Builder
@@ -22,6 +23,9 @@ public class RecruiterContactResponse {
     private RecruiterSource source;
     private LocalDate lastContactedAt;
     private String notes;
+    private int noteCount;
+    // Populated only for single-recruiter fetches and after note operations; null in list responses
+    private List<RecruiterNoteResponse> interactionNotes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

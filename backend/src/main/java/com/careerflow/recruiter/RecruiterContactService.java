@@ -3,9 +3,7 @@ package com.careerflow.recruiter;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
-import com.careerflow.recruiter.dto.RecruiterContactRequest;
-import com.careerflow.recruiter.dto.RecruiterContactResponse;
-import com.careerflow.recruiter.dto.RecruiterContactUpdateRequest;
+import com.careerflow.recruiter.dto.*;
 import com.careerflow.user.User;
 import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +12,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @SuppressWarnings("null")
 @Service
@@ -26,7 +26,10 @@ public class RecruiterContactService {
     );
 
     private final RecruiterContactRepository recruiterRepository;
+    private final RecruiterNoteRepository noteRepository;
     private final UserRepository userRepository;
+
+    // ── Recruiter CRUD ────────────────────────────────────────────────────────
 
     public RecruiterContactResponse addRecruiter(RecruiterContactRequest request) {
         User user = getCurrentUser();
@@ -51,7 +54,7 @@ public class RecruiterContactService {
                 .notes(request.getNotes())
                 .build();
 
-        return toResponse(recruiterRepository.save(recruiter));
+        return toSummaryResponse(recruiterRepository.save(recruiter), 0);
     }
 
     public List<RecruiterContactResponse> getMyRecruiters(
@@ -59,17 +62,18 @@ public class RecruiterContactService {
 
         User user = getCurrentUser();
 
+        // Single recruiter fetch — return with full notes list
         if (id != null) {
-            return List.of(toResponse(findOwned(id, user.getId())));
+            RecruiterContact r = findOwned(id, user.getId());
+            List<RecruiterNoteResponse> notes = fetchNotes(id, user.getId());
+            return List.of(toDetailResponse(r, notes));
         }
 
         if (!SORTABLE_FIELDS.contains(sortBy))
             throw new BadRequestException("Invalid sortBy field. Allowed: " + SORTABLE_FIELDS);
 
         Sort sort = Sort.by(
-                "asc".equalsIgnoreCase(order) ? Sort.Direction.ASC : Sort.Direction.DESC,
-                sortBy
-        );
+                "asc".equalsIgnoreCase(order) ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
 
         boolean hasSearch = search != null && !search.isBlank();
         RecruiterStatus statusFilter = null;
@@ -93,16 +97,26 @@ public class RecruiterContactService {
             results = recruiterRepository.findAllByUserId(user.getId(), sort);
         }
 
-        return results.stream().map(this::toResponse).toList();
+        // Batch note counts — one query for all recruiters
+        Map<Long, Integer> noteCounts = noteRepository.countGroupedByRecruiterForUser(user.getId())
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Long) row[1]).intValue()
+                ));
+
+        return results.stream()
+                .map(r -> toSummaryResponse(r, noteCounts.getOrDefault(r.getId(), 0)))
+                .toList();
     }
 
     public RecruiterContactResponse updateRecruiter(Long id, RecruiterContactUpdateRequest request) {
         User user = getCurrentUser();
         RecruiterContact recruiter = findOwned(id, user.getId());
 
-        if (request.getName() != null && !request.getName().isBlank()) {
+        // ── Update recruiter fields ───────────────────────────────────────────
+        if (request.getName() != null && !request.getName().isBlank())
             recruiter.setName(request.getName().trim());
-        }
 
         if (request.getEmail() != null) {
             String newEmail = request.getEmail().trim();
@@ -125,13 +139,52 @@ public class RecruiterContactService {
         if (request.getNotes() != null) recruiter.setNotes(request.getNotes().isBlank() ? null : request.getNotes());
         if (request.getLastContactedAt() != null) recruiter.setLastContactedAt(request.getLastContactedAt());
 
-        return toResponse(recruiterRepository.save(recruiter));
+        recruiterRepository.save(recruiter);
+
+        // ── Handle note operation (at most one per request) ───────────────────
+        if (request.getAddNote() != null) {
+            String content = request.getAddNote().trim();
+            if (content.isBlank())
+                throw new BadRequestException("Note content cannot be empty");
+            RecruiterNote note = RecruiterNote.builder()
+                    .recruiterContact(recruiter)
+                    .user(user)
+                    .content(content)
+                    .build();
+            noteRepository.save(note);
+        } else if (request.getDeleteNoteId() != null) {
+            RecruiterNote note = noteRepository
+                    .findByIdAndRecruiterContactIdAndUserId(request.getDeleteNoteId(), id, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Note not found"));
+            noteRepository.delete(note);
+        } else if (request.getEditNote() != null) {
+            RecruiterNoteEditRequest edit = request.getEditNote();
+            RecruiterNote note = noteRepository
+                    .findByIdAndRecruiterContactIdAndUserId(edit.getId(), id, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Note not found"));
+            note.setContent(edit.getContent().trim());
+            noteRepository.save(note);
+        }
+
+        // Return updated recruiter with full notes list
+        List<RecruiterNoteResponse> notes = fetchNotes(id, user.getId());
+        return toDetailResponse(recruiter, notes);
     }
 
     public void deleteRecruiter(Long id) {
         User user = getCurrentUser();
         RecruiterContact recruiter = findOwned(id, user.getId());
-        recruiterRepository.delete(recruiter);
+        recruiterRepository.delete(recruiter); // cascade deletes all notes via @OneToMany
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private List<RecruiterNoteResponse> fetchNotes(Long recruiterId, Long userId) {
+        Sort sort = Sort.by(Sort.Direction.ASC, "createdAt");
+        return noteRepository.findAllByRecruiterContactIdAndUserId(recruiterId, userId, sort)
+                .stream()
+                .map(this::toNoteResponse)
+                .toList();
     }
 
     private RecruiterContact findOwned(Long recruiterId, Long userId) {
@@ -145,7 +198,8 @@ public class RecruiterContactService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
-    private RecruiterContactResponse toResponse(RecruiterContact r) {
+    // List view — noteCount only, no notes list
+    private RecruiterContactResponse toSummaryResponse(RecruiterContact r, int noteCount) {
         return RecruiterContactResponse.builder()
                 .id(r.getId())
                 .name(r.getName())
@@ -158,8 +212,44 @@ public class RecruiterContactService {
                 .source(r.getSource())
                 .lastContactedAt(r.getLastContactedAt())
                 .notes(r.getNotes())
+                .noteCount(noteCount)
+                .interactionNotes(null)
                 .createdAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
+                .build();
+    }
+
+    // Single / update view — full notes list included
+    private RecruiterContactResponse toDetailResponse(RecruiterContact r, List<RecruiterNoteResponse> notes) {
+        return RecruiterContactResponse.builder()
+                .id(r.getId())
+                .name(r.getName())
+                .email(r.getEmail())
+                .phone(r.getPhone())
+                .linkedIn(r.getLinkedIn())
+                .company(r.getCompany())
+                .jobTitle(r.getJobTitle())
+                .status(r.getStatus())
+                .source(r.getSource())
+                .lastContactedAt(r.getLastContactedAt())
+                .notes(r.getNotes())
+                .noteCount(notes.size())
+                .interactionNotes(notes)
+                .createdAt(r.getCreatedAt())
+                .updatedAt(r.getUpdatedAt())
+                .build();
+    }
+
+    private RecruiterNoteResponse toNoteResponse(RecruiterNote note) {
+        boolean edited = note.getUpdatedAt() != null
+                && !note.getUpdatedAt().equals(note.getCreatedAt());
+        return RecruiterNoteResponse.builder()
+                .id(note.getId())
+                .recruiterId(note.getRecruiterContact().getId())
+                .content(note.getContent())
+                .edited(edited)
+                .createdAt(note.getCreatedAt())
+                .updatedAt(note.getUpdatedAt())
                 .build();
     }
 }

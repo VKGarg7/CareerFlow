@@ -1,8 +1,6 @@
 package com.careerflow.recruiter;
 
-import com.careerflow.recruiter.dto.RecruiterContactRequest;
-import com.careerflow.recruiter.dto.RecruiterContactResponse;
-import com.careerflow.recruiter.dto.RecruiterContactUpdateRequest;
+import com.careerflow.recruiter.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

@@ -2,6 +2,7 @@ package com.careerflow.recruiter.dto;
 
 import com.careerflow.recruiter.RecruiterSource;
 import com.careerflow.recruiter.RecruiterStatus;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -14,6 +15,8 @@ import java.time.LocalDate;
 @Getter
 @Setter
 public class RecruiterContactUpdateRequest {
+
+    // ── Recruiter fields ──────────────────────────────────────────────────────
 
     @Size(max = 100, message = "Name must be 100 characters or fewer")
     private String name;
@@ -46,4 +49,14 @@ public class RecruiterContactUpdateRequest {
 
     @Size(max = 2000, message = "Notes must be 2000 characters or fewer")
     private String notes;
+
+    // ── Note operations (at most one per request) ─────────────────────────────
+
+    @Size(max = 1000, message = "Note must be 1000 characters or fewer")
+    private String addNote;
+
+    private Long deleteNoteId;
+
+    @Valid
+    private RecruiterNoteEditRequest editNote;
 }
