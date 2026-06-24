@@ -31,6 +31,7 @@ export default function Layout({ children }) {
             {navLink('/dashboard', 'Dashboard')}
             {navLink('/companies', 'Companies')}
             {navLink('/applications', 'Applications')}
+            {navLink('/recruiters', 'Recruiters')}
             {navLink('/profile', 'Profile')}
           </nav>
         </div>
