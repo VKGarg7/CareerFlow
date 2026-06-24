@@ -30,6 +30,7 @@ export default function Layout({ children }) {
           <nav className="flex gap-1">
             {navLink('/dashboard', 'Dashboard')}
             {navLink('/companies', 'Companies')}
+            {navLink('/applications', 'Applications')}
             {navLink('/profile', 'Profile')}
           </nav>
         </div>

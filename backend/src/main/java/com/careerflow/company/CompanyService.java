@@ -1,5 +1,6 @@
 package com.careerflow.company;
 
+import com.careerflow.application.ApplicationService;
 import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
 import com.careerflow.company.dto.CompanyUpdateRequest;
@@ -10,6 +11,7 @@ import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.user.User;
 import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,8 @@ public class CompanyService {
 
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    @Lazy
+    private final ApplicationService applicationService;
 
     public CompanyResponse addCompany(CompanyRequest request) {
         User user = getCurrentUser();
@@ -82,11 +86,12 @@ public class CompanyService {
     public void deleteCompany(Long id, boolean force) {
         User user = getCurrentUser();
         Company company = findOwned(id, user.getId());
-        boolean hasApplications = false;
+        boolean hasApplications = applicationService.hasApplications(user.getId(), id);
         if (hasApplications && !force)
             throw new ConflictException(
                     "Company '" + company.getName() + "' has existing applications. " +
                     "Pass force=true to delete it along with all associated applications.");
+        if (hasApplications) applicationService.deleteAllByCompany(id);
         companyRepository.delete(company);
     }
 
