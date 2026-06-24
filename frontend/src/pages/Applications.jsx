@@ -7,6 +7,9 @@ import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
 import { getApplications, addApplication, updateApplication, deleteApplication } from '../api/application'
 import { getCompanies } from '../api/company'
+import PageHeader from '../components/PageHeader'
+import EmptyState from '../components/EmptyState'
+import SharedStatusBadge from '../components/StatusBadge'
 
 const STATUS_CONFIG = {
   SAVED:               { label: 'Saved',               badge: 'bg-gray-100 text-gray-600',    border: 'border-l-gray-300',    dot: 'bg-gray-400'    },
@@ -45,12 +48,7 @@ function initials(name = '') {
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.APPLIED
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full shrink-0 ${cfg.badge}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-      {cfg.label}
-    </span>
-  )
+  return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
 // ─── Application List Card ────────────────────────────────────────────────────
@@ -377,16 +375,16 @@ export default function Applications() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Applications</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Track every job application you submit</p>
-        </div>
-        <button onClick={openAdd}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
-          <Add fontSize="small" />Add Application
-        </button>
-      </div>
+      <PageHeader
+        title="Applications"
+        subtitle="Track every job application you submit"
+        action={
+          <button onClick={openAdd}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+            <Add fontSize="small" />Add Application
+          </button>
+        }
+      />
 
       {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
       {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
@@ -438,23 +436,17 @@ export default function Applications() {
       {loading ? (
         <div className="flex justify-center py-16"><CircularProgress /></div>
       ) : applications.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-            <span className="text-4xl">📋</span>
-          </div>
-          <h3 className="text-lg font-bold text-gray-700 mb-1">
-            {filterStatus ? 'No applications with this status' : 'No applications yet'}
-          </h3>
-          <p className="text-sm text-gray-400 mb-6">
-            {filterStatus ? 'Try a different filter.' : 'Start recording your job applications.'}
-          </p>
-          {!filterStatus && (
+        <EmptyState
+          icon="📋"
+          title={filterStatus ? 'No applications with this status' : 'No applications yet'}
+          description={filterStatus ? 'Try a different filter.' : 'Start recording your job applications.'}
+          action={!filterStatus && (
             <button onClick={openAdd}
               className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
               Add your first application
             </button>
           )}
-        </div>
+        />
       ) : viewMode === 'list' ? (
         <div className="space-y-3">
           <p className="text-xs text-gray-400 font-medium">
