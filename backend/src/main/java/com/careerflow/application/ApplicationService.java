@@ -3,18 +3,18 @@ package com.careerflow.application;
 import com.careerflow.application.dto.ApplicationRequest;
 import com.careerflow.application.dto.ApplicationResponse;
 import com.careerflow.application.dto.ApplicationUpdateRequest;
+import com.careerflow.common.SecurityUtils;
+import com.careerflow.common.SortHelper;
 import com.careerflow.company.Company;
 import com.careerflow.company.CompanyRepository;
-import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.user.User;
-import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -28,10 +28,10 @@ public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
     private final CompanyRepository companyRepository;
-    private final UserRepository userRepository;
+    private final SecurityUtils securityUtils;
 
     public ApplicationResponse addApplication(ApplicationRequest request) {
-        User user = getCurrentUser();
+        User user = securityUtils.getCurrentUser();
         Company company = findOwnedCompany(request.getCompanyId(), user.getId());
 
         JobApplication application = JobApplication.builder()
@@ -50,12 +50,8 @@ public class ApplicationService {
 
     public List<ApplicationResponse> getMyApplications(
             Long companyId, ApplicationStatus status, String sortBy, String order) {
-        User user = getCurrentUser();
-
-        if (!SORTABLE_FIELDS.contains(sortBy))
-            throw new BadRequestException("Invalid sortBy field. Allowed: " + SORTABLE_FIELDS);
-
-        Sort sort = Sort.by("asc".equalsIgnoreCase(order) ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
+        User user = securityUtils.getCurrentUser();
+        Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
 
         List<JobApplication> results;
         if (companyId != null && status != null) {
@@ -72,7 +68,7 @@ public class ApplicationService {
     }
 
     public ApplicationResponse updateApplication(Long id, ApplicationUpdateRequest request) {
-        User user = getCurrentUser();
+        User user = securityUtils.getCurrentUser();
         JobApplication application = findOwned(id, user.getId());
 
         if (request.getCompanyId() != null) {
@@ -96,15 +92,15 @@ public class ApplicationService {
     }
 
     public void deleteApplication(Long id) {
-        User user = getCurrentUser();
+        User user = securityUtils.getCurrentUser();
         JobApplication application = findOwned(id, user.getId());
-        application.setDeletedAt(java.time.LocalDateTime.now());
+        application.softDelete();
         applicationRepository.save(application);
     }
 
     @Transactional
     public void deleteAllByCompany(Long companyId) {
-        applicationRepository.softDeleteAllByCompanyId(companyId, java.time.LocalDateTime.now());
+        applicationRepository.softDeleteAllByCompanyId(companyId, LocalDateTime.now());
     }
 
     public boolean hasApplications(Long userId, Long companyId) {
@@ -119,12 +115,6 @@ public class ApplicationService {
     private Company findOwnedCompany(Long companyId, Long userId) {
         return companyRepository.findByIdAndUserId(companyId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found"));
-    }
-
-    private User getCurrentUser() {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
     private ApplicationResponse toResponse(JobApplication app) {

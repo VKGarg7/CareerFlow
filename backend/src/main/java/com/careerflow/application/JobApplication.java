@@ -1,27 +1,21 @@
 package com.careerflow.application;
 
+import com.careerflow.common.SoftDeleteEntity;
 import com.careerflow.company.Company;
 import com.careerflow.user.User;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.SQLRestriction;
+import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "job_applications")
-@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class JobApplication {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+@SuperBuilder
+public class JobApplication extends SoftDeleteEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
@@ -34,37 +28,19 @@ public class JobApplication {
     @Column(nullable = false)
     private String role;
 
-    private LocalDate applicationDate;
+    @Builder.Default
+    private LocalDate applicationDate = LocalDate.now();
 
     @Enumerated(EnumType.STRING)
     private ApplicationSource source;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ApplicationStatus status;
+    @Builder.Default
+    private ApplicationStatus status = ApplicationStatus.SAVED;
 
     private String expectedSalary;
 
     @Column(columnDefinition = "TEXT")
     private String notes;
-
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    private LocalDateTime updatedAt;
-
-    private LocalDateTime deletedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-        if (status == null) status = ApplicationStatus.SAVED;
-        if (applicationDate == null) applicationDate = LocalDate.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
 }
