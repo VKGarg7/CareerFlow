@@ -6,6 +6,9 @@ import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
 import { getCompanies, addCompany, updateCompany, deleteCompany } from '../api/company'
+import PageHeader from '../components/PageHeader'
+import EmptyState from '../components/EmptyState'
+import SharedStatusBadge from '../components/StatusBadge'
 
 const STATUS_CONFIG = {
   TARGETING:    { label: 'Targeting',    badge: 'bg-blue-100 text-blue-700',   border: 'border-l-blue-400',    dot: 'bg-blue-500'    },
@@ -36,12 +39,7 @@ function initials(name = '') {
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.TARGETING
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full shrink-0 ${cfg.badge}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-      {cfg.label}
-    </span>
-  )
+  return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
 // ─── Company List Card ────────────────────────────────────────────────────────
@@ -379,16 +377,16 @@ export default function Companies() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Companies</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Track companies you&apos;re targeting</p>
-        </div>
-        <button onClick={openAdd}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
-          <Add fontSize="small" />Add Company
-        </button>
-      </div>
+      <PageHeader
+        title="Companies"
+        subtitle="Track companies you're targeting in your job search"
+        action={
+          <button onClick={openAdd}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+            <Add fontSize="small" />Add Company
+          </button>
+        }
+      />
 
       {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
       {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
@@ -449,23 +447,17 @@ export default function Companies() {
       {loading ? (
         <div className="flex justify-center py-16"><CircularProgress /></div>
       ) : companies.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-            <span className="text-4xl">🏢</span>
-          </div>
-          <h3 className="text-lg font-bold text-gray-700 mb-1">
-            {isFiltered ? 'No companies match your filters' : 'No companies yet'}
-          </h3>
-          <p className="text-sm text-gray-400 mb-6">
-            {isFiltered ? 'Try adjusting your search or filter.' : 'Start building your target list.'}
-          </p>
-          {!isFiltered && (
+        <EmptyState
+          icon="🏢"
+          title={isFiltered ? 'No companies match your filters' : 'No companies yet'}
+          description={isFiltered ? 'Try adjusting your search or filter.' : 'Start building your target list.'}
+          action={!isFiltered && (
             <button onClick={openAdd}
               className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
               Add your first company
             </button>
           )}
-        </div>
+        />
       ) : viewMode === 'list' ? (
         <div className="space-y-3">
           <p className="text-xs text-gray-400 font-medium">

@@ -9,6 +9,9 @@ import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
 import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecruiter } from '../api/recruiter'
+import PageHeader from '../components/PageHeader'
+import EmptyState from '../components/EmptyState'
+import SharedStatusBadge from '../components/StatusBadge'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -58,12 +61,7 @@ function fmt(dt) {
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.NEW
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full ${cfg.badge}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-      {cfg.label}
-    </span>
-  )
+  return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
 // ─── Recruiter Card ───────────────────────────────────────────────────────────
@@ -968,17 +966,16 @@ export default function Recruiters() {
 
   return (
     <Layout>
-      {/* Page header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Recruiter Directory</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Your complete recruiter network at a glance</p>
-        </div>
-        <button onClick={openAdd}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
-          <Add fontSize="small" />Add Recruiter
-        </button>
-      </div>
+      <PageHeader
+        title="Recruiter Directory"
+        subtitle="Your complete recruiter network at a glance"
+        action={
+          <button onClick={openAdd}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+            <Add fontSize="small" />Add Recruiter
+          </button>
+        }
+      />
 
       {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
       {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
@@ -1039,23 +1036,17 @@ export default function Recruiters() {
       {loading ? (
         <div className="flex justify-center py-16"><CircularProgress /></div>
       ) : recruiters.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-            <span className="text-4xl">🤝</span>
-          </div>
-          <h3 className="text-lg font-bold text-gray-700 mb-1">
-            {isFiltered ? 'No recruiters match your filters' : 'No recruiter contacts yet'}
-          </h3>
-          <p className="text-sm text-gray-400 mb-6">
-            {isFiltered ? 'Try adjusting your search or filter.' : 'Start building your recruiter network.'}
-          </p>
-          {!isFiltered && (
+        <EmptyState
+          icon="🤝"
+          title={isFiltered ? 'No recruiters match your filters' : 'No recruiter contacts yet'}
+          description={isFiltered ? 'Try adjusting your search or filter.' : 'Start building your recruiter network.'}
+          action={!isFiltered && (
             <button onClick={openAdd}
               className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
               Add your first recruiter
             </button>
           )}
-        </div>
+        />
       ) : viewMode === 'list' ? (
         <div className="space-y-3">
           <p className="text-xs text-gray-400 font-medium">
