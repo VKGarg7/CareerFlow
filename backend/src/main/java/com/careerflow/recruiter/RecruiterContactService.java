@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 @SuppressWarnings("null")
 @Service
@@ -174,7 +175,8 @@ public class RecruiterContactService {
     public void deleteRecruiter(Long id) {
         User user = getCurrentUser();
         RecruiterContact recruiter = findOwned(id, user.getId());
-        recruiterRepository.delete(recruiter); // cascade deletes all notes via @OneToMany
+        recruiter.setDeletedAt(LocalDateTime.now());
+        recruiterRepository.save(recruiter);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

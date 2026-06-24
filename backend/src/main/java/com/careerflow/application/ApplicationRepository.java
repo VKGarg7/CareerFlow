@@ -2,7 +2,11 @@ package com.careerflow.application;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,5 +18,8 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
     List<JobApplication> findAllByUserIdAndCompanyIdAndStatus(Long userId, Long companyId, ApplicationStatus status, Sort sort);
     Optional<JobApplication> findByIdAndUserId(Long id, Long userId);
     boolean existsByUserIdAndCompanyId(Long userId, Long companyId);
-    void deleteAllByCompanyId(Long companyId);
+
+    @Modifying
+    @Query("UPDATE JobApplication a SET a.deletedAt = :now WHERE a.company.id = :companyId AND a.deletedAt IS NULL")
+    void softDeleteAllByCompanyId(@Param("companyId") Long companyId, @Param("now") LocalDateTime now);
 }

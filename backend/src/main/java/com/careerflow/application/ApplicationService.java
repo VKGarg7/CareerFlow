@@ -98,12 +98,13 @@ public class ApplicationService {
     public void deleteApplication(Long id) {
         User user = getCurrentUser();
         JobApplication application = findOwned(id, user.getId());
-        applicationRepository.delete(application);
+        application.setDeletedAt(java.time.LocalDateTime.now());
+        applicationRepository.save(application);
     }
 
     @Transactional
     public void deleteAllByCompany(Long companyId) {
-        applicationRepository.deleteAllByCompanyId(companyId);
+        applicationRepository.softDeleteAllByCompanyId(companyId, java.time.LocalDateTime.now());
     }
 
     public boolean hasApplications(Long userId, Long companyId) {
