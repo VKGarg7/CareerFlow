@@ -16,6 +16,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -92,7 +93,8 @@ public class CompanyService {
                     "Company '" + company.getName() + "' has existing applications. " +
                     "Pass force=true to delete it along with all associated applications.");
         if (hasApplications) applicationService.deleteAllByCompany(id);
-        companyRepository.delete(company);
+        company.setDeletedAt(LocalDateTime.now());
+        companyRepository.save(company);
     }
 
     private Company findOwned(Long companyId, Long userId) {

@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Profile from './pages/Profile'
 import Companies from './pages/Companies'
 import Applications from './pages/Applications'
+import Recruiters from './pages/Recruiters'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -52,6 +53,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <Applications />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/recruiters"
+          element={
+            <PrivateRoute>
+              <Recruiters />
             </PrivateRoute>
           }
         />

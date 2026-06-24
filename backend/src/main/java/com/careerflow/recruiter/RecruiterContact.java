@@ -1,6 +1,5 @@
-package com.careerflow.application;
+package com.careerflow.recruiter;
 
-import com.careerflow.company.Company;
 import com.careerflow.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -8,16 +7,18 @@ import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
-@Table(name = "job_applications")
+@Table(name = "recruiter_contacts")
 @SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class JobApplication {
+public class RecruiterContact {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,26 +28,34 @@ public class JobApplication {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "company_id", nullable = false)
-    private Company company;
-
     @Column(nullable = false)
-    private String role;
+    private String name;
 
-    private LocalDate applicationDate;
+    private String email;
+
+    private String phone;
+
+    private String linkedIn;
+
+    private String company;
+
+    private String jobTitle;
 
     @Enumerated(EnumType.STRING)
-    private ApplicationSource source;
+    @Column(nullable = false)
+    private RecruiterStatus status;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private ApplicationStatus status;
+    private RecruiterSource source;
 
-    private String expectedSalary;
+    private LocalDate lastContactedAt;
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "recruiterContact", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RecruiterNote> interactionNotes = new ArrayList<>();
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -59,8 +68,7 @@ public class JobApplication {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        if (status == null) status = ApplicationStatus.SAVED;
-        if (applicationDate == null) applicationDate = LocalDate.now();
+        if (status == null) status = RecruiterStatus.NEW;
     }
 
     @PreUpdate
