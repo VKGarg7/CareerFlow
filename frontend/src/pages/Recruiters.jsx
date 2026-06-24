@@ -5,6 +5,9 @@ import {
   Close, Send, Check, Clear, EditNote,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
+import ViewToggle from '../components/ViewToggle'
+import StatusSummaryBar from '../components/StatusSummaryBar'
+import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
 import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecruiter } from '../api/recruiter'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -171,6 +174,97 @@ function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
       </div>
     </div>
   )
+}
+
+// ─── Directory Card (compact grid view) ──────────────────────────────────────
+function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
+  const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
+  const noteCount = recruiter.noteCount ?? 0
+
+  return (
+    <div
+      onClick={() => onView(recruiter)}
+      className={`bg-white rounded-xl border border-gray-100 border-t-4 p-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col gap-3`}
+      style={{ borderTopColor: borderColor(recruiter.status) }}
+    >
+      {/* Top: avatar + name */}
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
+          {initials(recruiter.name)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-gray-800 truncate">{recruiter.name}</p>
+          {(recruiter.jobTitle || recruiter.company) && (
+            <p className="text-xs text-gray-400 truncate">
+              {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Status badge */}
+      <StatusBadge status={recruiter.status} />
+
+      {/* Quick contact icons */}
+      <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+        {recruiter.email && (
+          <a href={`mailto:${recruiter.email}`} title={recruiter.email}
+            className="p-1.5 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
+            <Email sx={{ fontSize: 14 }} />
+          </a>
+        )}
+        {recruiter.phone && (
+          <a href={`tel:${recruiter.phone}`} title={recruiter.phone}
+            className="p-1.5 rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 transition">
+            <Phone sx={{ fontSize: 14 }} />
+          </a>
+        )}
+        {recruiter.linkedIn && (
+          <a href={recruiter.linkedIn} target="_blank" rel="noreferrer" title="LinkedIn"
+            className="p-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition">
+            <LinkedIn sx={{ fontSize: 14 }} />
+          </a>
+        )}
+        {recruiter.source && (
+          <span className="text-[11px] text-gray-400 italic ml-auto">
+            {SOURCE_LABELS[recruiter.source] || recruiter.source}
+          </span>
+        )}
+      </div>
+
+      {/* Footer: note count + actions */}
+      <div className="flex items-center gap-2 pt-1 border-t border-gray-50" onClick={(e) => e.stopPropagation()}>
+        <button onClick={() => onNotes(recruiter)}
+          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium transition">
+          <EditNote sx={{ fontSize: 14 }} />
+          {noteCount > 0 ? `${noteCount} note${noteCount > 1 ? 's' : ''}` : 'Notes'}
+        </button>
+        <div className="flex gap-1 ml-auto">
+          <button onClick={() => onEdit(recruiter)}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition" title="Edit">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+              <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z" />
+              <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9a.75.75 0 0 1 1.5 0v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z" />
+            </svg>
+          </button>
+          <button onClick={() => onDelete(recruiter)}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Delete">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+              <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function borderColor(status) {
+  const map = {
+    NEW: '#9ca3af', REACHED_OUT: '#60a5fa', RESPONDED: '#fbbf24',
+    MEETING_SCHEDULED: '#a78bfa', ACTIVELY_HELPING: '#4ade80', CLOSED: '#f87171',
+  }
+  return map[status] || map.NEW
 }
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
@@ -682,173 +776,119 @@ function AddEditModal({ open, recruiter, onClose, onSaved }) {
     fieldErrors[field] ? <p className="text-xs text-red-500 mt-1">{fieldErrors[field]}</p> : null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Modal header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+    <ModalShell
+      open={open} onClose={onClose}
+      title={recruiter ? 'Edit Recruiter Contact' : 'Add Recruiter Contact'}
+      subtitle={recruiter ? 'Update contact information' : 'Add a new recruiter to your network'}
+    >
+      <div className="px-6 py-5">
+        {error && <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <h2 className="text-lg font-bold text-gray-800">
-              {recruiter ? 'Edit Recruiter Contact' : 'Add Recruiter Contact'}
-            </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {recruiter ? 'Update contact information' : 'Add a new recruiter to your network'}
-            </p>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Full Name <span className="text-red-500">*</span>
+            </label>
+            <input type="text" value={form.name} onChange={set('name')}
+              placeholder="e.g. Priya Sharma" className={inputCls('name')} />
+            <FieldError field="name" />
           </div>
-          <button onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
-            <Close sx={{ fontSize: 18 }} />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto px-6 py-5">
-          {error && <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Full Name <span className="text-red-500">*</span>
-              </label>
-              <input type="text" value={form.name} onChange={set('name')}
-                placeholder="e.g. Priya Sharma" className={inputCls('name')} />
-              <FieldError field="name" />
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Job Title</label>
+              <input type="text" value={form.jobTitle} onChange={set('jobTitle')}
+                placeholder="Technical Recruiter" className={inputCls('jobTitle')} />
+              <FieldError field="jobTitle" />
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Job Title</label>
-                <input type="text" value={form.jobTitle} onChange={set('jobTitle')}
-                  placeholder="Technical Recruiter" className={inputCls('jobTitle')} />
-                <FieldError field="jobTitle" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Company</label>
-                <input type="text" value={form.company} onChange={set('company')}
-                  placeholder="e.g. Google" className={inputCls('company')} />
-                <FieldError field="company" />
-              </div>
-            </div>
-
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Email</label>
-              <input type="email" value={form.email} onChange={set('email')}
-                placeholder="priya@google.com" className={inputCls('email')} />
-              <FieldError field="email" />
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Company</label>
+              <input type="text" value={form.company} onChange={set('company')}
+                placeholder="e.g. Google" className={inputCls('company')} />
+              <FieldError field="company" />
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Phone</label>
-                <input type="tel" value={form.phone} onChange={set('phone')}
-                  placeholder="+91 98765 43210" className={inputCls('phone')} />
-                <FieldError field="phone" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">LinkedIn URL</label>
-                <input type="url" value={form.linkedIn} onChange={set('linkedIn')}
-                  placeholder="https://linkedin.com/in/..." className={inputCls('linkedIn')} />
-                <FieldError field="linkedIn" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</label>
-                <select value={form.status} onChange={set('status')} className={inputCls('status')}>
-                  {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                    <option key={val} value={val}>{label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Source</label>
-                <select value={form.source} onChange={set('source')} className={inputCls('source')}>
-                  <option value="">— Select —</option>
-                  {Object.entries(SOURCE_LABELS).map(([val, label]) => (
-                    <option key={val} value={val}>{label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Email</label>
+            <input type="email" value={form.email} onChange={set('email')}
+              placeholder="priya@google.com" className={inputCls('email')} />
+            <FieldError field="email" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Last Contacted</label>
-              <input type="date" value={form.lastContactedAt} onChange={set('lastContactedAt')}
-                max={new Date().toISOString().split('T')[0]} className={inputCls('lastContactedAt')} />
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Phone</label>
+              <input type="tel" value={form.phone} onChange={set('phone')}
+                placeholder="+91 98765 43210" className={inputCls('phone')} />
+              <FieldError field="phone" />
             </div>
-
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">General Notes</label>
-              <textarea value={form.notes} onChange={set('notes')} rows={3}
-                placeholder="Background info, referrals, context..."
-                className={`${inputCls('notes')} resize-none`} />
-              <p className="text-xs text-gray-400 mt-1 text-right">{form.notes.length}/2000</p>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">LinkedIn URL</label>
+              <input type="url" value={form.linkedIn} onChange={set('linkedIn')}
+                placeholder="https://linkedin.com/in/..." className={inputCls('linkedIn')} />
+              <FieldError field="linkedIn" />
             </div>
-
-            <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={saving}
-                className="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm">
-                {saving && <CircularProgress size={14} color="inherit" />}
-                {recruiter ? 'Save Changes' : 'Add Recruiter'}
-              </button>
-              <button type="button" onClick={onClose}
-                className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
-                Cancel
-              </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</label>
+              <select value={form.status} onChange={set('status')} className={inputCls('status')}>
+                {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
             </div>
-          </form>
-        </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Source</label>
+              <select value={form.source} onChange={set('source')} className={inputCls('source')}>
+                <option value="">— Select —</option>
+                {Object.entries(SOURCE_LABELS).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Last Contacted</label>
+            <input type="date" value={form.lastContactedAt} onChange={set('lastContactedAt')}
+              max={new Date().toISOString().split('T')[0]} className={inputCls('lastContactedAt')} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">General Notes</label>
+            <textarea value={form.notes} onChange={set('notes')} rows={3}
+              placeholder="Background info, referrals, context..."
+              className={`${inputCls('notes')} resize-none`} />
+            <p className="text-xs text-gray-400 mt-1 text-right">{form.notes.length}/2000</p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm">
+              {saving && <CircularProgress size={14} color="inherit" />}
+              {recruiter ? 'Save Changes' : 'Add Recruiter'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
-    </div>
+    </ModalShell>
   )
 }
 
 // ─── Delete Recruiter Modal ───────────────────────────────────────────────────
 function DeleteModal({ open, recruiter, onClose, onDeleted }) {
-  const [deleting, setDeleting] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => { if (open) setError('') }, [open])
-  if (!open || !recruiter) return null
-
-  const handleDelete = async () => {
-    setDeleting(true)
-    setError('')
-    try {
-      await deleteRecruiter(recruiter.id)
-      onDeleted()
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete. Please try again.')
-    } finally {
-      setDeleting(false)
-    }
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-        <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6 text-red-500">
-            <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z" clipRule="evenodd"/>
-          </svg>
-        </div>
-        <h2 className="text-base font-bold text-gray-800 text-center mb-1">Delete Recruiter Contact</h2>
-        <p className="text-sm text-gray-500 text-center mb-5">
-          Remove <span className="font-semibold text-gray-700">{recruiter.name}</span> and all interaction notes?
+    <ConfirmDeleteModal
+      open={open && !!recruiter}
+      onClose={onClose}
+      onConfirm={async () => { await deleteRecruiter(recruiter.id); onDeleted() }}
+      title="Delete Recruiter Contact"
+      message={
+        <>
+          Remove <span className="font-semibold text-gray-700">{recruiter?.name}</span> and all interaction notes?
           <span className="block text-xs text-red-500 mt-1">This action cannot be undone.</span>
-        </p>
-        {error && <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-600 text-sm">{error}</div>}
-        <div className="flex gap-3">
-          <button onClick={handleDelete} disabled={deleting}
-            className="flex-1 py-2.5 text-sm font-semibold text-white bg-red-500 rounded-xl hover:bg-red-600 transition disabled:opacity-50 flex items-center justify-center gap-2">
-            {deleting && <CircularProgress size={14} color="inherit" />}Delete
-          </button>
-          <button onClick={onClose}
-            className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    />
   )
 }
 
@@ -863,6 +903,8 @@ export default function Recruiters() {
   const [statusFilter, setStatusFilter] = useState('')
   const [sortBy, setSortBy] = useState('createdAt')
   const [order, setOrder] = useState('desc')
+
+  const [viewMode, setViewMode] = useState('list') // 'list' | 'directory'
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -907,13 +949,30 @@ export default function Recruiters() {
 
   const isFiltered = search.trim() || statusFilter
 
+
+  // For directory: group alphabetically
+  const grouped = recruiters.reduce((acc, r) => {
+    const letter = r.name[0]?.toUpperCase() || '#'
+    if (!acc[letter]) acc[letter] = []
+    acc[letter].push(r)
+    return acc
+  }, {})
+  const sortedLetters = Object.keys(grouped).sort()
+
+  const cardProps = {
+    onView: (rec) => setViewTarget(rec.id),
+    onEdit: openEdit,
+    onDelete: setDeleteTarget,
+    onNotes: setNotesTarget,
+  }
+
   return (
     <Layout>
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Recruiter Contacts</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Track recruiters and your interactions</p>
+          <h1 className="text-2xl font-bold text-gray-800">Recruiter Directory</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Your complete recruiter network at a glance</p>
         </div>
         <button onClick={openAdd}
           className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
@@ -924,7 +983,17 @@ export default function Recruiters() {
       {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
       {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
 
-      {/* Filters */}
+      {/* Status summary bar */}
+      {!loading && recruiters.length > 0 && (
+        <StatusSummaryBar
+          items={recruiters}
+          statusConfig={STATUS_CONFIG}
+          activeFilter={statusFilter}
+          onFilter={setStatusFilter}
+        />
+      )}
+
+      {/* Filters + view toggle */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none flex">
@@ -962,9 +1031,11 @@ export default function Recruiters() {
           className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition bg-white whitespace-nowrap">
           {order === 'desc' ? '↓ Desc' : '↑ Asc'}
         </button>
+
+        <ViewToggle value={viewMode} onChange={setViewMode} />
       </div>
 
-      {/* List */}
+      {/* Content */}
       {loading ? (
         <div className="flex justify-center py-16"><CircularProgress /></div>
       ) : recruiters.length === 0 ? (
@@ -985,15 +1056,36 @@ export default function Recruiters() {
             </button>
           )}
         </div>
-      ) : (
+      ) : viewMode === 'list' ? (
         <div className="space-y-3">
           <p className="text-xs text-gray-400 font-medium">
             {recruiters.length} {recruiters.length === 1 ? 'recruiter' : 'recruiters'}
           </p>
           {recruiters.map((r) => (
-            <RecruiterCard key={r.id} recruiter={r}
-              onView={(rec) => setViewTarget(rec.id)}
-              onEdit={openEdit} onDelete={setDeleteTarget} onNotes={setNotesTarget} />
+            <RecruiterCard key={r.id} recruiter={r} {...cardProps} />
+          ))}
+        </div>
+      ) : (
+        /* Directory view — alphabetical groups */
+        <div>
+          <p className="text-xs text-gray-400 font-medium mb-4">
+            {recruiters.length} {recruiters.length === 1 ? 'recruiter' : 'recruiters'}
+          </p>
+          {sortedLetters.map((letter) => (
+            <div key={letter} className="mb-8">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="w-8 h-8 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center justify-center shrink-0">
+                  {letter}
+                </span>
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400">{grouped[letter].length}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {grouped[letter].map((r) => (
+                  <DirectoryCard key={r.id} recruiter={r} {...cardProps} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
