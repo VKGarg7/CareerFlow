@@ -7,6 +7,9 @@ import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
 import { getApplications, addApplication, updateApplication, deleteApplication } from '../api/application'
 import { getCompanies } from '../api/company'
+import { getFollowUpsForApplication, createFollowUp, updateFollowUp, deleteFollowUp } from '../api/followup'
+import { todayStr, fmtDate } from '../utils/followup'
+import RescheduleInline from '../components/RescheduleInline'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
@@ -52,7 +55,7 @@ function StatusBadge({ status }) {
 }
 
 // ─── Application List Card ────────────────────────────────────────────────────
-function ApplicationCard({ app, onEdit, onDelete }) {
+function ApplicationCard({ app, onEdit, onDelete, onFollowUp }) {
   const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
   return (
     <div className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${cfg.border} p-5 hover:shadow-md transition-all duration-200`}>
@@ -83,6 +86,11 @@ function ApplicationCard({ app, onEdit, onDelete }) {
                 💰 {app.expectedSalary}
               </span>
             )}
+            {app.nextFollowUpDate && (
+              <span className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium">
+                🔔 Follow-up {new Date(app.nextFollowUpDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              </span>
+            )}
           </div>
           {app.notes && (
             <p className="mt-1.5 text-xs text-gray-400 line-clamp-1 italic">"{app.notes}"</p>
@@ -90,6 +98,14 @@ function ApplicationCard({ app, onEdit, onDelete }) {
         </div>
 
         <div className="flex gap-1.5 shrink-0">
+          <button onClick={() => onFollowUp(app)}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-200 text-amber-600 bg-white hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all"
+            title="Schedule follow-up">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <path d="M4.214 3.227a.75.75 0 00-1.156-.956 8.97 8.97 0 00-1.856 3.826.75.75 0 001.466.316 7.47 7.47 0 011.546-3.186zM16.942 2.271a.75.75 0 00-1.156.956 7.47 7.47 0 011.547 3.186.75.75 0 001.466-.316 8.971 8.971 0 00-1.857-3.826zM10 6a4 4 0 00-4 4v.667l-1.166 2.333a.75.75 0 000 .666.75.75 0 00.666.334h9a.75.75 0 00.666-.334.75.75 0 000-.666L14 10.667V10a4 4 0 00-4-4zm0 13a2.5 2.5 0 01-2.45-2h4.9A2.5 2.5 0 0110 19z"/>
+            </svg>
+            Follow-Up
+          </button>
           <button onClick={() => onEdit(app)}
             className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
@@ -112,7 +128,7 @@ function ApplicationCard({ app, onEdit, onDelete }) {
 }
 
 // ─── Application Directory Card (compact grid) ────────────────────────────────
-function ApplicationDirectoryCard({ app, onEdit, onDelete }) {
+function ApplicationDirectoryCard({ app, onEdit, onDelete, onFollowUp }) {
   const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
   return (
     <div className="bg-white rounded-xl border border-gray-100 border-t-4 p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col gap-3"
@@ -136,12 +152,25 @@ function ApplicationDirectoryCard({ app, onEdit, onDelete }) {
         {app.source && <span>· via {SOURCE_LABELS[app.source] || app.source}</span>}
         {app.expectedSalary && <span className="text-green-600 font-medium">· 💰 {app.expectedSalary}</span>}
       </div>
+      {app.nextFollowUpDate && (
+        <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full font-medium">
+          🔔 {new Date(app.nextFollowUpDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+        </span>
+      )}
 
       {app.notes && (
         <p className="text-[11px] text-gray-400 line-clamp-2 italic">"{app.notes}"</p>
       )}
 
       <div className="flex gap-1.5 pt-1 border-t border-gray-50">
+        <button onClick={() => onFollowUp(app)}
+          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all"
+          title="Schedule follow-up">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+            <path d="M3.5 2A1.5 1.5 0 0 0 2 3.5v9A1.5 1.5 0 0 0 3.5 14h5.5a.75.75 0 0 0 0-1.5H3.5v-9h9v5.5a.75.75 0 0 0 1.5 0V3.5A1.5 1.5 0 0 0 12.5 2h-9ZM8 9.5a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0Zm2.5-1a.75.75 0 0 0-.75.75v.5c0 .414.336.75.75.75h.5a.75.75 0 0 0 0-1.5h-.5V9.25A.75.75 0 0 0 10.5 8.5Z"/>
+          </svg>
+          Follow-Up
+        </button>
         <button onClick={() => onEdit(app)}
           className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
@@ -291,6 +320,300 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
   )
 }
 
+// ─── Follow-Up Modal ──────────────────────────────────────────────────────────
+function FollowUpModal({ open, app, onClose, onChanged }) {
+  const [followUps, setFollowUps] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
+  const [form, setForm] = useState({ followUpDate: todayStr(), note: '', daysFromNow: '' })
+  const [saving, setSaving] = useState(false)
+  const [processingId, setProcessingId] = useState(null)
+  const [useDays, setUseDays] = useState(true)
+
+  const fetch = useCallback(async () => {
+    if (!app) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await getFollowUpsForApplication(app.id)
+      setFollowUps(res.data)
+    } catch {
+      setError('Failed to load follow-ups.')
+    } finally {
+      setLoading(false)
+    }
+  }, [app])
+
+  useEffect(() => {
+    if (open) {
+      setForm({ followUpDate: todayStr(), note: '', daysFromNow: '' })
+      setUseDays(true)
+      setError('')
+      setSuccessMsg('')
+      fetch()
+    }
+  }, [open, fetch])
+
+  const handleAdd = async (e) => {
+    e.preventDefault()
+    let date = form.followUpDate
+    if (useDays) {
+      const days = parseInt(form.daysFromNow, 10)
+      if (!days || days < 1) { setError('Enter a valid number of days (≥ 1).'); return }
+      const d = new Date()
+      d.setDate(d.getDate() + days)
+      date = d.toISOString().slice(0, 10)
+    }
+    if (!date) { setError('Follow-up date is required.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await createFollowUp(app.id, { followUpDate: date, note: form.note.trim() || undefined })
+      setForm({ followUpDate: todayStr(), note: '', daysFromNow: '' })
+      flash('Follow-up scheduled.')
+      fetch()
+      onChanged?.()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to add follow-up.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const flash = (msg) => {
+    setSuccessMsg(msg)
+    setTimeout(() => setSuccessMsg(''), 2500)
+  }
+
+  const markDone = async (fu) => {
+    setProcessingId(fu.id)
+    try {
+      await updateFollowUp(fu.id, { status: 'DONE' })
+      flash('Marked as completed.')
+      fetch()
+      onChanged?.()
+    } catch {
+      setError('Failed to update follow-up.')
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const markPending = async (fu) => {
+    setProcessingId(fu.id)
+    try {
+      await updateFollowUp(fu.id, { status: 'PENDING' })
+      flash('Moved back to pending.')
+      fetch()
+      onChanged?.()
+    } catch {
+      setError('Failed to update follow-up.')
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const remove = async (id) => {
+    setProcessingId(id)
+    try {
+      await deleteFollowUp(id)
+      flash('Follow-up deleted.')
+      fetch()
+      onChanged?.()
+    } catch {
+      setError('Failed to delete follow-up.')
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const reschedule = async (fu, newDate) => {
+    try {
+      await updateFollowUp(fu.id, { followUpDate: newDate })
+      flash('Follow-up rescheduled.')
+      fetch()
+      onChanged?.()
+    } catch {
+      setError('Failed to reschedule follow-up.')
+      throw new Error('reschedule failed')
+    }
+  }
+
+  const inputCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition'
+
+  const pending = followUps.filter((f) => f.status === 'PENDING')
+  const done = followUps.filter((f) => f.status === 'DONE')
+
+  return (
+    <ModalShell
+      open={open} onClose={onClose}
+      title="Follow-Up Reminders"
+      subtitle={app ? `${app.role} at ${app.companyName}` : ''}
+      maxWidth="max-w-lg"
+    >
+      <div className="px-6 py-5 space-y-5">
+        {successMsg && (
+          <div className="p-3 rounded-xl bg-green-50 border border-green-100 text-green-700 text-sm flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
+              <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
+            </svg>
+            {successMsg}
+          </div>
+        )}
+        {error && <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+
+        {/* Add new follow-up */}
+        <form onSubmit={handleAdd} className="bg-blue-50 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Schedule a Follow-Up</p>
+
+          {/* Toggle between days and date */}
+          <div className="flex gap-2">
+            <button type="button"
+              onClick={() => setUseDays(true)}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition ${useDays ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+              Days from now
+            </button>
+            <button type="button"
+              onClick={() => setUseDays(false)}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition ${!useDays ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+              Pick a date
+            </button>
+          </div>
+
+          {useDays ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 whitespace-nowrap">Follow up in</span>
+              <input
+                type="number" min="1" max="365"
+                value={form.daysFromNow}
+                onChange={(e) => setForm((f) => ({ ...f, daysFromNow: e.target.value }))}
+                placeholder="5"
+                className="w-20 px-3 py-2 border border-gray-200 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+              <span className="text-sm text-gray-600">days</span>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Date</label>
+              <input type="date" value={form.followUpDate}
+                onChange={(e) => setForm((f) => ({ ...f, followUpDate: e.target.value }))}
+                className={inputCls} />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Note (optional)</label>
+            <input type="text" value={form.note}
+              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+              placeholder="e.g. Email HR about status update"
+              className={inputCls} />
+          </div>
+
+          <button type="submit" disabled={saving}
+            className="w-full py-2 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2">
+            {saving && <CircularProgress size={13} color="inherit" />}
+            Add Follow-Up
+          </button>
+        </form>
+
+        {/* Follow-up list */}
+        {loading ? (
+          <div className="flex justify-center py-6"><CircularProgress size={24} /></div>
+        ) : followUps.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">No follow-ups scheduled yet.</p>
+        ) : (
+          <div className="space-y-4">
+            {pending.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Pending</p>
+                <div className="space-y-2">
+                  {pending.map((fu) => (
+                    <FollowUpRow key={fu.id} fu={fu} onDone={() => markDone(fu)} onDelete={() => remove(fu.id)} onReschedule={(d) => reschedule(fu, d)} loading={processingId === fu.id} />
+                  ))}
+                </div>
+              </div>
+            )}
+            {done.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Completed</p>
+                <div className="space-y-2">
+                  {done.map((fu) => (
+                    <FollowUpRow key={fu.id} fu={fu} onUndo={() => markPending(fu)} onDelete={() => remove(fu.id)} loading={processingId === fu.id} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </ModalShell>
+  )
+}
+
+function FollowUpRow({ fu, onDone, onUndo, onDelete, onReschedule, loading }) {
+  const isDone = fu.status === 'DONE'
+  const isOverdue = fu.overdue
+  const [editing, setEditing] = useState(false)
+
+  return (
+    <div className={`p-3 rounded-xl border ${isDone ? 'bg-gray-50 border-gray-100 opacity-70' : isOverdue ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'}`}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-xs font-semibold ${isDone ? 'text-gray-400 line-through' : isOverdue ? 'text-red-600' : 'text-gray-700'}`}>
+              📅 {fmtDate(fu.followUpDate)}
+            </span>
+            {isOverdue && !isDone && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">Overdue</span>
+            )}
+            {isDone && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-600">Done</span>
+            )}
+          </div>
+          {fu.note && (
+            <p className={`text-xs mt-0.5 ${isDone ? 'text-gray-400' : 'text-gray-500'}`}>{fu.note}</p>
+          )}
+        </div>
+        <div className="flex gap-1 shrink-0">
+          {!isDone && onDone && (
+            <button onClick={onDone} disabled={loading}
+              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-green-200 text-green-600 bg-white hover:bg-green-500 hover:text-white hover:border-green-500 transition disabled:opacity-50 flex items-center gap-1">
+              {loading ? <CircularProgress size={10} color="inherit" /> : null}
+              Done
+            </button>
+          )}
+          {!isDone && onReschedule && (
+            <button onClick={() => setEditing((e) => !e)} disabled={loading}
+              title="Reschedule"
+              className={`px-2 py-1 text-[11px] font-semibold rounded-lg border transition disabled:opacity-50 ${editing ? 'bg-amber-500 text-white border-amber-500' : 'border-amber-200 text-amber-600 bg-white hover:bg-amber-500 hover:text-white hover:border-amber-500'}`}>
+              📅
+            </button>
+          )}
+          {isDone && onUndo && (
+            <button onClick={onUndo} disabled={loading}
+              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-gray-200 text-gray-500 bg-white hover:bg-gray-200 transition disabled:opacity-50 flex items-center gap-1">
+              {loading ? <CircularProgress size={10} color="inherit" /> : null}
+              Undo
+            </button>
+          )}
+          <button onClick={onDelete} disabled={loading}
+            className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition disabled:opacity-50">
+            ×
+          </button>
+        </div>
+      </div>
+      {editing && (
+        <RescheduleInline
+          currentDate={fu.followUpDate}
+          onSave={async (d) => { await onReschedule(d); setEditing(false) }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
+    </div>
+  )
+}
+
 // ─── Delete Modal ─────────────────────────────────────────────────────────────
 function DeleteModal({ open, app, onClose, onDeleted }) {
   return (
@@ -326,6 +649,7 @@ export default function Applications() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [followUpTarget, setFollowUpTarget] = useState(null)
 
   useEffect(() => {
     getCompanies({}).then((res) => setCompanies(res.data)).catch(() => {})
@@ -345,8 +669,9 @@ export default function Applications() {
 
   useEffect(() => { fetchApplications() }, [fetchApplications])
 
-  const openAdd  = () => { setEditTarget(null); setModalOpen(true) }
-  const openEdit = (a) => { setEditTarget(a); setModalOpen(true) }
+  const openAdd      = () => { setEditTarget(null); setModalOpen(true) }
+  const openEdit     = (a) => { setEditTarget(a); setModalOpen(true) }
+  const openFollowUp = (a) => { setFollowUpTarget(a) }
 
   const handleSaved = () => {
     setModalOpen(false)
@@ -371,7 +696,7 @@ export default function Applications() {
   }, {})
   const sortedLetters = Object.keys(grouped).sort()
 
-  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget }
+  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onFollowUp: openFollowUp }
 
   return (
     <Layout>
@@ -482,6 +807,8 @@ export default function Applications() {
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
       <DeleteModal open={!!deleteTarget} app={deleteTarget}
         onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />
+      <FollowUpModal open={!!followUpTarget} app={followUpTarget}
+        onClose={() => setFollowUpTarget(null)} onChanged={fetchApplications} />
     </Layout>
   )
 }
