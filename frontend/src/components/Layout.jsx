@@ -3,15 +3,16 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   DashboardOutlined, BusinessOutlined, WorkOutlined,
   PeopleOutlined, PersonOutlined, LogoutOutlined,
-  Menu, Close,
+  Menu, Close, NotificationsNoneOutlined,
 } from '@mui/icons-material'
 
 const NAV = [
-  { to: '/dashboard',    Icon: DashboardOutlined, label: 'Dashboard'    },
-  { to: '/companies',    Icon: BusinessOutlined,  label: 'Companies'    },
-  { to: '/applications', Icon: WorkOutlined,      label: 'Applications' },
-  { to: '/recruiters',   Icon: PeopleOutlined,    label: 'Recruiters'   },
-  { to: '/profile',      Icon: PersonOutlined,    label: 'Profile'      },
+  { to: '/dashboard',    Icon: DashboardOutlined,        label: 'Dashboard'    },
+  { to: '/companies',    Icon: BusinessOutlined,          label: 'Companies'    },
+  { to: '/applications', Icon: WorkOutlined,              label: 'Applications' },
+  { to: '/follow-ups',   Icon: NotificationsNoneOutlined, label: 'Follow-Ups'   },
+  { to: '/recruiters',   Icon: PeopleOutlined,            label: 'Recruiters'   },
+  { to: '/profile',      Icon: PersonOutlined,            label: 'Profile'      },
 ]
 
 function Brand() {

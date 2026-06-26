@@ -8,15 +8,19 @@ import com.careerflow.common.SortHelper;
 import com.careerflow.company.Company;
 import com.careerflow.company.CompanyRepository;
 import com.careerflow.exception.ResourceNotFoundException;
+import com.careerflow.followup.FollowUpRepository;
 import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @SuppressWarnings("null")
 @Service
@@ -28,6 +32,7 @@ public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
     private final CompanyRepository companyRepository;
+    private final FollowUpRepository followUpRepository;
     private final SecurityUtils securityUtils;
 
     public ApplicationResponse addApplication(ApplicationRequest request) {
@@ -64,7 +69,8 @@ public class ApplicationService {
             results = applicationRepository.findAllByUserId(user.getId(), sort);
         }
 
-        return results.stream().map(this::toResponse).toList();
+        Map<Long, LocalDate> nearestFollowUps = buildNearestFollowUpMap(results);
+        return results.stream().map(a -> toResponse(a, nearestFollowUps.get(a.getId()))).toList();
     }
 
     public ApplicationResponse updateApplication(Long id, ApplicationUpdateRequest request) {
@@ -117,7 +123,18 @@ public class ApplicationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found"));
     }
 
+    private Map<Long, LocalDate> buildNearestFollowUpMap(List<JobApplication> apps) {
+        if (apps.isEmpty()) return Map.of();
+        List<Long> ids = apps.stream().map(JobApplication::getId).toList();
+        return followUpRepository.findNearestPendingFollowUpDates(ids).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (LocalDate) row[1]));
+    }
+
     private ApplicationResponse toResponse(JobApplication app) {
+        return toResponse(app, null);
+    }
+
+    private ApplicationResponse toResponse(JobApplication app, LocalDate nextFollowUpDate) {
         return ApplicationResponse.builder()
                 .id(app.getId())
                 .companyId(app.getCompany().getId())
@@ -128,6 +145,7 @@ public class ApplicationService {
                 .status(app.getStatus())
                 .expectedSalary(app.getExpectedSalary())
                 .notes(app.getNotes())
+                .nextFollowUpDate(nextFollowUpDate)
                 .createdAt(app.getCreatedAt())
                 .updatedAt(app.getUpdatedAt())
                 .build();

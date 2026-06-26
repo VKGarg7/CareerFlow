@@ -9,6 +9,7 @@ import Profile from './pages/Profile'
 import Companies from './pages/Companies'
 import Applications from './pages/Applications'
 import Recruiters from './pages/Recruiters'
+import FollowUps from './pages/FollowUps'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -61,6 +62,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <Recruiters />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/follow-ups"
+          element={
+            <PrivateRoute>
+              <FollowUps />
             </PrivateRoute>
           }
         />

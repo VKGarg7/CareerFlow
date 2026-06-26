@@ -1,0 +1,97 @@
+package com.careerflow.followup;
+
+import com.careerflow.application.ApplicationRepository;
+import com.careerflow.application.JobApplication;
+import com.careerflow.common.SecurityUtils;
+import com.careerflow.exception.ResourceNotFoundException;
+import com.careerflow.followup.dto.FollowUpRequest;
+import com.careerflow.followup.dto.FollowUpResponse;
+import com.careerflow.followup.dto.FollowUpUpdateRequest;
+import com.careerflow.user.User;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.util.List;
+
+@SuppressWarnings("null")
+@Service
+@RequiredArgsConstructor
+public class FollowUpService {
+
+    private final FollowUpRepository followUpRepository;
+    private final ApplicationRepository applicationRepository;
+    private final SecurityUtils securityUtils;
+
+    public FollowUpResponse createFollowUp(Long applicationId, FollowUpRequest request) {
+        User user = securityUtils.getCurrentUser();
+        JobApplication application = findOwnedApplication(applicationId, user.getId());
+
+        FollowUp followUp = FollowUp.builder()
+                .application(application)
+                .user(user)
+                .followUpDate(request.getFollowUpDate())
+                .note(request.getNote())
+                .build();
+
+        return toResponse(followUpRepository.save(followUp));
+    }
+
+    public List<FollowUpResponse> getFollowUpsForApplication(Long applicationId) {
+        User user = securityUtils.getCurrentUser();
+        findOwnedApplication(applicationId, user.getId());
+        return followUpRepository
+                .findAllByUserIdAndApplicationIdOrderByFollowUpDateAsc(user.getId(), applicationId)
+                .stream().map(this::toResponse).toList();
+    }
+
+    public List<FollowUpResponse> getAllFollowUps(FollowUpStatus status) {
+        User user = securityUtils.getCurrentUser();
+        List<FollowUp> results = status != null
+                ? followUpRepository.findAllByUserIdAndStatusOrderByFollowUpDateAsc(user.getId(), status)
+                : followUpRepository.findAllByUserIdOrderByFollowUpDateAsc(user.getId());
+        return results.stream().map(this::toResponse).toList();
+    }
+
+    public FollowUpResponse updateFollowUp(Long id, FollowUpUpdateRequest request) {
+        User user = securityUtils.getCurrentUser();
+        FollowUp followUp = findOwned(id, user.getId());
+
+        if (request.getFollowUpDate() != null) followUp.setFollowUpDate(request.getFollowUpDate());
+        if (request.getNote() != null) followUp.setNote(request.getNote());
+        if (request.getStatus() != null) followUp.setStatus(request.getStatus());
+
+        return toResponse(followUpRepository.save(followUp));
+    }
+
+    public void deleteFollowUp(Long id) {
+        User user = securityUtils.getCurrentUser();
+        FollowUp followUp = findOwned(id, user.getId());
+        followUpRepository.delete(followUp);
+    }
+
+    private FollowUp findOwned(Long id, Long userId) {
+        return followUpRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Follow-up not found"));
+    }
+
+    private JobApplication findOwnedApplication(Long applicationId, Long userId) {
+        return applicationRepository.findByIdAndUserId(applicationId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
+    }
+
+    private FollowUpResponse toResponse(FollowUp f) {
+        return FollowUpResponse.builder()
+                .id(f.getId())
+                .applicationId(f.getApplication().getId())
+                .companyName(f.getApplication().getCompany().getName())
+                .role(f.getApplication().getRole())
+                .followUpDate(f.getFollowUpDate())
+                .note(f.getNote())
+                .status(f.getStatus())
+                .overdue(f.getStatus() == FollowUpStatus.PENDING && f.getFollowUpDate().isBefore(LocalDate.now()))
+                .createdAt(f.getCreatedAt())
+                .updatedAt(f.getUpdatedAt())
+                .build();
+    }
+}

@@ -20,6 +20,7 @@ public class ApplicationResponse {
     private ApplicationStatus status;
     private String expectedSalary;
     private String notes;
+    private LocalDate nextFollowUpDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
