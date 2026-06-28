@@ -8,20 +8,23 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-export const getProfile = () => api.get('/users/profile')
+export const getProfile    = ()     => api.get('/users/profile')
 export const createProfile = (data) => api.post('/users/profile', data)
 export const updateProfile = (data) => api.patch('/users/profile', data)
 
-export const updateDocuments = (resume, coverLetter, deleteDocumentId) => {
+// Single endpoint for all document operations on the profile
+export const updateProfileDocuments = ({ resume, coverLetter, deleteDocumentId } = {}) => {
   const fd = new FormData()
   if (resume) fd.append('resume', resume)
   if (coverLetter) fd.append('coverLetter', coverLetter)
-  const params = deleteDocumentId ? { params: { deleteDocumentId } } : {}
   return api.patch('/users/profile/documents', fd, {
-    ...params,
+    params: deleteDocumentId != null ? { deleteDocumentId } : undefined,
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
 
-export const downloadDocument = (id) =>
-  api.get(`/users/documents/${id}`, { responseType: 'blob' })
+export const downloadProfileDocument = (id, inline = false) =>
+  api.get(`/users/documents/${id}`, {
+    params: inline ? { inline: true } : undefined,
+    responseType: 'blob',
+  })

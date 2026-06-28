@@ -19,7 +19,7 @@ public class UserProfileResponse {
     private String githubUrl;
     private String portfolioUrl;
     private String bio;
-    private DocumentDto resume;
+    private List<UserResumeDto> resumes;
     private DocumentDto coverLetter;
     private List<EducationDto> education;
     private List<ExperienceDto> experience;

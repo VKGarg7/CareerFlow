@@ -5,8 +5,9 @@ import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
-import { getApplications, addApplication, updateApplication, deleteApplication } from '../api/application'
+import { getApplications, addApplication, updateApplication, deleteApplication, uploadApplicationDocuments, downloadApplicationDocument, viewApplicationDocument } from '../api/application'
 import { getCompanies } from '../api/company'
+import { getProfile } from '../api/user'
 import { getFollowUpsForApplication, createFollowUp, updateFollowUp, deleteFollowUp } from '../api/followup'
 import { todayStr, fmtDate } from '../utils/followup'
 import RescheduleInline from '../components/RescheduleInline'
@@ -86,10 +87,39 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp }) {
                 💰 {app.expectedSalary}
               </span>
             )}
-            {app.nextFollowUpDate && (
-              <span className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium">
-                🔔 Follow-up {new Date(app.nextFollowUpDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-              </span>
+            {app.nextFollowUpDate && (() => {
+              const today = new Date().toISOString().slice(0, 10)
+              const isOverdue = app.nextFollowUpDate < today
+              const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+              const showUpcoming = isOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
+              return (
+                <>
+                  <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                    🔔 {fmt(app.nextFollowUpDate)}
+                    {isOverdue && <span className="ml-1 text-[10px] font-bold">Overdue</span>}
+                  </span>
+                  {showUpcoming && (
+                    <span className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium">
+                      🔔 {fmt(app.nextUpcomingFollowUpDate)}
+                    </span>
+                  )}
+                </>
+              )
+            })()}
+            {app.resume && (
+              <button type="button"
+                onClick={() => triggerDocView(app.resume)}
+                className="inline-flex items-center text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition"
+                title={`View ${app.resume.originalName}`}>
+                📄 {app.resume.originalName.replace(/\.[^/.]+$/, '')}
+              </button>
+            )}
+            {app.coverLetter && (
+              <button type="button" onClick={() => triggerDocView(app.coverLetter)}
+                className="inline-flex items-center text-xs px-2.5 py-1 bg-violet-50 text-violet-600 rounded-full hover:bg-violet-100 transition"
+                title={`View ${app.coverLetter.originalName}`}>
+                ✉ Cover Letter
+              </button>
             )}
           </div>
           {app.notes && (
@@ -152,10 +182,36 @@ function ApplicationDirectoryCard({ app, onEdit, onDelete, onFollowUp }) {
         {app.source && <span>· via {SOURCE_LABELS[app.source] || app.source}</span>}
         {app.expectedSalary && <span className="text-green-600 font-medium">· 💰 {app.expectedSalary}</span>}
       </div>
-      {app.nextFollowUpDate && (
-        <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full font-medium">
-          🔔 {new Date(app.nextFollowUpDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+      {app.nextFollowUpDate && (() => {
+        const today = new Date().toISOString().slice(0, 10)
+        const isOverdue = app.nextFollowUpDate < today
+        const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+        const showUpcoming = isOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
+        return (
+          <>
+            <span className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full font-medium ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+              🔔 {fmt(app.nextFollowUpDate)}
+              {isOverdue && <span className="ml-1 text-[10px] font-bold">Overdue</span>}
+            </span>
+            {showUpcoming && (
+              <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full font-medium">
+                🔔 {fmt(app.nextUpcomingFollowUpDate)}
+              </span>
+            )}
+          </>
+        )
+      })()}
+      {app.resume && (
+        <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full">
+          📄 Resume
         </span>
+      )}
+      {app.coverLetter && (
+        <button type="button" onClick={() => triggerDocView(app.coverLetter)}
+          className="inline-flex items-center text-[11px] px-2 py-0.5 bg-violet-50 text-violet-600 rounded-full hover:bg-violet-100 transition"
+          title={`View ${app.coverLetter.originalName}`}>
+          ✉ Cover Letter
+        </button>
       )}
 
       {app.notes && (
@@ -200,25 +256,119 @@ function dotHex(status) {
   return map[status] || map.APPLIED
 }
 
+function formatSize(b) {
+  if (!b) return ''
+  if (b < 1024) return `${b} B`
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / 1048576).toFixed(1)} MB`
+}
+
+async function triggerDocDownload(doc) {
+  try {
+    const res = await downloadApplicationDocument(doc.id)
+    const url = URL.createObjectURL(new Blob([res.data], { type: doc.contentType }))
+    const a = document.createElement('a')
+    a.href = url; a.download = doc.originalName; a.click()
+    URL.revokeObjectURL(url)
+  } catch {}
+}
+
+async function triggerDocView(doc) {
+  try {
+    const res = await viewApplicationDocument(doc.id)
+    const url = URL.createObjectURL(new Blob([res.data], { type: doc.contentType }))
+    window.open(url, '_blank')
+  } catch {}
+}
+
 // ─── Add / Edit Modal ─────────────────────────────────────────────────────────
 function AddEditModal({ open, app, companies, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // liveApp mirrors app but reflects immediate deletions without closing the modal
+  const [liveApp, setLiveApp] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [resumeFile, setResumeFile] = useState(null)
+  const [resumeError, setResumeError] = useState('')
+  const [coverLetterFile, setCoverLetterFile] = useState(null)
+  const [coverLetterError, setCoverLetterError] = useState('')
+  const [profileResumes, setProfileResumes] = useState([])
+  const [selectedProfileResumeDocId, setSelectedProfileResumeDocId] = useState('')
 
   useEffect(() => {
     if (open) {
+      setLiveApp(app ?? null)
       setForm(app ? {
         companyId: app.companyId || '', role: app.role || '',
         applicationDate: app.applicationDate || new Date().toISOString().slice(0, 10),
         source: app.source || '', status: app.status || 'APPLIED',
         expectedSalary: app.expectedSalary || '', notes: app.notes || '',
       } : EMPTY_FORM)
+      setResumeFile(null)
+      setResumeError('')
+      setCoverLetterFile(null)
+      setCoverLetterError('')
       setError('')
+      setSelectedProfileResumeDocId('')
+      getProfile().then((res) => setProfileResumes(res.data?.resumes ?? [])).catch(() => {})
     }
   }, [open, app])
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  const handleResumePick = (e) => {
+    const file = e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    const ext = file.name.split('.').pop().toLowerCase()
+    if (!['pdf', 'doc', 'docx'].includes(ext)) {
+      setResumeError('Only PDF, DOC, and DOCX files are supported.')
+      return
+    }
+    setResumeError('')
+    setResumeFile(file)
+    setSelectedProfileResumeDocId('')
+  }
+
+  const handleCoverLetterChange = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const ext = file.name.split('.').pop().toLowerCase()
+    if (!['pdf', 'doc', 'docx'].includes(ext)) {
+      setCoverLetterError('Only PDF, DOC, and DOCX files are supported.')
+      e.target.value = ''
+      return
+    }
+    setCoverLetterError('')
+    setCoverLetterFile(file)
+  }
+
+  const handleRemoveResume = async () => {
+    if (!liveApp?.resume) return
+    setDeletingId('resume')
+    try {
+      const res = await deleteApplication(liveApp.id, liveApp.resume.id)
+      setLiveApp(res.data)
+    } catch {
+      setError('Failed to remove resume.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleDeleteCoverLetter = async () => {
+    if (!liveApp?.coverLetter) return
+    setDeletingId('coverLetter')
+    try {
+      const res = await deleteApplication(liveApp.id, liveApp.coverLetter.id)
+      setLiveApp(res.data)
+    } catch {
+      setError('Failed to delete cover letter.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -234,7 +384,22 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
         expectedSalary: form.expectedSalary.trim() || undefined,
         notes: form.notes.trim() || undefined,
       }
-      app ? await updateApplication(app.id, payload) : await addApplication(payload)
+      let savedId
+      if (liveApp) {
+        await updateApplication(liveApp.id, payload)
+        savedId = liveApp.id
+      } else {
+        const res = await addApplication(payload)
+        savedId = res.data.id
+      }
+      if (selectedProfileResumeDocId) {
+        await uploadApplicationDocuments(savedId, { profileResumeDocumentId: Number(selectedProfileResumeDocId) })
+      } else if (resumeFile) {
+        await uploadApplicationDocuments(savedId, { resume: resumeFile })
+      }
+      if (coverLetterFile) {
+        await uploadApplicationDocuments(savedId, { coverLetter: coverLetterFile })
+      }
       onSaved()
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong.')
@@ -303,11 +468,155 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
             <textarea value={form.notes} onChange={set('notes')} rows={3}
               placeholder="Referral contact, interview prep notes..." className={`${inputCls} resize-none`} />
           </div>
+
+          {/* Resume — single */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Resume <span className="text-gray-400 normal-case font-normal">(PDF, DOC, DOCX)</span>
+            </label>
+
+            {liveApp?.resume && (
+              <div className="flex items-center gap-3 p-3 mb-2 rounded-xl border border-gray-200 bg-gray-50">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-indigo-500 shrink-0">
+                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700 truncate">{liveApp.resume.originalName}</p>
+                  <p className="text-xs text-gray-400">{formatSize(liveApp.resume.fileSize)}</p>
+                </div>
+                <button type="button"
+                  onClick={() => triggerDocView(liveApp.resume)}
+                  className="text-xs font-semibold text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition">
+                  View
+                </button>
+                <button type="button"
+                  onClick={() => triggerDocDownload(liveApp.resume)}
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded-lg hover:bg-indigo-50 transition">
+                  Download
+                </button>
+                <button type="button"
+                  onClick={handleRemoveResume}
+                  disabled={deletingId === 'resume'}
+                  className="text-xs font-semibold text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-1">
+                  {deletingId === 'resume' && <CircularProgress size={10} color="inherit" />}
+                  Delete
+                </button>
+              </div>
+            )}
+
+            {/* All upload options — only shown when no resume is attached yet */}
+            {!liveApp?.resume && (
+              <>
+                {/* Profile resume dropdown */}
+                {profileResumes.length > 0 && (
+                  <div className="mb-2">
+                    <label className="block text-xs text-gray-500 mb-1">Select from profile</label>
+                    <select
+                      value={selectedProfileResumeDocId}
+                      onChange={(e) => { setSelectedProfileResumeDocId(e.target.value); setResumeFile(null) }}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white hover:border-gray-300 transition">
+                      <option value="">— choose a resume —</option>
+                      {profileResumes.map((r) => (
+                        <option key={r.id} value={r.documentId}>{r.originalName}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* OR divider when profile resumes exist */}
+                {profileResumes.length > 0 && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex-1 h-px bg-gray-200" />
+                    <span className="text-xs text-gray-400">or upload new</span>
+                    <div className="flex-1 h-px bg-gray-200" />
+                  </div>
+                )}
+
+                {/* Pending new file */}
+                {resumeFile && (
+                  <div className="flex items-center gap-3 p-3 mb-2 rounded-xl border border-indigo-200 bg-indigo-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-indigo-400 shrink-0">
+                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm text-indigo-700 truncate flex-1">{resumeFile.name}</span>
+                    <span className="text-xs text-indigo-400">pending upload</span>
+                    <button type="button" onClick={() => setResumeFile(null)}
+                      className="text-indigo-400 hover:text-red-500 font-bold text-base leading-none px-1 transition">×</button>
+                  </div>
+                )}
+
+                {/* Upload zone */}
+                {!resumeFile && (
+                  <label className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed border-gray-200 hover:border-indigo-300 cursor-pointer transition w-full">
+                    <input type="file" accept=".pdf,.doc,.docx" onChange={handleResumePick} className="sr-only" />
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-gray-400">
+                      <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                    </svg>
+                    <span className="text-sm text-gray-400">Upload resume</span>
+                  </label>
+                )}
+              </>
+            )}
+            {resumeError && <p className="mt-1 text-xs text-red-500">{resumeError}</p>}
+          </div>
+
+          {/* Cover Letter section */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Cover Letter <span className="text-gray-400 normal-case font-normal">(PDF, DOC, DOCX)</span>
+            </label>
+            {liveApp?.coverLetter && (
+              <div className="flex items-center gap-3 p-3 mb-2 rounded-xl border border-gray-200 bg-gray-50">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-violet-500 shrink-0">
+                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700 truncate">{liveApp.coverLetter.originalName}</p>
+                  <p className="text-xs text-gray-400">{formatSize(liveApp.coverLetter.fileSize)}</p>
+                </div>
+                <button type="button" onClick={() => triggerDocView(liveApp.coverLetter)}
+                  className="text-xs font-semibold text-gray-500 hover:text-gray-700 transition px-2 py-1 rounded-lg hover:bg-gray-100">
+                  View
+                </button>
+                <button type="button" onClick={() => triggerDocDownload(liveApp.coverLetter)}
+                  className="text-xs font-semibold text-violet-600 hover:text-violet-800 transition px-2 py-1 rounded-lg hover:bg-violet-50">
+                  Download
+                </button>
+                <button type="button" onClick={handleDeleteCoverLetter}
+                  disabled={deletingId === 'coverLetter'}
+                  className="text-xs font-semibold text-red-400 hover:text-red-600 transition px-2 py-1 rounded-lg hover:bg-red-50 disabled:opacity-50 flex items-center gap-1">
+                  {deletingId === 'coverLetter' && <CircularProgress size={10} color="inherit" />}
+                  Delete
+                </button>
+              </div>
+            )}
+            {!liveApp?.coverLetter && (
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-gray-200 hover:border-violet-300 cursor-pointer transition">
+                  <input type="file" accept=".pdf,.doc,.docx" onChange={handleCoverLetterChange} className="sr-only" />
+                  {coverLetterFile ? (
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-violet-500 shrink-0">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm text-gray-700 truncate flex-1">{coverLetterFile.name}</span>
+                      <button type="button" onClick={(e) => { e.preventDefault(); setCoverLetterFile(null) }}
+                        className="text-gray-400 hover:text-red-500 transition font-bold text-base leading-none px-1">×</button>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-400">Click to upload cover letter</span>
+                  )}
+                </label>
+                {coverLetterError && <p className="text-xs text-red-500">{coverLetterError}</p>}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving}
               className="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm">
               {saving && <CircularProgress size={14} color="inherit" />}
-              {app ? 'Save Changes' : 'Add Application'}
+              {liveApp ? 'Save Changes' : 'Add Application'}
             </button>
             <button type="button" onClick={onClose}
               className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
