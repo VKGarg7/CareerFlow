@@ -1083,6 +1083,90 @@ export default function Applications() {
       })
     : filteredApplications
 
+  // Analytics — derived from full unfiltered list
+  const thisMonth = (() => {
+    const now = new Date()
+    const y = now.getFullYear(), m = now.getMonth()
+    return applications.filter((a) => {
+      if (!a.applicationDate) return false
+      const d = new Date(a.applicationDate)
+      return d.getFullYear() === y && d.getMonth() === m
+    }).length
+  })()
+  const activeCount = applications.filter(
+    (a) => !['REJECTED', 'JOINED'].includes(a.status)
+  ).length
+  const offerCount = applications.filter((a) => a.status === 'OFFER_RECEIVED').length
+  const conversionRate = applications.length > 0
+    ? ((offerCount / applications.length) * 100).toFixed(1)
+    : null
+  const interviewsScheduled = applications.filter((a) => a.status === 'INTERVIEW_SCHEDULED').length
+  const interviewsCleared   = applications.filter((a) => a.status === 'INTERVIEW_CLEARED').length
+  const totalInterviews     = interviewsScheduled + interviewsCleared
+  const interviewSuccessRate = totalInterviews > 0
+    ? ((interviewsCleared / totalInterviews) * 100).toFixed(1)
+    : null
+
+  // Monthly trend — last 12 months
+  const monthlyTrend = (() => {
+    const now = new Date()
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
+      const y = d.getFullYear(), m = d.getMonth()
+      const count = applications.filter((a) => {
+        if (!a.applicationDate) return false
+        const ad = new Date(a.applicationDate)
+        return ad.getFullYear() === y && ad.getMonth() === m
+      }).length
+      return {
+        label: d.toLocaleDateString('en-US', { month: 'short' }),
+        fullLabel: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        count,
+        isCurrent: y === now.getFullYear() && m === now.getMonth(),
+      }
+    })
+  })()
+  const trendMax = Math.max(...monthlyTrend.map((m) => m.count), 1)
+
+  // Top companies by application count
+  const topCompanies = (() => {
+    const map = {}
+    applications.forEach((a) => {
+      if (!a.companyId) return
+      if (!map[a.companyId]) map[a.companyId] = { name: a.companyName, count: 0, statuses: [] }
+      map[a.companyId].count++
+      map[a.companyId].statuses.push(a.status)
+    })
+    return Object.values(map)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+  })()
+  const topCompanyMax = topCompanies[0]?.count || 1
+
+  // Source analysis
+  const sourceAnalysis = (() => {
+    const map = {}
+    applications.forEach((a) => {
+      const key = a.source || 'OTHER'
+      if (!map[key]) map[key] = { total: 0, offers: 0, interviews: 0 }
+      map[key].total++
+      if (a.status === 'OFFER_RECEIVED') map[key].offers++
+      if (a.status === 'INTERVIEW_SCHEDULED' || a.status === 'INTERVIEW_CLEARED') map[key].interviews++
+    })
+    return Object.entries(map)
+      .map(([key, { total, offers, interviews }]) => ({
+        key,
+        label: SOURCE_LABELS[key] || key,
+        total,
+        offers,
+        interviews,
+        offerRate: total > 0 ? (offers / total) * 100 : 0,
+      }))
+      .sort((a, b) => b.total - a.total)
+  })()
+  const sourceMax = sourceAnalysis[0]?.total || 1
+  const bestSource = sourceAnalysis.filter((s) => s.total >= 2).sort((a, b) => b.offerRate - a.offerRate)[0] ?? null
+
   // Directory view: group by company name alphabetically
   const grouped = displayApplications.reduce((acc, a) => {
     const letter = a.companyName?.[0]?.toUpperCase() || '#'
@@ -1109,6 +1193,178 @@ export default function Applications() {
 
       {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
       {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+
+      {/* Analytics bar */}
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+          {[
+            { label: 'Total Submitted', value: applications.length, icon: '📨', color: 'text-blue-600',   bg: 'bg-blue-50'   },
+            { label: 'This Month',      value: thisMonth,           icon: '📅', color: 'text-violet-600', bg: 'bg-violet-50' },
+            { label: 'Active',          value: activeCount,         icon: '⚡', color: 'text-amber-600',  bg: 'bg-amber-50'  },
+          ].map(({ label, value, icon, color, bg }) => (
+            <div key={label} className={`${bg} rounded-2xl px-4 py-3 flex items-center gap-3`}>
+              <span className="text-xl shrink-0">{icon}</span>
+              <div className="min-w-0">
+                <p className={`text-2xl font-black leading-none ${color}`}>{value}</p>
+                <p className="text-[11px] text-gray-500 font-medium mt-0.5 truncate">{label}</p>
+              </div>
+            </div>
+          ))}
+          {/* Offer conversion rate */}
+          <div className="bg-green-50 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <span className="text-xl shrink-0">🎯</span>
+            <div className="min-w-0">
+              <p className="text-2xl font-black leading-none text-green-600">
+                {conversionRate !== null ? `${conversionRate}%` : '—'}
+              </p>
+              <p className="text-[11px] text-gray-500 font-medium mt-0.5">Offer Rate</p>
+              {conversionRate !== null && (
+                <p className="text-[10px] text-gray-400 leading-tight">{offerCount} of {applications.length}</p>
+              )}
+            </div>
+          </div>
+          {/* Interview success rate */}
+          <div className="bg-purple-50 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <span className="text-xl shrink-0">🧠</span>
+            <div className="min-w-0">
+              <p className="text-2xl font-black leading-none text-purple-600">
+                {interviewSuccessRate !== null ? `${interviewSuccessRate}%` : '—'}
+              </p>
+              <p className="text-[11px] text-gray-500 font-medium mt-0.5">Interview Rate</p>
+              {interviewSuccessRate !== null && (
+                <p className="text-[10px] text-gray-400 leading-tight">{interviewsCleared} of {totalInterviews}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monthly trend + top companies */}
+      {!loading && applications.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+
+          {/* Monthly trend chart */}
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-4 pb-3">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Monthly Trend</p>
+            <div className="flex items-end gap-1.5 h-24">
+              {monthlyTrend.map(({ label, fullLabel, count, isCurrent }) => {
+                const heightPct = trendMax > 0 ? (count / trendMax) * 100 : 0
+                return (
+                  <div key={fullLabel} className="flex-1 flex flex-col items-center gap-1 group relative">
+                    <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 z-10
+                      hidden group-hover:flex flex-col items-center pointer-events-none">
+                      <div className="bg-gray-800 text-white text-[11px] font-semibold px-2 py-1 rounded-lg whitespace-nowrap shadow-lg">
+                        {fullLabel}: {count}
+                      </div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rotate-45 -mt-[3px]" />
+                    </div>
+                    <div className="w-full flex items-end" style={{ height: '80px' }}>
+                      <div
+                        className={`w-full rounded-t-md transition-all duration-500 ${
+                          isCurrent ? 'bg-blue-500' : count === 0 ? 'bg-gray-100' : 'bg-blue-200 group-hover:bg-blue-400'
+                        }`}
+                        style={{ height: count === 0 ? '3px' : `${Math.max(heightPct, 6)}%` }}
+                      />
+                    </div>
+                    <span className={`text-[10px] font-semibold ${isCurrent ? 'text-blue-600' : 'text-gray-400'}`}>
+                      {label}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Top companies */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-4 pb-3">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Most Applied</p>
+            {topCompanies.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-6">No data yet</p>
+            ) : (
+              <div className="space-y-3">
+                {topCompanies.map(({ name, count, statuses }, i) => {
+                  const barPct = (count / topCompanyMax) * 100
+                  const hasOffer = statuses.includes('OFFER_RECEIVED')
+                  const hasInterview = statuses.some((s) => s.startsWith('INTERVIEW'))
+                  const tag = hasOffer ? { label: 'Offer', cls: 'bg-green-100 text-green-700' }
+                    : hasInterview ? { label: 'Interview', cls: 'bg-purple-100 text-purple-700' }
+                    : null
+                  return (
+                    <div key={name}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] font-bold text-gray-400 w-4 shrink-0">#{i + 1}</span>
+                          <span className="text-xs font-semibold text-gray-700 truncate">{name}</span>
+                          {tag && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${tag.cls}`}>
+                              {tag.label}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-gray-500 shrink-0 ml-2">{count}</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-400 rounded-full transition-all duration-500"
+                          style={{ width: `${barPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Source analysis */}
+      {!loading && sourceAnalysis.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-4 pb-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Application Sources</p>
+            {bestSource && (
+              <span className="text-[11px] font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full">
+                🏆 Best: {bestSource.label} ({bestSource.offerRate.toFixed(0)}% offer rate)
+              </span>
+            )}
+          </div>
+          <div className="space-y-3">
+            {sourceAnalysis.map(({ key, label, total, offers, interviews, offerRate }) => {
+              const isBest = bestSource?.key === key
+              return (
+                <div key={key}>
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className={`text-xs font-semibold w-28 shrink-0 truncate ${isBest ? 'text-green-700' : 'text-gray-700'}`}>
+                      {label}
+                      {isBest && <span className="ml-1 text-green-500">★</span>}
+                    </span>
+                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${isBest ? 'bg-green-400' : 'bg-blue-300'}`}
+                        style={{ width: `${(total / sourceMax) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-gray-500 w-5 text-right shrink-0">{total}</span>
+                    <div className="flex gap-2 shrink-0">
+                      {interviews > 0 && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600">
+                          {interviews} interview{interviews !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {offers > 0 && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-50 text-green-700">
+                          {offers} offer{offers !== 1 ? 's' : ''} · {offerRate.toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Status summary bar */}
       {!loading && applications.length > 0 && (
