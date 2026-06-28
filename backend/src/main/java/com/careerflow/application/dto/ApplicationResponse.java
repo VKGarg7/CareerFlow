@@ -2,6 +2,7 @@ package com.careerflow.application.dto;
 
 import com.careerflow.application.ApplicationSource;
 import com.careerflow.application.ApplicationStatus;
+import com.careerflow.document.DocumentDto;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -20,7 +21,10 @@ public class ApplicationResponse {
     private ApplicationStatus status;
     private String expectedSalary;
     private String notes;
+    private DocumentDto resume;
+    private DocumentDto coverLetter;
     private LocalDate nextFollowUpDate;
+    private LocalDate nextUpcomingFollowUpDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -17,6 +17,8 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
     List<JobApplication> findAllByUserIdAndSource(Long userId, ApplicationSource source, Sort sort);
     List<JobApplication> findAllByUserIdAndCompanyIdAndStatus(Long userId, Long companyId, ApplicationStatus status, Sort sort);
     Optional<JobApplication> findByIdAndUserId(Long id, Long userId);
+    Optional<JobApplication> findByResumeIdAndUserId(Long resumeId, Long userId);
+    Optional<JobApplication> findByCoverLetterIdAndUserId(Long coverLetterId, Long userId);
     boolean existsByUserIdAndCompanyId(Long userId, Long companyId);
 
     @Modifying

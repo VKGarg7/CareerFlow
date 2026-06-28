@@ -21,23 +21,13 @@ public class UserController {
     }
 
     @PostMapping("/profile")
-    public ResponseEntity<ProfileUpdateResponse> saveProfile(
-            @RequestBody UpdateProfileRequest data) {
-        return ResponseEntity.ok(userService.saveProfile(data, null, null));
+    public ResponseEntity<ProfileUpdateResponse> saveProfile(@RequestBody UpdateProfileRequest data) {
+        return ResponseEntity.ok(userService.saveProfile(data));
     }
 
     @PatchMapping("/profile")
-    public ResponseEntity<ProfileUpdateResponse> updateProfile(
-            @RequestBody UpdateProfileRequest data) {
-        return ResponseEntity.ok(userService.updateProfile(data, null, null));
-    }
-
-    @PatchMapping(value = "/profile/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ProfileUpdateResponse> updateDocuments(
-            @RequestPart(required = false) MultipartFile resume,
-            @RequestPart(required = false) MultipartFile coverLetter,
-            @RequestParam(required = false) Long deleteDocumentId) {
-        return ResponseEntity.ok(userService.updateDocuments(resume, coverLetter, deleteDocumentId));
+    public ResponseEntity<ProfileUpdateResponse> updateProfile(@RequestBody UpdateProfileRequest data) {
+        return ResponseEntity.ok(userService.updateProfile(data));
     }
 
     @DeleteMapping("/profile")
@@ -46,8 +36,19 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    // Resume upload/delete + cover letter upload/delete — all through one endpoint
+    @PatchMapping(value = "/profile/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UserProfileResponse> updateDocuments(
+            @RequestPart(required = false) MultipartFile resume,
+            @RequestPart(required = false) MultipartFile coverLetter,
+            @RequestParam(required = false) Long deleteDocumentId) {
+        return ResponseEntity.ok(userService.updateDocuments(resume, coverLetter, deleteDocumentId));
+    }
+
     @GetMapping("/documents/{id}")
-    public ResponseEntity<Resource> downloadDocument(@PathVariable Long id) {
-        return userService.downloadDocument(id);
+    public ResponseEntity<Resource> downloadDocument(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean inline) {
+        return userService.downloadDocument(id, inline);
     }
 }

@@ -5,9 +5,12 @@ import com.careerflow.application.dto.ApplicationResponse;
 import com.careerflow.application.dto.ApplicationUpdateRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -40,8 +43,29 @@ public class ApplicationController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteApplication(@PathVariable Long id) {
+    public ResponseEntity<?> delete(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long documentId) {
+        if (documentId != null) {
+            return ResponseEntity.ok(applicationService.deleteDocument(id, documentId));
+        }
         applicationService.deleteApplication(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping(value = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApplicationResponse> uploadDocuments(
+            @PathVariable Long id,
+            @RequestPart(required = false) MultipartFile resume,
+            @RequestPart(required = false) MultipartFile coverLetter,
+            @RequestParam(required = false) Long profileResumeDocumentId) {
+        return ResponseEntity.ok(applicationService.uploadDocuments(id, resume, coverLetter, profileResumeDocumentId));
+    }
+
+    @GetMapping("/documents/{documentId}")
+    public ResponseEntity<Resource> downloadDocument(
+            @PathVariable Long documentId,
+            @RequestParam(defaultValue = "false") boolean inline) {
+        return applicationService.downloadDocument(documentId, inline);
     }
 }

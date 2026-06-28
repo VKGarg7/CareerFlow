@@ -2,6 +2,7 @@ package com.careerflow.application;
 
 import com.careerflow.common.SoftDeleteEntity;
 import com.careerflow.company.Company;
+import com.careerflow.document.Document;
 import com.careerflow.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -43,4 +44,12 @@ public class JobApplication extends SoftDeleteEntity {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "resume_id")
+    private Document resume;
+
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "cover_letter_id")
+    private Document coverLetter;
 }
