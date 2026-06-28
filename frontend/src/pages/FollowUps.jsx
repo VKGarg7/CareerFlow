@@ -7,6 +7,7 @@ import EmptyState from '../components/EmptyState'
 import { getAllFollowUps, updateFollowUp, deleteFollowUp } from '../api/followup'
 import { todayStr, fmtDate, fmtDateTime, daysLabel } from '../utils/followup'
 import RescheduleInline from '../components/RescheduleInline'
+import CompanyDetailModal from '../components/CompanyDetailModal'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function monthKey(dtStr) {
@@ -95,7 +96,7 @@ function SectionHeader({ icon, label, count, accent }) {
 }
 
 // ─── Active follow-up card ────────────────────────────────────────────────────
-function FollowUpCard({ fu, onDone, onDelete, onReschedule }) {
+function FollowUpCard({ fu, onDone, onDelete, onReschedule, onCompany }) {
   const isOverdue = fu.overdue
   const [editing, setEditing] = useState(false)
 
@@ -119,8 +120,10 @@ function FollowUpCard({ fu, onDone, onDelete, onReschedule }) {
               {daysLabel(fu.followUpDate)}
             </span>
           </div>
-          <p className="text-sm font-semibold text-gray-700 truncate">
-            {fu.companyName}<span className="text-gray-400 font-normal"> · {fu.role}</span>
+          <p className="text-sm text-gray-700 flex items-center gap-1 flex-wrap">
+            <button type="button" onClick={() => onCompany(fu.companyId)}
+              className="font-semibold hover:text-blue-600 transition">{fu.companyName}</button>
+            <span className="text-gray-400 font-normal">· {fu.role}</span>
           </p>
           {fu.note && (
             <p className="text-xs mt-1 text-gray-500 line-clamp-2">"{fu.note}"</p>
@@ -155,7 +158,7 @@ function FollowUpCard({ fu, onDone, onDelete, onReschedule }) {
 }
 
 // ─── History card (completed follow-ups) ──────────────────────────────────────
-function HistoryCard({ fu, onUndo, onDelete }) {
+function HistoryCard({ fu, onUndo, onDelete, onCompany }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-green-300 p-4 hover:shadow-md transition-all duration-200">
       <div className="flex items-start gap-4">
@@ -166,8 +169,10 @@ function HistoryCard({ fu, onUndo, onDelete }) {
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-gray-800 truncate mb-1">
-            {fu.companyName}<span className="text-gray-400 font-normal"> · {fu.role}</span>
+          <p className="text-sm text-gray-800 flex items-center gap-1 flex-wrap mb-1">
+            <button type="button" onClick={() => onCompany(fu.companyId)}
+              className="font-bold hover:text-blue-600 transition">{fu.companyName}</button>
+            <span className="text-gray-400 font-normal">· {fu.role}</span>
           </p>
 
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -208,6 +213,7 @@ export default function FollowUps() {
   const [followUps, setFollowUps] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [companyDetailId, setCompanyDetailId] = useState(null)
   const [success, setSuccess] = useState('')
   const [activeChip, setActiveChip] = useState(null)
 
@@ -346,6 +352,7 @@ export default function FollowUps() {
                         onDone={() => handleDone(fu)}
                         onDelete={() => handleDelete(fu.id)}
                         onReschedule={(d) => handleReschedule(fu, d)}
+                        onCompany={setCompanyDetailId}
                       />
                     ))}
                   </div>
@@ -389,6 +396,7 @@ export default function FollowUps() {
                       <HistoryCard key={fu.id} fu={fu}
                         onUndo={() => handleUndo(fu)}
                         onDelete={() => handleDelete(fu.id)}
+                        onCompany={setCompanyDetailId}
                       />
                     ))}
                   </div>
@@ -398,6 +406,8 @@ export default function FollowUps() {
           )}
         </>
       )}
+      <CompanyDetailModal open={companyDetailId !== null} companyId={companyDetailId}
+        onClose={() => setCompanyDetailId(null)} />
     </Layout>
   )
 }

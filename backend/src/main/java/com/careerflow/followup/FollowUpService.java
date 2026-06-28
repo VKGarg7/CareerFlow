@@ -84,6 +84,7 @@ public class FollowUpService {
         return FollowUpResponse.builder()
                 .id(f.getId())
                 .applicationId(f.getApplication().getId())
+                .companyId(f.getApplication().getCompany().getId())
                 .companyName(f.getApplication().getCompany().getName())
                 .role(f.getApplication().getRole())
                 .followUpDate(f.getFollowUpDate())

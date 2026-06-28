@@ -14,6 +14,7 @@ import RescheduleInline from '../components/RescheduleInline'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
+import CompanyDetailModal from '../components/CompanyDetailModal'
 
 const STATUS_CONFIG = {
   SAVED:               { label: 'Saved',               badge: 'bg-gray-100 text-gray-600',    border: 'border-l-gray-300',    dot: 'bg-gray-400'    },
@@ -56,7 +57,7 @@ function StatusBadge({ status }) {
 }
 
 // ─── Application List Card ────────────────────────────────────────────────────
-function ApplicationCard({ app, onEdit, onDelete, onFollowUp }) {
+function ApplicationCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
   const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
   return (
     <div className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${cfg.border} p-5 hover:shadow-md transition-all duration-200`}>
@@ -67,7 +68,10 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp }) {
 
         <div className="flex-1 min-w-0">
           <div className="min-w-0 mb-2">
-            <h3 className="text-base font-bold text-gray-800 truncate mb-1.5">{app.companyName}</h3>
+            <button type="button" onClick={() => onCompany(app.companyId)}
+              className="block w-full text-base font-bold text-gray-800 truncate mb-1.5 hover:text-blue-600 transition text-left">
+              {app.companyName}
+            </button>
             <div><StatusBadge status={app.status} /></div>
           </div>
           <p className="text-sm font-medium text-gray-600 mb-2">💼 {app.role}</p>
@@ -94,14 +98,14 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp }) {
               const showUpcoming = isOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
               return (
                 <>
-                  <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                  <button type="button" onClick={() => onFollowUp(app)} className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium hover:opacity-80 transition ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
                     🔔 {fmt(app.nextFollowUpDate)}
                     {isOverdue && <span className="ml-1 text-[10px] font-bold">Overdue</span>}
-                  </span>
+                  </button>
                   {showUpcoming && (
-                    <span className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium">
+                    <button type="button" onClick={() => onFollowUp(app)} className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium hover:opacity-80 transition">
                       🔔 {fmt(app.nextUpcomingFollowUpDate)}
-                    </span>
+                    </button>
                   )}
                 </>
               )
@@ -157,90 +161,110 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp }) {
   )
 }
 
-// ─── Application Directory Card (compact grid) ────────────────────────────────
-function ApplicationDirectoryCard({ app, onEdit, onDelete, onFollowUp }) {
+// ─── Application Grid Card ─────────────────────────────────────────────────────
+function ApplicationDirectoryCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
   const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
+  const today = new Date().toISOString().slice(0, 10)
+  const hasOverdue = app.nextFollowUpDate && app.nextFollowUpDate < today
+  const hasUpcoming = app.nextFollowUpDate && app.nextFollowUpDate >= today
+  const showUpcoming = hasOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
+  const fmtDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+
   return (
-    <div className="bg-white rounded-xl border border-gray-100 border-t-4 p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col gap-3"
-      style={{ borderTopColor: dotHex(app.status) }}>
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
-          {initials(app.companyName)}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-gray-800 truncate">{app.companyName}</p>
-          <p className="text-xs text-gray-500 truncate">💼 {app.role}</p>
-        </div>
-      </div>
+    <div onClick={() => onEdit(app)} style={{ borderTopColor: dotHex(app.status) }}
+      className="bg-white rounded-2xl border border-gray-100 border-t-4 shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col cursor-pointer overflow-hidden group">
 
-      <div className="self-start"><StatusBadge status={app.status} /></div>
+      {/* Card body */}
+      <div className="p-4 flex flex-col gap-3 flex-1">
+        {/* Avatar + company + role */}
+        <div className="flex items-start gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
+            {initials(app.companyName)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <button type="button" onClick={(e) => { e.stopPropagation(); onCompany(app.companyId) }}
+              className="block text-sm font-bold text-gray-800 truncate hover:text-blue-600 transition text-left leading-tight">
+              {app.companyName}
+            </button>
+            <p className="text-xs text-gray-500 truncate mt-0.5">{app.role}</p>
+          </div>
+        </div>
 
-      <div className="flex flex-wrap gap-1.5 text-[11px] text-gray-400">
-        {app.applicationDate && (
-          <span>📅 {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-        )}
-        {app.source && <span>· via {SOURCE_LABELS[app.source] || app.source}</span>}
-        {app.expectedSalary && <span className="text-green-600 font-medium">· 💰 {app.expectedSalary}</span>}
-      </div>
-      {app.nextFollowUpDate && (() => {
-        const today = new Date().toISOString().slice(0, 10)
-        const isOverdue = app.nextFollowUpDate < today
-        const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-        const showUpcoming = isOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
-        return (
-          <>
-            <span className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full font-medium ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-              🔔 {fmt(app.nextFollowUpDate)}
-              {isOverdue && <span className="ml-1 text-[10px] font-bold">Overdue</span>}
+        {/* Status + date row */}
+        <div className="flex items-center justify-between gap-2">
+          <StatusBadge status={app.status} />
+          {app.applicationDate && (
+            <span className="text-[11px] text-gray-400 shrink-0">
+              {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
             </span>
+          )}
+        </div>
+
+        {/* Follow-up chips */}
+        {(hasOverdue || hasUpcoming || showUpcoming) && (
+          <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
+            {hasOverdue && (
+              <button type="button" onClick={() => onFollowUp(app)}
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-red-50 text-red-600 hover:bg-red-100 transition">
+                🔔 {fmtDate(app.nextFollowUpDate)} · Overdue
+              </button>
+            )}
+            {(hasUpcoming && !hasOverdue) && (
+              <button type="button" onClick={() => onFollowUp(app)}
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
+                🔔 {fmtDate(app.nextFollowUpDate)}
+              </button>
+            )}
             {showUpcoming && (
-              <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full font-medium">
-                🔔 {fmt(app.nextUpcomingFollowUpDate)}
+              <button type="button" onClick={() => onFollowUp(app)}
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
+                🔔 {fmtDate(app.nextUpcomingFollowUpDate)}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Doc + salary indicators */}
+        {(app.resume || app.coverLetter || app.expectedSalary) && (
+          <div className="flex flex-wrap gap-1.5">
+            {app.resume && (
+              <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-medium">
+                📄 Resume
               </span>
             )}
-          </>
-        )
-      })()}
-      {app.resume && (
-        <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full">
-          📄 Resume
-        </span>
-      )}
-      {app.coverLetter && (
-        <button type="button" onClick={() => triggerDocView(app.coverLetter)}
-          className="inline-flex items-center text-[11px] px-2 py-0.5 bg-violet-50 text-violet-600 rounded-full hover:bg-violet-100 transition"
-          title={`View ${app.coverLetter.originalName}`}>
-          ✉ Cover Letter
-        </button>
-      )}
+            {app.coverLetter && (
+              <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-violet-50 text-violet-600 rounded-full font-medium">
+                ✉ Cover Letter
+              </span>
+            )}
+            {app.expectedSalary && (
+              <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-green-50 text-green-600 rounded-full font-medium">
+                {app.expectedSalary}
+              </span>
+            )}
+          </div>
+        )}
 
-      {app.notes && (
-        <p className="text-[11px] text-gray-400 line-clamp-2 italic">"{app.notes}"</p>
-      )}
+        {app.notes && (
+          <p className="text-[11px] text-gray-400 line-clamp-1 italic">"{app.notes}"</p>
+        )}
+      </div>
 
-      <div className="flex gap-1.5 pt-1 border-t border-gray-50">
+      {/* Action footer */}
+      <div className="flex border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => onFollowUp(app)}
-          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all"
-          title="Schedule follow-up">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-            <path d="M3.5 2A1.5 1.5 0 0 0 2 3.5v9A1.5 1.5 0 0 0 3.5 14h5.5a.75.75 0 0 0 0-1.5H3.5v-9h9v5.5a.75.75 0 0 0 1.5 0V3.5A1.5 1.5 0 0 0 12.5 2h-9ZM8 9.5a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0Zm2.5-1a.75.75 0 0 0-.75.75v.5c0 .414.336.75.75.75h.5a.75.75 0 0 0 0-1.5h-.5V9.25A.75.75 0 0 0 10.5 8.5Z"/>
-          </svg>
-          Follow-Up
+          className="flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors">
+          🔔 Follow-Up
         </button>
+        <div className="w-px bg-gray-100" />
         <button onClick={() => onEdit(app)}
-          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-            <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z" />
-            <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9a.75.75 0 0 1 1.5 0v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z" />
-          </svg>
-          Edit
+          className="flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+          ✏️ Edit
         </button>
+        <div className="w-px bg-gray-100" />
         <button onClick={() => onDelete(app)}
-          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-            <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
-          </svg>
-          Delete
+          className="flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition-colors">
+          🗑️ Delete
         </button>
       </div>
     </div>
@@ -959,6 +983,7 @@ export default function Applications() {
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [followUpTarget, setFollowUpTarget] = useState(null)
+  const [companyDetailId, setCompanyDetailId] = useState(null)
 
   useEffect(() => {
     getCompanies({}).then((res) => setCompanies(res.data)).catch(() => {})
@@ -1005,7 +1030,7 @@ export default function Applications() {
   }, {})
   const sortedLetters = Object.keys(grouped).sort()
 
-  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onFollowUp: openFollowUp }
+  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onFollowUp: openFollowUp, onCompany: setCompanyDetailId }
 
   return (
     <Layout>
@@ -1094,19 +1119,8 @@ export default function Applications() {
             {applications.length} {applications.length === 1 ? 'application' : 'applications'}
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            {sortedLetters.map((letter) => (
-              <>
-                <div key={`hdr-${letter}`} className="col-span-full flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center justify-center shrink-0">
-                    {letter}
-                  </span>
-                  <div className="flex-1 h-px bg-gray-100" />
-                  <span className="text-xs text-gray-400">{grouped[letter].length}</span>
-                </div>
-                {grouped[letter].map((a) => (
-                  <ApplicationDirectoryCard key={a.id} app={a} {...cardProps} />
-                ))}
-              </>
+            {applications.map((a) => (
+              <ApplicationDirectoryCard key={a.id} app={a} {...cardProps} />
             ))}
           </div>
         </div>
@@ -1118,6 +1132,8 @@ export default function Applications() {
         onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />
       <FollowUpModal open={!!followUpTarget} app={followUpTarget}
         onClose={() => setFollowUpTarget(null)} onChanged={fetchApplications} />
+      <CompanyDetailModal open={companyDetailId !== null} companyId={companyDetailId}
+        onClose={() => setCompanyDetailId(null)} />
     </Layout>
   )
 }
