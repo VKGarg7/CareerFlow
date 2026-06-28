@@ -1,13 +1,3 @@
-/**
- * Clickable status summary cards — one per status showing item count.
- *
- * Props:
- *   items:        array of data objects
- *   statusKey:    field name on each item to group by (default 'status')
- *   statusConfig: { STATUS_KEY: { label, badge } }  — badge must be Tailwind bg+text classes
- *   activeFilter: currently selected status string ('' = all)
- *   onFilter:     (statusKey | '') => void
- */
 export default function StatusSummaryBar({
   items = [],
   statusKey = 'status',
@@ -21,35 +11,49 @@ export default function StatusSummaryBar({
   }, {})
 
   const statuses = Object.entries(statusConfig)
+  const allActive = activeFilter === ''
 
   return (
-    <div
-      className={`grid gap-2 mb-6 ${
-        statuses.length <= 6
-          ? 'grid-cols-3 sm:grid-cols-6'
-          : 'grid-cols-3 sm:grid-cols-5'
-      }`}
-    >
-      {statuses.map(([key, cfg]) => (
+    <div className="mb-6">
+      <div className="flex flex-wrap gap-2">
+        {/* All chip */}
         <button
-          key={key}
-          onClick={() => onFilter(activeFilter === key ? '' : key)}
-          className={`rounded-xl p-3 text-center transition-all border ${
-            activeFilter === key
-              ? `${cfg.badge} border-current shadow-sm`
-              : 'bg-white border-gray-100 hover:border-gray-200 hover:shadow-sm'
+          onClick={() => onFilter('')}
+          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+            allActive
+              ? 'bg-gray-800 text-white border-gray-800 shadow-sm'
+              : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700'
           }`}
         >
-          <p className="text-lg font-bold text-gray-800">{counts[key] || 0}</p>
-          <p
-            className={`text-[11px] font-semibold leading-tight mt-0.5 ${
-              activeFilter === key ? '' : 'text-gray-500'
-            }`}
-          >
-            {cfg.label}
-          </p>
+          All
+          <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${allActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+            {items.length}
+          </span>
         </button>
-      ))}
+
+        {/* Per-status chips — only shown if count > 0 */}
+        {statuses.map(([key, cfg]) => {
+          const count = counts[key] || 0
+          if (count === 0) return null
+          const isActive = activeFilter === key
+          return (
+            <button
+              key={key}
+              onClick={() => onFilter(isActive ? '' : key)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                isActive
+                  ? `${cfg.badge} border-current shadow-sm ring-2 ring-offset-1 ring-current`
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700'
+              }`}
+            >
+              {cfg.label}
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-black/10' : 'bg-gray-100 text-gray-500'}`}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
