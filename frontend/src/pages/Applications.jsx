@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Alert, CircularProgress } from '@mui/material'
-import { Add, KeyboardArrowDown } from '@mui/icons-material'
+import { Add } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
@@ -34,10 +34,10 @@ const SOURCE_LABELS = {
 }
 
 const SORT_OPTIONS = [
-  { value: 'createdAt',       label: 'Date Added' },
-  { value: 'applicationDate', label: 'Applied On' },
-  { value: 'role',            label: 'Role' },
-  { value: 'status',          label: 'Status' },
+  { value: 'applicationDate', label: 'Date',    clientSide: false },
+  { value: 'company',         label: 'Company', clientSide: true  },
+  { value: 'status',          label: 'Status',  clientSide: false },
+  { value: 'createdAt',       label: 'Added',   clientSide: false },
 ]
 
 const EMPTY_FORM = {
@@ -975,6 +975,10 @@ export default function Applications() {
   const [success, setSuccess] = useState('')
 
   const [filterStatus, setFilterStatus] = useState('')
+  const [search, setSearch] = useState('')
+  const [datePreset, setDatePreset] = useState('')  // 'week' | 'month' | '3months' | 'year' | 'custom'
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [sortBy, setSortBy] = useState('createdAt')
   const [order, setOrder] = useState('desc')
   const [viewMode, setViewMode] = useState('list')
@@ -989,17 +993,24 @@ export default function Applications() {
     getCompanies({}).then((res) => setCompanies(res.data)).catch(() => {})
   }, [])
 
+  const activeSortOption = SORT_OPTIONS.find((o) => o.value === sortBy)
+
   const fetchApplications = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await getApplications({ status: filterStatus || undefined, sortBy, order })
+      const isClientSort = activeSortOption?.clientSide
+      const res = await getApplications({
+        status: filterStatus || undefined,
+        sortBy: isClientSort ? 'createdAt' : sortBy,
+        order: isClientSort ? 'desc' : order,
+      })
       setApplications(res.data)
     } catch {
       setError('Failed to load applications.')
     } finally {
       setLoading(false)
     }
-  }, [filterStatus, sortBy, order])
+  }, [filterStatus, sortBy, order, activeSortOption])
 
   useEffect(() => { fetchApplications() }, [fetchApplications])
 
@@ -1021,8 +1032,59 @@ export default function Applications() {
     setTimeout(() => setSuccess(''), 3000)
   }
 
+  // Compute effective date range from preset or custom inputs
+  const effectiveDateRange = (() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const toStr = (d) => d.toISOString().slice(0, 10)
+    if (datePreset === 'week') {
+      const from = new Date(today)
+      from.setDate(today.getDate() - today.getDay())  // Sunday start
+      return { from: toStr(from), to: toStr(today) }
+    }
+    if (datePreset === 'month') {
+      return { from: toStr(new Date(today.getFullYear(), today.getMonth(), 1)), to: toStr(today) }
+    }
+    if (datePreset === '3months') {
+      const from = new Date(today)
+      from.setMonth(today.getMonth() - 3)
+      return { from: toStr(from), to: toStr(today) }
+    }
+    if (datePreset === 'year') {
+      return { from: toStr(new Date(today.getFullYear(), 0, 1)), to: toStr(today) }
+    }
+    if (datePreset === 'custom') {
+      return { from: dateFrom || null, to: dateTo || null }
+    }
+    return { from: null, to: null }
+  })()
+
+  // Client-side search + date filter
+  const q = search.trim().toLowerCase()
+  const filteredApplications = applications.filter((a) => {
+    if (q && !(
+      a.companyName?.toLowerCase().includes(q) ||
+      a.role?.toLowerCase().includes(q) ||
+      (SOURCE_LABELS[a.source] || a.source || '').toLowerCase().includes(q) ||
+      a.notes?.toLowerCase().includes(q)
+    )) return false
+    if (effectiveDateRange.from && a.applicationDate && a.applicationDate < effectiveDateRange.from) return false
+    if (effectiveDateRange.to   && a.applicationDate && a.applicationDate > effectiveDateRange.to)   return false
+    return true
+  })
+
+  // Client-side sort (for fields not handled server-side)
+  const displayApplications = activeSortOption?.clientSide
+    ? [...filteredApplications].sort((a, b) => {
+        const va = (a.companyName || '').toLowerCase()
+        const vb = (b.companyName || '').toLowerCase()
+        const cmp = va < vb ? -1 : va > vb ? 1 : 0
+        return order === 'asc' ? cmp : -cmp
+      })
+    : filteredApplications
+
   // Directory view: group by company name alphabetically
-  const grouped = applications.reduce((acc, a) => {
+  const grouped = displayApplications.reduce((acc, a) => {
     const letter = a.companyName?.[0]?.toUpperCase() || '#'
     if (!acc[letter]) acc[letter] = []
     acc[letter].push(a)
@@ -1059,37 +1121,123 @@ export default function Applications() {
       )}
 
       {/* Filters + view toggle */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row gap-3 mb-3">
         <div className="relative flex-1">
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-            className="appearance-none w-full pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-            <option value="">All Statuses</option>
-            {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-              <option key={val} value={val}>{label}</option>
-            ))}
-          </select>
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-            <KeyboardArrowDown fontSize="small" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by company, role, source..."
+            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
+          />
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
+            </svg>
           </span>
         </div>
 
-        <div className="relative">
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-            className="appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-            <KeyboardArrowDown fontSize="small" />
-          </span>
+        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1.5">
+          <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pr-1">Sort</span>
+          {SORT_OPTIONS.map((opt) => {
+            const isActive = sortBy === opt.value
+            const dir = isActive ? order : null
+            return (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  if (isActive) {
+                    setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
+                  } else {
+                    setSortBy(opt.value)
+                    setOrder('desc')
+                  }
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  isActive
+                    ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-white'
+                }`}
+              >
+                {opt.label}
+                {isActive && (
+                  <span className="text-gray-400 text-[11px]">{dir === 'desc' ? '↓' : '↑'}</span>
+                )}
+              </button>
+            )
+          })}
         </div>
-
-        <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
-          className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition bg-white whitespace-nowrap">
-          {order === 'desc' ? '↓ Desc' : '↑ Asc'}
-        </button>
 
         <ViewToggle value={viewMode} onChange={setViewMode} />
       </div>
+
+      {/* Date range filter */}
+      {(() => {
+        const DATE_PRESETS = [
+          { value: 'week',    label: 'This Week' },
+          { value: 'month',   label: 'This Month' },
+          { value: '3months', label: 'Last 3 Months' },
+          { value: 'year',    label: 'This Year' },
+          { value: 'custom',  label: 'Custom Range' },
+        ]
+        const togglePreset = (v) => {
+          setDatePreset((p) => (p === v ? '' : v))
+          if (v !== 'custom') { setDateFrom(''); setDateTo('') }
+        }
+        return (
+          <div className="mb-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Applied:</span>
+              {DATE_PRESETS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => togglePreset(value)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                    datePreset === value
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              {datePreset && (
+                <button
+                  onClick={() => { setDatePreset(''); setDateFrom(''); setDateTo('') }}
+                  className="ml-1 text-xs text-gray-400 hover:text-gray-600 transition"
+                >
+                  ✕ Clear
+                </button>
+              )}
+            </div>
+
+            {datePreset === 'custom' && (
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
+                />
+                <span className="text-xs text-gray-400">to</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
+                />
+              </div>
+            )}
+
+            {datePreset && datePreset !== 'custom' && (
+              <p className="mt-1.5 text-xs text-gray-400">
+                {effectiveDateRange.from} → {effectiveDateRange.to}
+              </p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Content */}
       {loading ? (
@@ -1097,8 +1245,8 @@ export default function Applications() {
       ) : applications.length === 0 ? (
         <EmptyState
           icon="📋"
-          title={filterStatus ? 'No applications with this status' : 'No applications yet'}
-          description={filterStatus ? 'Try a different filter.' : 'Start recording your job applications.'}
+          title={filterStatus ? `No ${STATUS_CONFIG[filterStatus]?.label ?? filterStatus} applications` : 'No applications yet'}
+          description={filterStatus ? 'Try a different status filter above.' : 'Start recording your job applications.'}
           action={!filterStatus && (
             <button onClick={openAdd}
               className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
@@ -1106,20 +1254,38 @@ export default function Applications() {
             </button>
           )}
         />
+      ) : displayApplications.length === 0 ? (
+        <EmptyState
+          icon="🔍"
+          title="No results found"
+          description={
+            search && datePreset
+              ? `No applications match your search and date filter.`
+              : search
+              ? `No applications match "${search}".`
+              : `No applications in this date range.`
+          }
+        />
       ) : viewMode === 'list' ? (
         <div className="space-y-3">
           <p className="text-xs text-gray-400 font-medium">
-            {applications.length} {applications.length === 1 ? 'application' : 'applications'}
+            {displayApplications.length} {displayApplications.length === 1 ? 'application' : 'applications'}
+            {(q || datePreset) && applications.length !== displayApplications.length && (
+              <span className="ml-1 text-gray-400">of {applications.length}</span>
+            )}
           </p>
-          {applications.map((a) => <ApplicationCard key={a.id} app={a} {...cardProps} />)}
+          {displayApplications.map((a) => <ApplicationCard key={a.id} app={a} {...cardProps} />)}
         </div>
       ) : (
         <div>
           <p className="text-xs text-gray-400 font-medium mb-4">
-            {applications.length} {applications.length === 1 ? 'application' : 'applications'}
+            {displayApplications.length} {displayApplications.length === 1 ? 'application' : 'applications'}
+            {(q || datePreset) && applications.length !== displayApplications.length && (
+              <span className="ml-1 text-gray-400">of {applications.length}</span>
+            )}
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            {applications.map((a) => (
+            {displayApplications.map((a) => (
               <ApplicationDirectoryCard key={a.id} app={a} {...cardProps} />
             ))}
           </div>
