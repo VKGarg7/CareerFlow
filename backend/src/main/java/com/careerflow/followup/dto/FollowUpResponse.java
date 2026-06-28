@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 public class FollowUpResponse {
     private Long id;
     private Long applicationId;
+    private Long companyId;
     private String companyName;
     private String role;
     private LocalDate followUpDate;

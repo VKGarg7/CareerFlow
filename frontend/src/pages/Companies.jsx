@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Alert, CircularProgress } from '@mui/material'
 import { Add, Search, KeyboardArrowDown, Language } from '@mui/icons-material'
 import Layout from '../components/Layout'
@@ -9,6 +9,7 @@ import { getCompanies, addCompany, updateCompany, deleteCompany } from '../api/c
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
+import CompanyDetailModal from '../components/CompanyDetailModal'
 
 const STATUS_CONFIG = {
   TARGETING:    { label: 'Targeting',    badge: 'bg-blue-100 text-blue-700',   border: 'border-l-blue-400',    dot: 'bg-blue-500'    },
@@ -43,10 +44,11 @@ function StatusBadge({ status }) {
 }
 
 // ─── Company List Card ────────────────────────────────────────────────────────
-function CompanyCard({ company, onEdit, onDelete }) {
+function CompanyCard({ company, onEdit, onDelete, onView }) {
   const cfg = STATUS_CONFIG[company.status] || STATUS_CONFIG.TARGETING
   return (
-    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${cfg.border} p-5 hover:shadow-md transition-all duration-200`}>
+    <div onClick={() => onView(company.id)}
+      className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${cfg.border} p-5 hover:shadow-md transition-all duration-200 cursor-pointer`}>
       <div className="flex items-start gap-4">
         <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
           {initials(company.name)}
@@ -69,7 +71,8 @@ function CompanyCard({ company, onEdit, onDelete }) {
               </span>
             )}
             {company.website && (
-              <a href={company.website} target="_blank" rel="noreferrer"
+              <a href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
+                target="_blank" rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition">
                 <Language sx={{ fontSize: 12 }} />
@@ -83,7 +86,7 @@ function CompanyCard({ company, onEdit, onDelete }) {
         </div>
 
         <div className="flex gap-1.5 shrink-0">
-          <button onClick={() => onEdit(company)}
+          <button onClick={(e) => { e.stopPropagation(); onEdit(company) }}
             className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
               <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z"/>
@@ -91,7 +94,7 @@ function CompanyCard({ company, onEdit, onDelete }) {
             </svg>
             Edit
           </button>
-          <button onClick={() => onDelete(company)}
+          <button onClick={(e) => { e.stopPropagation(); onDelete(company) }}
             className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
               <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd"/>
@@ -105,10 +108,11 @@ function CompanyCard({ company, onEdit, onDelete }) {
 }
 
 // ─── Company Directory Card (compact grid) ────────────────────────────────────
-function CompanyDirectoryCard({ company, onEdit, onDelete }) {
+function CompanyDirectoryCard({ company, onEdit, onDelete, onView }) {
   const cfg = STATUS_CONFIG[company.status] || STATUS_CONFIG.TARGETING
   return (
-    <div className={`bg-white rounded-xl border border-gray-100 border-t-4 p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col gap-3`}
+    <div onClick={() => onView(company.id)}
+      className={`bg-white rounded-xl border border-gray-100 border-t-4 p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col gap-3 cursor-pointer`}
       style={{ borderTopColor: dotHex(company.status) }}>
       <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
@@ -141,7 +145,7 @@ function CompanyDirectoryCard({ company, onEdit, onDelete }) {
       )}
 
       <div className="flex gap-1.5 pt-1 border-t border-gray-50">
-        <button onClick={() => onEdit(company)}
+        <button onClick={(e) => { e.stopPropagation(); onEdit(company) }}
           className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
             <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z" />
@@ -149,7 +153,7 @@ function CompanyDirectoryCard({ company, onEdit, onDelete }) {
           </svg>
           Edit
         </button>
-        <button onClick={() => onDelete(company)}
+        <button onClick={(e) => { e.stopPropagation(); onDelete(company) }}
           className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
             <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
@@ -330,6 +334,7 @@ export default function Companies() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [viewId, setViewId] = useState(null)
 
   const fetchCompanies = useCallback(async () => {
     setLoading(true)
@@ -373,7 +378,7 @@ export default function Companies() {
   }, {})
   const sortedLetters = Object.keys(grouped).sort()
 
-  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget }
+  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onView: setViewId }
 
   return (
     <Layout>
@@ -471,19 +476,8 @@ export default function Companies() {
             {companies.length} {companies.length === 1 ? 'company' : 'companies'}
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            {sortedLetters.map((letter) => (
-              <>
-                <div key={`hdr-${letter}`} className="col-span-full flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center justify-center shrink-0">
-                    {letter}
-                  </span>
-                  <div className="flex-1 h-px bg-gray-100" />
-                  <span className="text-xs text-gray-400">{grouped[letter].length}</span>
-                </div>
-                {grouped[letter].map((c) => (
-                  <CompanyDirectoryCard key={c.id} company={c} {...cardProps} />
-                ))}
-              </>
+            {companies.map((c) => (
+              <CompanyDirectoryCard key={c.id} company={c} {...cardProps} />
             ))}
           </div>
         </div>
@@ -493,6 +487,8 @@ export default function Companies() {
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
       <DeleteModal open={!!deleteTarget} company={deleteTarget}
         onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />
+      <CompanyDetailModal open={viewId !== null} companyId={viewId}
+        onClose={() => setViewId(null)} />
     </Layout>
   )
 }

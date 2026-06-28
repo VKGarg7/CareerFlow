@@ -180,78 +180,85 @@ function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
   const noteCount = recruiter.noteCount ?? 0
 
   return (
-    <div
-      onClick={() => onView(recruiter)}
-      className={`bg-white rounded-xl border border-gray-100 border-t-4 p-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col gap-3`}
-      style={{ borderTopColor: borderColor(recruiter.status) }}
-    >
-      {/* Top: avatar + name */}
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
-          {initials(recruiter.name)}
+    <div onClick={() => onView(recruiter)} style={{ borderTopColor: borderColor(recruiter.status) }}
+      className="bg-white rounded-2xl border border-gray-100 border-t-4 shadow-sm hover:shadow-lg transition-all duration-200 cursor-pointer flex flex-col overflow-hidden">
+
+      {/* Card body */}
+      <div className="p-4 flex flex-col gap-3 flex-1">
+        {/* Avatar + name + title */}
+        <div className="flex items-start gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
+            {initials(recruiter.name)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-gray-800 truncate leading-tight">{recruiter.name}</p>
+            {(recruiter.jobTitle || recruiter.company) && (
+              <p className="text-xs text-gray-500 truncate mt-0.5">
+                {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-gray-800 truncate">{recruiter.name}</p>
-          {(recruiter.jobTitle || recruiter.company) && (
-            <p className="text-xs text-gray-400 truncate">
-              {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
-            </p>
+
+        {/* Status + note count row */}
+        <div className="flex items-center justify-between gap-2">
+          <StatusBadge status={recruiter.status} />
+          {noteCount > 0 && (
+            <span className="text-[11px] text-blue-500 font-medium">
+              {noteCount} note{noteCount > 1 ? 's' : ''}
+            </span>
           )}
         </div>
-      </div>
 
-      {/* Status badge */}
-      <StatusBadge status={recruiter.status} />
-
-      {/* Quick contact icons */}
-      <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
-        {recruiter.email && (
-          <a href={`mailto:${recruiter.email}`} title={recruiter.email}
-            className="p-1.5 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
-            <Email sx={{ fontSize: 14 }} />
-          </a>
-        )}
-        {recruiter.phone && (
-          <a href={`tel:${recruiter.phone}`} title={recruiter.phone}
-            className="p-1.5 rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 transition">
-            <Phone sx={{ fontSize: 14 }} />
-          </a>
-        )}
-        {recruiter.linkedIn && (
-          <a href={recruiter.linkedIn} target="_blank" rel="noreferrer" title="LinkedIn"
-            className="p-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition">
-            <LinkedIn sx={{ fontSize: 14 }} />
-          </a>
-        )}
-        {recruiter.source && (
-          <span className="text-[11px] text-gray-400 italic ml-auto">
-            {SOURCE_LABELS[recruiter.source] || recruiter.source}
-          </span>
-        )}
-      </div>
-
-      {/* Footer: note count + actions */}
-      <div className="flex items-center gap-2 pt-1 border-t border-gray-50" onClick={(e) => e.stopPropagation()}>
-        <button onClick={() => onNotes(recruiter)}
-          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium transition">
-          <EditNote sx={{ fontSize: 14 }} />
-          {noteCount > 0 ? `${noteCount} note${noteCount > 1 ? 's' : ''}` : 'Notes'}
-        </button>
-        <div className="flex gap-1 ml-auto">
-          <button onClick={() => onEdit(recruiter)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition" title="Edit">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-              <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z" />
-              <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9a.75.75 0 0 1 1.5 0v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z" />
-            </svg>
-          </button>
-          <button onClick={() => onDelete(recruiter)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Delete">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-              <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
-            </svg>
-          </button>
+        {/* Contact chips */}
+        <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+          {recruiter.email && (
+            <a href={`mailto:${recruiter.email}`} title={recruiter.email}
+              className="p-1.5 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
+              <Email sx={{ fontSize: 13 }} />
+            </a>
+          )}
+          {recruiter.phone && (
+            <a href={`tel:${recruiter.phone}`} title={recruiter.phone}
+              className="p-1.5 rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 transition">
+              <Phone sx={{ fontSize: 13 }} />
+            </a>
+          )}
+          {recruiter.linkedIn && (
+            <a href={recruiter.linkedIn} target="_blank" rel="noreferrer" title="LinkedIn"
+              className="p-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition">
+              <LinkedIn sx={{ fontSize: 13 }} />
+            </a>
+          )}
+          {recruiter.lastContactedAt && (
+            <span className="text-[11px] text-gray-400 ml-auto shrink-0">
+              {new Date(recruiter.lastContactedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            </span>
+          )}
         </div>
+
+        {recruiter.notes && (
+          <p className="text-[11px] text-gray-400 line-clamp-1 italic">"{recruiter.notes}"</p>
+        )}
+      </div>
+
+      {/* Action footer */}
+      <div className="flex border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+        <button onClick={() => onNotes(recruiter)}
+          className="flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition-colors">
+          <EditNote sx={{ fontSize: 13 }} />
+          Notes{noteCount > 0 && ` (${noteCount})`}
+        </button>
+        <div className="w-px bg-gray-100" />
+        <button onClick={() => onEdit(recruiter)}
+          className="flex-1 flex items-center justify-center py-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+          ✏️ Edit
+        </button>
+        <div className="w-px bg-gray-100" />
+        <button onClick={() => onDelete(recruiter)}
+          className="flex-1 flex items-center justify-center py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition-colors">
+          🗑️ Delete
+        </button>
       </div>
     </div>
   )
@@ -1057,27 +1064,15 @@ export default function Recruiters() {
           ))}
         </div>
       ) : (
-        /* Directory view — alphabetical groups */
         <div>
           <p className="text-xs text-gray-400 font-medium mb-4">
             {recruiters.length} {recruiters.length === 1 ? 'recruiter' : 'recruiters'}
           </p>
-          {sortedLetters.map((letter) => (
-            <div key={letter} className="mb-8">
-              <div className="flex items-center gap-3 mb-3">
-                <span className="w-8 h-8 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center justify-center shrink-0">
-                  {letter}
-                </span>
-                <div className="flex-1 h-px bg-gray-100" />
-                <span className="text-xs text-gray-400">{grouped[letter].length}</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {grouped[letter].map((r) => (
-                  <DirectoryCard key={r.id} recruiter={r} {...cardProps} />
-                ))}
-              </div>
-            </div>
-          ))}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            {recruiters.map((r) => (
+              <DirectoryCard key={r.id} recruiter={r} {...cardProps} />
+            ))}
+          </div>
         </div>
       )}
 
