@@ -64,6 +64,7 @@ public class ApplicationService {
                 .source(request.getSource())
                 .status(request.getStatus() != null ? request.getStatus() : ApplicationStatus.APPLIED)
                 .expectedSalary(request.getExpectedSalary())
+                .deadline(request.getDeadline())
                 .notes(request.getNotes())
                 .build();
 
@@ -109,6 +110,8 @@ public class ApplicationService {
             application.setStatus(request.getStatus());
         if (request.getExpectedSalary() != null)
             application.setExpectedSalary(request.getExpectedSalary());
+        if (request.getDeadline() != null)
+            application.setDeadline(request.getDeadline());
         if (request.getNotes() != null)
             application.setNotes(request.getNotes());
 
@@ -256,6 +259,7 @@ public class ApplicationService {
                 .source(app.getSource())
                 .status(app.getStatus())
                 .expectedSalary(app.getExpectedSalary())
+                .deadline(app.getDeadline())
                 .notes(app.getNotes())
                 .resume(toDocumentDto(app.getResume()))
                 .coverLetter(toDocumentDto(app.getCoverLetter()))

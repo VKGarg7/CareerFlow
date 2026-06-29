@@ -13,6 +13,7 @@ public class ApplicationUpdateRequest {
     private Long companyId;
     private String role;
     private LocalDate applicationDate;
+    private LocalDate deadline;
     private ApplicationSource source;
     private ApplicationStatus status;
     private String expectedSalary;

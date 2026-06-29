@@ -42,6 +42,8 @@ public class JobApplication extends SoftDeleteEntity {
 
     private String expectedSalary;
 
+    private LocalDate deadline;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 
