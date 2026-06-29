@@ -6,6 +6,7 @@ import { getProfile } from '../api/user'
 import { getCompanies } from '../api/company'
 import { getApplications } from '../api/application'
 import { getRecruiters } from '../api/recruiter'
+import { getAllFollowUps } from '../api/followup'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -87,7 +88,14 @@ export default function Dashboard() {
   const [companies,    setCompanies]    = useState([])
   const [applications, setApplications] = useState([])
   const [recruiters,   setRecruiters]   = useState([])
+  const [followUps,    setFollowUps]    = useState([])
   const [loading,      setLoading]      = useState(true)
+  const [alertDismissed, setAlertDismissed]         = useState(false)
+  const [interviewDismissed, setInterviewDismissed] = useState(false)
+  const [deadlineDismissed, setDeadlineDismissed]   = useState(false)
+  const [summaryDismissed, setSummaryDismissed]     = useState(
+    () => localStorage.getItem('cf_summary_dismissed') === new Date().toISOString().slice(0, 10)
+  )
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -96,11 +104,13 @@ export default function Dashboard() {
       getCompanies(),
       getApplications(),
       getRecruiters(),
-    ]).then(([p, c, a, r]) => {
+      getAllFollowUps({ status: 'PENDING' }),
+    ]).then(([p, c, a, r, f]) => {
       if (p.status === 'fulfilled') setProfile(p.value.data)
       if (c.status === 'fulfilled') setCompanies(c.value.data  || [])
       if (a.status === 'fulfilled') setApplications(a.value.data || [])
       if (r.status === 'fulfilled') setRecruiters(r.value.data  || [])
+      if (f.status === 'fulfilled') setFollowUps(f.value.data   || [])
       setLoading(false)
     })
   }, [])
@@ -123,6 +133,66 @@ export default function Dashboard() {
   const greeting   = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const greetEmoji = hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙'
 
+  // Follow-up partitioning
+  const today = new Date().toISOString().slice(0, 10)
+  const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const overdueFollowUps  = followUps.filter((f) => f.followUpDate < today)
+  const todayFollowUps    = followUps.filter((f) => f.followUpDate === today)
+  const upcomingFollowUps = followUps.filter((f) => f.followUpDate > today && f.followUpDate <= in7Days)
+  const alertFollowUps    = [...overdueFollowUps, ...todayFollowUps, ...upcomingFollowUps]
+
+  // Deadline reminders — applications with deadline today or within 3 days
+  const in3Days = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)
+  const deadlineReminders = applications
+    .filter((a) => a.deadline && a.deadline >= today && a.deadline <= in3Days)
+    .map((a) => {
+      const daysLeft = Math.round((new Date(a.deadline) - new Date(today)) / 86400000)
+      return { ...a, daysLeft }
+    })
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+
+  // Interview reminders — INTERVIEW_SCHEDULED apps with a follow-up today or tomorrow
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+  const interviewFollowUpIds = new Set(
+    followUps
+      .filter((f) => f.followUpDate === today || f.followUpDate === tomorrow)
+      .map((f) => f.applicationId)
+  )
+  const interviewReminders = applications.filter(
+    (a) => a.status === 'INTERVIEW_SCHEDULED' && interviewFollowUpIds.has(a.id)
+  ).map((a) => {
+    const fu = followUps.find((f) => f.applicationId === a.id && (f.followUpDate === today || f.followUpDate === tomorrow))
+    return { ...a, followUpDate: fu?.followUpDate }
+  })
+
+  const fmtFollowUpDate = (d) => {
+    if (d === today) return 'Today'
+    if (d < today) {
+      const days = Math.round((new Date(today) - new Date(d)) / 86400000)
+      return `${days}d overdue`
+    }
+    const days = Math.round((new Date(d) - new Date(today)) / 86400000)
+    return `in ${days}d`
+  }
+
+  const dismissSummary = () => {
+    localStorage.setItem('cf_summary_dismissed', today)
+    setSummaryDismissed(true)
+  }
+
+  // Daily summary items — only non-zero entries shown
+  const summaryItems = [
+    overdueFollowUps.length  > 0 && { icon: '🔴', text: `${overdueFollowUps.length} overdue follow-up${overdueFollowUps.length !== 1 ? 's' : ''}` },
+    todayFollowUps.length    > 0 && { icon: '🔔', text: `${todayFollowUps.length} follow-up${todayFollowUps.length !== 1 ? 's' : ''} due today` },
+    upcomingFollowUps.length > 0 && { icon: '📅', text: `${upcomingFollowUps.length} follow-up${upcomingFollowUps.length !== 1 ? 's' : ''} this week` },
+    interviewReminders.length > 0 && { icon: '🎤', text: `${interviewReminders.length} interview${interviewReminders.length !== 1 ? 's' : ''} today or tomorrow` },
+    deadlineReminders.length > 0  && { icon: '⏰', text: `${deadlineReminders.length} deadline${deadlineReminders.length !== 1 ? 's' : ''} within 3 days` },
+    applications.filter((a) => a.status === 'OFFER_RECEIVED').length > 0 && {
+      icon: '🎉',
+      text: `${applications.filter((a) => a.status === 'OFFER_RECEIVED').length} offer${applications.filter((a) => a.status === 'OFFER_RECEIVED').length !== 1 ? 's' : ''} received`,
+    },
+  ].filter(Boolean)
+
   // Recent applications sorted newest-first (up to 5)
   const recent = [...applications]
     .sort((a, b) => new Date(b.appliedDate || b.createdAt || 0) - new Date(a.appliedDate || a.createdAt || 0))
@@ -142,6 +212,30 @@ export default function Dashboard() {
 
   return (
     <Layout>
+      {/* ── Daily Summary ── */}
+      {!loading && !summaryDismissed && summaryItems.length > 0 && (
+        <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 px-5 py-4 mb-6 flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2.5">
+              Today's Summary · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </p>
+            <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+              {summaryItems.map(({ icon, text }) => (
+                <span key={text} className="flex items-center gap-1.5 text-sm text-gray-700 font-medium">
+                  <span>{icon}</span>{text}
+                </span>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={dismissSummary}
+            className="text-gray-400 hover:text-gray-600 transition text-lg leading-none px-1 shrink-0"
+            title="Dismiss for today">
+            ×
+          </button>
+        </div>
+      )}
+
       {/* ── Hero ── */}
       <div className="relative rounded-3xl overflow-hidden mb-8 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 p-8 text-white shadow-xl shadow-blue-200">
         <div className="absolute inset-0 opacity-20"
@@ -199,6 +293,168 @@ export default function Dashboard() {
           gradient="from-amber-400 to-orange-500"  glow="shadow-orange-200/60 shadow-lg"
           onClick={() => navigate('/applications')} />
       </div>
+
+      {/* ── Deadline Reminders ── */}
+      {!deadlineDismissed && deadlineReminders.length > 0 && (
+        <div className="rounded-2xl border border-orange-100 bg-orange-50 px-5 py-4 mb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-base">⏰</span>
+                <p className="text-sm font-bold text-orange-700">
+                  {deadlineReminders.length === 1
+                    ? 'Application deadline approaching'
+                    : `${deadlineReminders.length} deadlines approaching`}
+                </p>
+              </div>
+              <div className="space-y-2">
+                {deadlineReminders.map((a) => (
+                  <div key={a.id} className="flex items-center gap-3">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                      a.daysLeft === 0 ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {a.daysLeft === 0 ? 'Today' : `${a.daysLeft}d left`}
+                    </span>
+                    <span className="text-xs font-semibold text-gray-700 truncate">
+                      {a.role} @ {a.companyName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => navigate('/applications')}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition">
+                View
+              </button>
+              <button onClick={() => setDeadlineDismissed(true)}
+                className="text-gray-400 hover:text-gray-600 transition text-lg leading-none px-1"
+                title="Dismiss">
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Interview Reminders ── */}
+      {!interviewDismissed && interviewReminders.length > 0 && (
+        <div className="rounded-2xl border border-purple-100 bg-purple-50 px-5 py-4 mb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-base">🎤</span>
+                <p className="text-sm font-bold text-purple-700">
+                  {interviewReminders.length === 1
+                    ? 'Interview reminder'
+                    : `${interviewReminders.length} interview reminders`}
+                </p>
+              </div>
+              <div className="space-y-2">
+                {interviewReminders.map((a) => {
+                  const isToday = a.followUpDate === today
+                  return (
+                    <div key={a.id} className="flex items-center gap-3">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                        isToday ? 'bg-purple-200 text-purple-800' : 'bg-purple-100 text-purple-700'
+                      }`}>
+                        {isToday ? 'Today' : 'Tomorrow'}
+                      </span>
+                      <span className="text-xs font-semibold text-gray-700 truncate">
+                        {a.role} @ {a.companyName}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => navigate('/applications')}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition">
+                View
+              </button>
+              <button onClick={() => setInterviewDismissed(true)}
+                className="text-gray-400 hover:text-gray-600 transition text-lg leading-none px-1"
+                title="Dismiss">
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Follow-Up Alerts ── */}
+      {!alertDismissed && alertFollowUps.length > 0 && (
+        <div className={`rounded-2xl border px-5 py-4 mb-6 ${
+          overdueFollowUps.length > 0
+            ? 'bg-red-50 border-red-100'
+            : todayFollowUps.length > 0
+            ? 'bg-amber-50 border-amber-100'
+            : 'bg-blue-50 border-blue-100'
+        }`}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-base">🔔</span>
+                <p className={`text-sm font-bold ${
+                  overdueFollowUps.length > 0 ? 'text-red-700'
+                  : todayFollowUps.length > 0 ? 'text-amber-700'
+                  : 'text-blue-700'
+                }`}>
+                  {overdueFollowUps.length > 0
+                    ? `${overdueFollowUps.length} overdue follow-up${overdueFollowUps.length !== 1 ? 's' : ''}`
+                    : todayFollowUps.length > 0
+                    ? `${todayFollowUps.length} follow-up${todayFollowUps.length !== 1 ? 's' : ''} due today`
+                    : `${upcomingFollowUps.length} follow-up${upcomingFollowUps.length !== 1 ? 's' : ''} this week`}
+                </p>
+              </div>
+              <div className="space-y-2">
+                {alertFollowUps.slice(0, 4).map((f) => {
+                  const isOverdue  = f.followUpDate < today
+                  const isToday    = f.followUpDate === today
+                  return (
+                    <div key={f.id} className="flex items-center gap-3">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                        isOverdue ? 'bg-red-100 text-red-600'
+                        : isToday ? 'bg-amber-100 text-amber-700'
+                        : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {fmtFollowUpDate(f.followUpDate)}
+                      </span>
+                      <span className="text-xs font-semibold text-gray-700 truncate">
+                        {f.role} @ {f.companyName}
+                      </span>
+                      {f.note && (
+                        <span className="text-xs text-gray-400 truncate hidden sm:block">— {f.note}</span>
+                      )}
+                    </div>
+                  )
+                })}
+                {alertFollowUps.length > 4 && (
+                  <p className="text-xs text-gray-400">+{alertFollowUps.length - 4} more</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => navigate('/follow-ups')}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
+                  overdueFollowUps.length > 0
+                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    : todayFollowUps.length > 0
+                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                }`}>
+                View all
+              </button>
+              <button onClick={() => setAlertDismissed(true)}
+                className="text-gray-400 hover:text-gray-600 transition text-lg leading-none px-1"
+                title="Dismiss">
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Main grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

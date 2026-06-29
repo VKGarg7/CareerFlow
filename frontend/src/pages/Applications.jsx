@@ -43,6 +43,7 @@ const SORT_OPTIONS = [
 const EMPTY_FORM = {
   companyId: '', role: '',
   applicationDate: new Date().toISOString().slice(0, 10),
+  deadline: '',
   source: '', status: 'SAVED', expectedSalary: '', notes: '',
 }
 
@@ -91,6 +92,19 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
                 💰 {app.expectedSalary}
               </span>
             )}
+            {app.deadline && (() => {
+              const today = new Date().toISOString().slice(0, 10)
+              const daysLeft = Math.round((new Date(app.deadline) - new Date(today)) / 86400000)
+              const isUrgent = daysLeft <= 3
+              const isPast   = daysLeft < 0
+              return (
+                <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${
+                  isPast ? 'bg-red-100 text-red-600' : isUrgent ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-500'
+                }`}>
+                  ⏰ {isPast ? 'Deadline passed' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`}
+                </span>
+              )
+            })()}
             {app.nextFollowUpDate && (() => {
               const today = new Date().toISOString().slice(0, 10)
               const isOverdue = app.nextFollowUpDate < today
@@ -199,6 +213,21 @@ function ApplicationDirectoryCard({ app, onEdit, onDelete, onFollowUp, onCompany
             </span>
           )}
         </div>
+
+        {/* Deadline chip */}
+        {app.deadline && (() => {
+          const todayStr = new Date().toISOString().slice(0, 10)
+          const daysLeft = Math.round((new Date(app.deadline) - new Date(todayStr)) / 86400000)
+          const isPast   = daysLeft < 0
+          const isUrgent = daysLeft >= 0 && daysLeft <= 3
+          return (
+            <span className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full font-medium ${
+              isPast ? 'bg-red-100 text-red-600' : isUrgent ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-500'
+            }`}>
+              ⏰ {isPast ? 'Deadline passed' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`}
+            </span>
+          )
+        })()}
 
         {/* Follow-up chips */}
         {(hasOverdue || hasUpcoming || showUpcoming) && (
@@ -326,6 +355,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
       setForm(app ? {
         companyId: app.companyId || '', role: app.role || '',
         applicationDate: app.applicationDate || new Date().toISOString().slice(0, 10),
+        deadline: app.deadline || '',
         source: app.source || '', status: app.status || 'APPLIED',
         expectedSalary: app.expectedSalary || '', notes: app.notes || '',
       } : EMPTY_FORM)
@@ -404,6 +434,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
       const payload = {
         companyId: Number(form.companyId), role: form.role.trim(),
         applicationDate: form.applicationDate || undefined,
+        deadline: form.deadline || undefined,
         source: form.source || undefined, status: form.status || undefined,
         expectedSalary: form.expectedSalary.trim() || undefined,
         notes: form.notes.trim() || undefined,
@@ -464,13 +495,19 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
               <input type="date" value={form.applicationDate} onChange={set('applicationDate')} className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</label>
-              <select value={form.status} onChange={set('status')} className={inputCls}>
-                {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                Deadline <span className="text-gray-400 normal-case font-normal">(optional)</span>
+              </label>
+              <input type="date" value={form.deadline} onChange={set('deadline')} className={inputCls} />
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</label>
+            <select value={form.status} onChange={set('status')} className={inputCls}>
+              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
+                <option key={val} value={val}>{label}</option>
+              ))}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

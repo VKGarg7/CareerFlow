@@ -20,6 +20,7 @@ public class ApplicationResponse {
     private ApplicationSource source;
     private ApplicationStatus status;
     private String expectedSalary;
+    private LocalDate deadline;
     private String notes;
     private DocumentDto resume;
     private DocumentDto coverLetter;
