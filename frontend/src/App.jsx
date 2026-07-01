@@ -10,6 +10,7 @@ import Companies from './pages/Companies'
 import Applications from './pages/Applications'
 import Recruiters from './pages/Recruiters'
 import FollowUps from './pages/FollowUps'
+import Referrals from './pages/Referrals'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -70,6 +71,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <FollowUps />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/referrals"
+          element={
+            <PrivateRoute>
+              <Referrals />
             </PrivateRoute>
           }
         />

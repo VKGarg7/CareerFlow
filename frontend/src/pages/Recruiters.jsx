@@ -12,6 +12,8 @@ import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecru
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
+import InlineStatusChanger from '../components/InlineStatusChanger'
+import { initials, fmt } from '../utils/followup'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -46,26 +48,27 @@ const EMPTY_FORM = {
 
 const NOTE_MAX = 1000
 
-function initials(name = '') {
-  return name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
-}
-
-function fmt(dt) {
-  if (!dt) return ''
-  return new Date(dt).toLocaleString('en-IN', {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
-}
-
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.NEW
   return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
+// ─── Inline Status Changer ────────────────────────────────────────────────────
+function RecruiterStatusChanger({ recruiter, onStatusChanged }) {
+  return (
+    <InlineStatusChanger
+      item={recruiter}
+      statusConfig={STATUS_CONFIG}
+      defaultStatus="NEW"
+      updateFn={(id, payload) => updateRecruiter(id, payload)}
+      onStatusChanged={onStatusChanged}
+    />
+  )
+}
+
 // ─── Recruiter Card ───────────────────────────────────────────────────────────
-function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
+function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusChanged }) {
   const noteCount = recruiter.noteCount ?? 0
   const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
 
@@ -85,7 +88,7 @@ function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center flex-wrap gap-2 mb-0.5">
             <h3 className="text-base font-bold text-gray-800">{recruiter.name}</h3>
-            <StatusBadge status={recruiter.status} />
+            <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />
           </div>
 
           {(recruiter.jobTitle || recruiter.company) && (
@@ -175,7 +178,7 @@ function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
 }
 
 // ─── Directory Card (compact grid view) ──────────────────────────────────────
-function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
+function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusChanged }) {
   const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
   const noteCount = recruiter.noteCount ?? 0
 
@@ -202,7 +205,7 @@ function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
 
         {/* Status + note count row */}
         <div className="flex items-center justify-between gap-2">
-          <StatusBadge status={recruiter.status} />
+          <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />
           {noteCount > 0 && (
             <span className="text-[11px] text-blue-500 font-medium">
               {noteCount} note{noteCount > 1 ? 's' : ''}
@@ -273,7 +276,7 @@ function borderColor(status) {
 }
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
-function DetailModal({ open, recruiterId, onClose, onEdit, onNotes, onDelete }) {
+function DetailModal({ open, recruiterId, onClose, onEdit, onNotes, onDelete, onStatusChanged }) {
   const [recruiter, setRecruiter] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -324,7 +327,7 @@ function DetailModal({ open, recruiterId, onClose, onEdit, onNotes, onDelete }) 
                   </p>
                 )}
                 <div className="mt-2">
-                  <StatusBadge status={recruiter.status} />
+                  <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={(updated) => { setRecruiter(updated); onStatusChanged?.(updated) }} />
                 </div>
               </div>
               <button onClick={onClose}
@@ -964,11 +967,16 @@ export default function Recruiters() {
   }, {})
   const sortedLetters = Object.keys(grouped).sort()
 
+  const handleStatusChanged = (updated) => {
+    setRecruiters(prev => prev.map(r => r.id === updated.id ? updated : r))
+  }
+
   const cardProps = {
     onView: (rec) => setViewTarget(rec.id),
     onEdit: openEdit,
     onDelete: setDeleteTarget,
     onNotes: setNotesTarget,
+    onStatusChanged: handleStatusChanged,
   }
 
   return (
@@ -1089,6 +1097,7 @@ export default function Recruiters() {
         onEdit={(r) => { setEditTarget(r); setModalOpen(true) }}
         onNotes={(r) => setNotesTarget(r)}
         onDelete={(r) => setDeleteTarget(r)}
+        onStatusChanged={handleStatusChanged}
       />
     </Layout>
   )

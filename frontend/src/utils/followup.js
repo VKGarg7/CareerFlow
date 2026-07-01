@@ -1,9 +1,22 @@
 export const todayStr = () => new Date().toISOString().slice(0, 10)
 
 export function fmtDate(dateStr) {
+  if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString('en-IN', {
     day: 'numeric', month: 'short', year: 'numeric',
   })
+}
+
+export function fmt(dt) {
+  if (!dt) return ''
+  return new Date(dt).toLocaleString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+export function initials(name = '') {
+  return name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
 }
 
 export function fmtDateTime(dtStr) {

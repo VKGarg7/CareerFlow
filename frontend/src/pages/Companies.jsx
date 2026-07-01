@@ -10,6 +10,8 @@ import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
 import CompanyDetailModal from '../components/CompanyDetailModal'
+import InlineStatusChanger from '../components/InlineStatusChanger'
+import { initials } from '../utils/followup'
 
 const STATUS_CONFIG = {
   TARGETING:    { label: 'Targeting',    badge: 'bg-blue-100 text-blue-700',   border: 'border-l-blue-400',    dot: 'bg-blue-500'    },
@@ -33,18 +35,27 @@ const EMPTY_FORM = {
   description: '', notes: '', status: 'TARGETING',
 }
 
-function initials(name = '') {
-  return name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
-}
-
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.TARGETING
   return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
+// ─── Inline Status Changer ────────────────────────────────────────────────────
+function CompanyStatusChanger({ company, onStatusChanged }) {
+  return (
+    <InlineStatusChanger
+      item={company}
+      statusConfig={STATUS_CONFIG}
+      defaultStatus="TARGETING"
+      updateFn={(id, payload) => updateCompany(id, payload)}
+      onStatusChanged={onStatusChanged}
+    />
+  )
+}
+
 // ─── Company List Card ────────────────────────────────────────────────────────
-function CompanyCard({ company, onEdit, onDelete, onView }) {
+function CompanyCard({ company, onEdit, onDelete, onView, onStatusChanged }) {
   const cfg = STATUS_CONFIG[company.status] || STATUS_CONFIG.TARGETING
   return (
     <div onClick={() => onView(company.id)}
@@ -57,7 +68,7 @@ function CompanyCard({ company, onEdit, onDelete, onView }) {
         <div className="flex-1 min-w-0">
           <div className="min-w-0 mb-2">
             <h3 className="text-base font-bold text-gray-800 truncate mb-1.5">{company.name}</h3>
-            <div><StatusBadge status={company.status} /></div>
+            <CompanyStatusChanger company={company} onStatusChanged={onStatusChanged} />
           </div>
           <div className="flex flex-wrap gap-2 mb-1.5">
             {company.industry && (
@@ -108,7 +119,7 @@ function CompanyCard({ company, onEdit, onDelete, onView }) {
 }
 
 // ─── Company Directory Card (compact grid) ────────────────────────────────────
-function CompanyDirectoryCard({ company, onEdit, onDelete, onView }) {
+function CompanyDirectoryCard({ company, onEdit, onDelete, onView, onStatusChanged }) {
   const cfg = STATUS_CONFIG[company.status] || STATUS_CONFIG.TARGETING
   return (
     <div onClick={() => onView(company.id)}
@@ -126,7 +137,9 @@ function CompanyDirectoryCard({ company, onEdit, onDelete, onView }) {
         </div>
       </div>
 
-      <div className="self-start"><StatusBadge status={company.status} /></div>
+      <div className="self-start" onClick={e => e.stopPropagation()}>
+        <CompanyStatusChanger company={company} onStatusChanged={onStatusChanged} />
+      </div>
 
       <div className="flex flex-wrap gap-1.5">
         {company.location && (
@@ -367,6 +380,10 @@ export default function Companies() {
     setTimeout(() => setSuccess(''), 3000)
   }
 
+  const handleStatusChanged = (updated) => {
+    setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c))
+  }
+
   const isFiltered = search.trim() || statusFilter
 
   // Alphabetical groups for directory view
@@ -378,7 +395,7 @@ export default function Companies() {
   }, {})
   const sortedLetters = Object.keys(grouped).sort()
 
-  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onView: setViewId }
+  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onView: setViewId, onStatusChanged: handleStatusChanged }
 
   return (
     <Layout>
@@ -488,7 +505,7 @@ export default function Companies() {
       <DeleteModal open={!!deleteTarget} company={deleteTarget}
         onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />
       <CompanyDetailModal open={viewId !== null} companyId={viewId}
-        onClose={() => setViewId(null)} />
+        onClose={() => setViewId(null)} onStatusChanged={handleStatusChanged} />
     </Layout>
   )
 }

@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
 import { CircularProgress } from '@mui/material'
 import { ModalShell } from './ModalShell'
-import { getCompany } from '../api/company'
+import { getCompany, updateCompany } from '../api/company'
 import { getApplications } from '../api/application'
+import InlineStatusChanger from './InlineStatusChanger'
+import { initials, fmtDate } from '../utils/followup'
 
-const STATUS_BADGE = {
-  TARGETING:    'bg-blue-100 text-blue-700',
-  APPLIED:      'bg-amber-100 text-amber-700',
-  INTERVIEWING: 'bg-purple-100 text-purple-700',
-  OFFER:        'bg-green-100 text-green-700',
-  REJECTED:     'bg-red-100 text-red-700',
+const STATUS_CONFIG = {
+  TARGETING:    { label: 'Targeting',    badge: 'bg-blue-100 text-blue-700'   },
+  APPLIED:      { label: 'Applied',      badge: 'bg-amber-100 text-amber-700'  },
+  INTERVIEWING: { label: 'Interviewing', badge: 'bg-purple-100 text-purple-700' },
+  OFFER:        { label: 'Offer',        badge: 'bg-green-100 text-green-700'  },
+  REJECTED:     { label: 'Rejected',     badge: 'bg-red-100 text-red-700'     },
 }
 
 const APP_STATUS_BADGE = {
@@ -31,11 +33,7 @@ const APP_STATUS_LABEL = {
   REJECTED: 'Rejected', JOINED: 'Joined',
 }
 
-function initials(name = '') {
-  return name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
-}
-
-export default function CompanyDetailModal({ open, companyId, onClose }) {
+export default function CompanyDetailModal({ open, companyId, onClose, onStatusChanged }) {
   const [company, setCompany] = useState(null)
   const [applications, setApplications] = useState([])
   const [loading, setLoading] = useState(false)
@@ -63,7 +61,10 @@ export default function CompanyDetailModal({ open, companyId, onClose }) {
       .finally(() => setLoading(false))
   }, [open, companyId])
 
-  const statusBadge = company ? (STATUS_BADGE[company.status] || STATUS_BADGE.TARGETING) : ''
+  const handleStatusChanged = (updated) => {
+    setCompany(updated)
+    onStatusChanged?.(updated)
+  }
 
   return (
     <ModalShell open={open} onClose={onClose} title="Company Profile" maxWidth="max-w-lg">
@@ -80,9 +81,14 @@ export default function CompanyDetailModal({ open, companyId, onClose }) {
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-lg font-bold text-gray-800 truncate">{company.name}</h2>
-                <span className={`inline-flex items-center text-xs px-2.5 py-0.5 rounded-full font-medium ${statusBadge}`}>
-                  {company.status}
-                </span>
+                <InlineStatusChanger
+                  item={company}
+                  statusConfig={STATUS_CONFIG}
+                  defaultStatus="TARGETING"
+                  updateFn={(id, payload) => updateCompany(id, payload)}
+                  onStatusChanged={handleStatusChanged}
+                  wrapperClass="mt-2"
+                />
               </div>
             </div>
 
@@ -138,9 +144,7 @@ export default function CompanyDetailModal({ open, companyId, onClose }) {
                       <p className="text-sm font-semibold text-gray-700 truncate">💼 {app.role}</p>
                       <div className="flex items-center justify-between gap-2">
                         {app.applicationDate && (
-                          <p className="text-xs text-gray-400">
-                            {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </p>
+                          <p className="text-xs text-gray-400">{fmtDate(app.applicationDate)}</p>
                         )}
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${APP_STATUS_BADGE[app.status] || 'bg-gray-100 text-gray-600'}`}>
                           {APP_STATUS_LABEL[app.status] || app.status}

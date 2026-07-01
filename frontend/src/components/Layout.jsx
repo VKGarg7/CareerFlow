@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   DashboardOutlined, BusinessOutlined, WorkOutlined,
   PeopleOutlined, PersonOutlined, LogoutOutlined,
-  Menu, Close, NotificationsNoneOutlined,
+  Menu, Close, NotificationsNoneOutlined, Handshake,
 } from '@mui/icons-material'
 
 const NAV = [
@@ -12,6 +12,7 @@ const NAV = [
   { to: '/applications', Icon: WorkOutlined,              label: 'Applications' },
   { to: '/follow-ups',   Icon: NotificationsNoneOutlined, label: 'Follow-Ups'   },
   { to: '/recruiters',   Icon: PeopleOutlined,            label: 'Recruiters'   },
+  { to: '/referrals',    Icon: Handshake,                 label: 'Referrals'    },
   { to: '/profile',      Icon: PersonOutlined,            label: 'Profile'      },
 ]
 
