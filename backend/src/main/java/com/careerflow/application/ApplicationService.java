@@ -246,7 +246,12 @@ public class ApplicationService {
     }
 
     private ApplicationResponse toResponse(JobApplication app) {
-        return toResponse(app, null, null);
+        List<Long> ids = List.of(app.getId());
+        LocalDate next = followUpRepository.findNearestPendingFollowUpDates(ids)
+                .stream().findFirst().map(r -> (LocalDate) r[1]).orElse(null);
+        LocalDate upcoming = followUpRepository.findNearestUpcomingFollowUpDates(ids, LocalDate.now())
+                .stream().findFirst().map(r -> (LocalDate) r[1]).orElse(null);
+        return toResponse(app, next, upcoming);
     }
 
     private ApplicationResponse toResponse(JobApplication app, LocalDate nextFollowUpDate, LocalDate nextUpcomingFollowUpDate) {

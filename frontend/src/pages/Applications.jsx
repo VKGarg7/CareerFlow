@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Alert, CircularProgress } from '@mui/material'
-import { Add } from '@mui/icons-material'
+import { Add, Close } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
@@ -9,12 +9,13 @@ import { getApplications, addApplication, updateApplication, deleteApplication, 
 import { getCompanies } from '../api/company'
 import { getProfile } from '../api/user'
 import { getFollowUpsForApplication, createFollowUp, updateFollowUp, deleteFollowUp } from '../api/followup'
-import { todayStr, fmtDate } from '../utils/followup'
+import { todayStr, fmtDate, initials } from '../utils/followup'
 import RescheduleInline from '../components/RescheduleInline'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
 import CompanyDetailModal from '../components/CompanyDetailModal'
+import InlineStatusChanger from '../components/InlineStatusChanger'
 
 const STATUS_CONFIG = {
   SAVED:               { label: 'Saved',               badge: 'bg-gray-100 text-gray-600',    border: 'border-l-gray-300',    dot: 'bg-gray-400'    },
@@ -47,21 +48,30 @@ const EMPTY_FORM = {
   source: '', status: 'SAVED', expectedSalary: '', notes: '',
 }
 
-function initials(name = '') {
-  return name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
-}
-
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.APPLIED
   return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
+// ─── Inline Status Changer ────────────────────────────────────────────────────
+function AppStatusChanger({ app, onStatusChanged }) {
+  return (
+    <InlineStatusChanger
+      item={app}
+      statusConfig={STATUS_CONFIG}
+      defaultStatus="SAVED"
+      updateFn={(id, payload) => updateApplication(id, payload)}
+      onStatusChanged={onStatusChanged}
+    />
+  )
+}
+
 // ─── Application List Card ────────────────────────────────────────────────────
-function ApplicationCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
+function ApplicationCard({ app, onView, onEdit, onDelete, onFollowUp, onCompany, onStatusChanged }) {
   const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
   return (
-    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${cfg.border} p-5 hover:shadow-md transition-all duration-200`}>
+    <div onClick={() => onView(app)} className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${cfg.border} p-5 hover:shadow-md transition-all duration-200 cursor-pointer`}>
       <div className="flex items-start gap-4">
         <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
           {initials(app.companyName)}
@@ -69,11 +79,11 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
 
         <div className="flex-1 min-w-0">
           <div className="min-w-0 mb-2">
-            <button type="button" onClick={() => onCompany(app.companyId)}
+            <button type="button" onClick={(e) => { e.stopPropagation(); onCompany(app.companyId) }}
               className="block w-full text-base font-bold text-gray-800 truncate mb-1.5 hover:text-blue-600 transition text-left">
               {app.companyName}
             </button>
-            <div><StatusBadge status={app.status} /></div>
+            <div><AppStatusChanger app={app} onStatusChanged={onStatusChanged} /></div>
           </div>
           <p className="text-sm font-medium text-gray-600 mb-2">💼 {app.role}</p>
           <div className="flex flex-wrap gap-2">
@@ -112,12 +122,12 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
               const showUpcoming = isOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
               return (
                 <>
-                  <button type="button" onClick={() => onFollowUp(app)} className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium hover:opacity-80 transition ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); onFollowUp(app) }} className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium hover:opacity-80 transition ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
                     🔔 {fmt(app.nextFollowUpDate)}
                     {isOverdue && <span className="ml-1 text-[10px] font-bold">Overdue</span>}
                   </button>
                   {showUpcoming && (
-                    <button type="button" onClick={() => onFollowUp(app)} className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium hover:opacity-80 transition">
+                    <button type="button" onClick={(e) => { e.stopPropagation(); onFollowUp(app) }} className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium hover:opacity-80 transition">
                       🔔 {fmt(app.nextUpcomingFollowUpDate)}
                     </button>
                   )}
@@ -126,14 +136,14 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
             })()}
             {app.resume && (
               <button type="button"
-                onClick={() => triggerDocView(app.resume)}
+                onClick={(e) => { e.stopPropagation(); triggerDocView(app.resume) }}
                 className="inline-flex items-center text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition"
                 title={`View ${app.resume.originalName}`}>
                 📄 {app.resume.originalName.replace(/\.[^/.]+$/, '')}
               </button>
             )}
             {app.coverLetter && (
-              <button type="button" onClick={() => triggerDocView(app.coverLetter)}
+              <button type="button" onClick={(e) => { e.stopPropagation(); triggerDocView(app.coverLetter) }}
                 className="inline-flex items-center text-xs px-2.5 py-1 bg-violet-50 text-violet-600 rounded-full hover:bg-violet-100 transition"
                 title={`View ${app.coverLetter.originalName}`}>
                 ✉ Cover Letter
@@ -145,7 +155,7 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
           )}
         </div>
 
-        <div className="flex gap-1.5 shrink-0">
+        <div className="flex gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
           <button onClick={() => onFollowUp(app)}
             className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-200 text-amber-600 bg-white hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all"
             title="Schedule follow-up">
@@ -176,7 +186,7 @@ function ApplicationCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
 }
 
 // ─── Application Grid Card ─────────────────────────────────────────────────────
-function ApplicationDirectoryCard({ app, onEdit, onDelete, onFollowUp, onCompany }) {
+function ApplicationDirectoryCard({ app, onView, onEdit, onDelete, onFollowUp, onCompany, onStatusChanged }) {
   const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
   const today = new Date().toISOString().slice(0, 10)
   const hasOverdue = app.nextFollowUpDate && app.nextFollowUpDate < today
@@ -185,7 +195,7 @@ function ApplicationDirectoryCard({ app, onEdit, onDelete, onFollowUp, onCompany
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
   return (
-    <div onClick={() => onEdit(app)} style={{ borderTopColor: dotHex(app.status) }}
+    <div onClick={() => onView(app)} style={{ borderTopColor: dotHex(app.status) }}
       className="bg-white rounded-2xl border border-gray-100 border-t-4 shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col cursor-pointer overflow-hidden group">
 
       {/* Card body */}
@@ -206,7 +216,7 @@ function ApplicationDirectoryCard({ app, onEdit, onDelete, onFollowUp, onCompany
 
         {/* Status + date row */}
         <div className="flex items-center justify-between gap-2">
-          <StatusBadge status={app.status} />
+          <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
           {app.applicationDate && (
             <span className="text-[11px] text-gray-400 shrink-0">
               {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -332,6 +342,122 @@ async function triggerDocView(doc) {
     const url = URL.createObjectURL(new Blob([res.data], { type: doc.contentType }))
     window.open(url, '_blank')
   } catch {}
+}
+
+// ─── Detail (View) Modal ──────────────────────────────────────────────────────
+function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatusChanged }) {
+  const [app, setApp] = useState(initialApp)
+
+  useEffect(() => { setApp(initialApp) }, [initialApp])
+
+  if (!open) return null
+
+  const cfg = app ? (STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED) : STATUS_CONFIG.APPLIED
+
+  const handleStatusChanged = (updated) => {
+    setApp(updated)
+    onStatusChanged?.(updated)
+  }
+
+  const Row = ({ label, value }) => value ? (
+    <div className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
+      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-32 shrink-0 pt-0.5">{label}</span>
+      <span className="text-sm text-gray-700 flex-1 break-words">{value}</span>
+    </div>
+  ) : null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
+
+        {/* Header */}
+        <div className="rounded-t-2xl px-6 pt-6 pb-5 border-b border-gray-100">
+          {app && (
+            <div className="flex items-start gap-4">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold shrink-0 ${cfg.dot}`}>
+                {(app.companyName || '?')[0].toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-bold text-gray-800 leading-tight">{app.companyName || '—'}</h2>
+                <p className="text-sm text-gray-500 mt-0.5">💼 {app.role}</p>
+                <div className="mt-2">
+                  <AppStatusChanger app={app} onStatusChanged={handleStatusChanged} />
+                </div>
+              </div>
+              <button onClick={onClose}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition shrink-0">
+                <Close sx={{ fontSize: 18 }} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Body */}
+        {app && (
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+
+            <div className="mb-4">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Application Details</p>
+              <Row label="Applied On"   value={app.applicationDate ? new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : null} />
+              <Row label="Deadline"     value={app.deadline ? new Date(app.deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : null} />
+              <Row label="Source"       value={SOURCE_LABELS[app.source] || app.source || null} />
+              <Row label="Expected CTC" value={app.expectedSalary || null} />
+            </div>
+
+            {app.notes && (
+              <div className="mb-4">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Notes</p>
+                <div className="bg-gray-50 rounded-xl px-4 py-3">
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{app.notes}</p>
+                </div>
+              </div>
+            )}
+
+            {(app.resume || app.coverLetter) && (
+              <div className="mb-2">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Documents</p>
+                <div className="flex gap-2 flex-wrap">
+                  {app.resume && (
+                    <button onClick={() => triggerDocView(app.resume)}
+                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition font-medium">
+                      📄 {app.resume.originalName || 'Resume'}
+                    </button>
+                  )}
+                  {app.coverLetter && (
+                    <button onClick={() => triggerDocView(app.coverLetter)}
+                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-violet-50 text-violet-600 rounded-lg hover:bg-violet-100 transition font-medium">
+                      📋 {app.coverLetter.originalName || 'Cover Letter'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        {app && (
+          <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+            <button onClick={() => { onClose(); onEdit(app) }}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-700 transition">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z"/>
+                <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z"/>
+              </svg>
+              Edit
+            </button>
+            <button onClick={() => { onClose(); onDelete(app) }}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-red-500 bg-white border border-red-200 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition ml-auto">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z" clipRule="evenodd"/>
+              </svg>
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ─── Add / Edit Modal ─────────────────────────────────────────────────────────
@@ -1022,6 +1148,7 @@ export default function Applications() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
+  const [viewTarget, setViewTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [followUpTarget, setFollowUpTarget] = useState(null)
   const [companyDetailId, setCompanyDetailId] = useState(null)
@@ -1053,6 +1180,7 @@ export default function Applications() {
 
   const openAdd      = () => { setEditTarget(null); setModalOpen(true) }
   const openEdit     = (a) => { setEditTarget(a); setModalOpen(true) }
+  const openView     = (a) => { setViewTarget(a) }
   const openFollowUp = (a) => { setFollowUpTarget(a) }
 
   const handleSaved = () => {
@@ -1213,7 +1341,12 @@ export default function Applications() {
   }, {})
   const sortedLetters = Object.keys(grouped).sort()
 
-  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onFollowUp: openFollowUp, onCompany: setCompanyDetailId }
+  const handleStatusChanged = (updated) => {
+    setApplications(prev => prev.map(a => a.id === updated.id ? updated : a))
+    setViewTarget(prev => prev?.id === updated.id ? updated : prev)
+  }
+
+  const cardProps = { onView: openView, onEdit: openEdit, onDelete: setDeleteTarget, onFollowUp: openFollowUp, onCompany: setCompanyDetailId, onStatusChanged: handleStatusChanged }
 
   return (
     <Layout>
@@ -1585,6 +1718,8 @@ export default function Applications() {
         </div>
       )}
 
+      <DetailModal open={!!viewTarget} app={viewTarget}
+        onClose={() => setViewTarget(null)} onEdit={openEdit} onDelete={setDeleteTarget} onStatusChanged={handleStatusChanged} />
       <AddEditModal open={modalOpen} app={editTarget} companies={companies}
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
       <DeleteModal open={!!deleteTarget} app={deleteTarget}
