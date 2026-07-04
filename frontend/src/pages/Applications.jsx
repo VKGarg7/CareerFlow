@@ -9,6 +9,7 @@ import { getApplications, addApplication, updateApplication, deleteApplication, 
 import { getCompanies } from '../api/company'
 import { getProfile } from '../api/user'
 import { getFollowUpsForApplication, createFollowUp, updateFollowUp, deleteFollowUp } from '../api/followup'
+import { getInterviewsForApplication, createInterview, updateInterview, deleteInterview } from '../api/interview'
 import { todayStr, fmtDate, initials } from '../utils/followup'
 import RescheduleInline from '../components/RescheduleInline'
 import PageHeader from '../components/PageHeader'
@@ -79,10 +80,9 @@ function ApplicationCard({ app, onView, onEdit, onDelete, onFollowUp, onCompany,
 
         <div className="flex-1 min-w-0">
           <div className="min-w-0 mb-2">
-            <button type="button" onClick={(e) => { e.stopPropagation(); onCompany(app.companyId) }}
-              className="block w-full text-base font-bold text-gray-800 truncate mb-1.5 hover:text-blue-600 transition text-left">
+            <span className="block w-full text-base font-bold text-gray-800 truncate mb-1.5">
               {app.companyName}
-            </button>
+            </span>
             <div><AppStatusChanger app={app} onStatusChanged={onStatusChanged} /></div>
           </div>
           <p className="text-sm font-medium text-gray-600 mb-2">💼 {app.role}</p>
@@ -206,10 +206,9 @@ function ApplicationDirectoryCard({ app, onView, onEdit, onDelete, onFollowUp, o
             {initials(app.companyName)}
           </div>
           <div className="flex-1 min-w-0">
-            <button type="button" onClick={(e) => { e.stopPropagation(); onCompany(app.companyId) }}
-              className="block text-sm font-bold text-gray-800 truncate hover:text-blue-600 transition text-left leading-tight">
+            <span className="block text-sm font-bold text-gray-800 truncate leading-tight">
               {app.companyName}
-            </button>
+            </span>
             <p className="text-xs text-gray-500 truncate mt-0.5">{app.role}</p>
           </div>
         </div>
@@ -345,10 +344,42 @@ async function triggerDocView(doc) {
 }
 
 // ─── Detail (View) Modal ──────────────────────────────────────────────────────
-function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatusChanged }) {
+function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatusChanged, onCompany }) {
   const [app, setApp] = useState(initialApp)
+  const [interviews, setInterviews] = useState([])
+  const [interviewsLoading, setInterviewsLoading] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addForm, setAddForm] = useState(EMPTY_INTERVIEW_FORM)
+  const [addSaving, setAddSaving] = useState(false)
+  const [addError, setAddError] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState(EMPTY_INTERVIEW_FORM)
+  const [editSaving, setEditSaving] = useState(false)
+  const [processingId, setProcessingId] = useState(null)
+  const [ivFlash, setIvFlash] = useState('')
 
   useEffect(() => { setApp(initialApp) }, [initialApp])
+
+  const fetchInterviews = useCallback(async () => {
+    if (!initialApp) return
+    setInterviewsLoading(true)
+    try {
+      const res = await getInterviewsForApplication(initialApp.id)
+      setInterviews(res.data)
+    } catch { /* silently ignore */ }
+    finally { setInterviewsLoading(false) }
+  }, [initialApp])
+
+  useEffect(() => {
+    if (open && initialApp) {
+      setShowAddForm(false)
+      setAddForm(EMPTY_INTERVIEW_FORM)
+      setAddError('')
+      setEditingId(null)
+      setIvFlash('')
+      fetchInterviews()
+    }
+  }, [open, initialApp, fetchInterviews])
 
   if (!open) return null
 
@@ -358,6 +389,87 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
     setApp(updated)
     onStatusChanged?.(updated)
   }
+
+  const flash = (msg) => { setIvFlash(msg); setTimeout(() => setIvFlash(''), 2500) }
+
+  const setAddField  = (key) => (e) => setAddForm(f  => ({ ...f,  [key]: e.target.value }))
+  const setEditField = (key) => (e) => setEditForm(f => ({ ...f,  [key]: e.target.value }))
+
+  const handleAddSubmit = async (e) => {
+    e.preventDefault()
+    if (!addForm.scheduledAt) { setAddError('Date & time is required.'); return }
+    setAddSaving(true); setAddError('')
+    try {
+      await createInterview(app.id, {
+        scheduledAt:      addForm.scheduledAt || undefined,
+        round:            addForm.round.trim() || undefined,
+        interviewType:    addForm.interviewType || undefined,
+        location:         addForm.location.trim() || undefined,
+        interviewerName:  addForm.interviewerName.trim() || undefined,
+        questionsAsked:   addForm.questionsAsked.trim() || undefined,
+        feedbackReceived: addForm.feedbackReceived.trim() || undefined,
+        outcome:          addForm.outcome || 'PENDING',
+      })
+      setAddForm(EMPTY_INTERVIEW_FORM)
+      setShowAddForm(false)
+      flash('Round added.')
+      fetchInterviews()
+    } catch (err) {
+      setAddError(err.response?.data?.message || 'Something went wrong.')
+    } finally { setAddSaving(false) }
+  }
+
+  const startEdit = (iv) => {
+    setEditingId(iv.id)
+    setEditForm({
+      scheduledAt:      iv.scheduledAt ? iv.scheduledAt.slice(0, 16) : '',
+      round:            iv.round || '',
+      interviewType:    iv.interviewType || '',
+      location:         iv.location || '',
+      interviewerName:  iv.interviewerName || '',
+      questionsAsked:   iv.questionsAsked || '',
+      feedbackReceived: iv.feedbackReceived || '',
+      outcome:          iv.outcome || 'PENDING',
+    })
+  }
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault()
+    if (!editForm.scheduledAt) return
+    setEditSaving(true)
+    try {
+      await updateInterview(editingId, {
+        scheduledAt:      editForm.scheduledAt || undefined,
+        round:            editForm.round.trim() || undefined,
+        interviewType:    editForm.interviewType || undefined,
+        location:         editForm.location.trim() || undefined,
+        interviewerName:  editForm.interviewerName.trim() || undefined,
+        questionsAsked:   editForm.questionsAsked.trim() || undefined,
+        feedbackReceived: editForm.feedbackReceived.trim() || undefined,
+        outcome:          editForm.outcome || 'PENDING',
+      })
+      setEditingId(null)
+      flash('Round updated.')
+      fetchInterviews()
+    } catch { flash('Update failed.') }
+    finally { setEditSaving(false) }
+  }
+
+  const handleDeleteRound = async (id) => {
+    setProcessingId(id)
+    try {
+      await deleteInterview(id)
+      flash('Round deleted.')
+      fetchInterviews()
+    } catch { flash('Delete failed.') }
+    finally { setProcessingId(null) }
+  }
+
+  const fmtDateTime = (dt) => dt
+    ? new Date(dt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '—'
+
+  const inputCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white hover:border-gray-300 transition'
 
   const Row = ({ label, value }) => value ? (
     <div className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
@@ -371,14 +483,22 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
 
         {/* Header */}
-        <div className="rounded-t-2xl px-6 pt-6 pb-5 border-b border-gray-100">
+        <div className="rounded-t-2xl px-6 pt-6 pb-5 border-b border-gray-100 shrink-0">
           {app && (
             <div className="flex items-start gap-4">
               <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold shrink-0 ${cfg.dot}`}>
                 {(app.companyName || '?')[0].toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-xl font-bold text-gray-800 leading-tight">{app.companyName || '—'}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xl font-bold text-gray-800 leading-tight">{app.companyName || '—'}</h2>
+                  {app.companyId && (
+                    <button onClick={() => { onClose(); onCompany(app.companyId) }}
+                      className="text-[11px] font-semibold text-blue-500 hover:text-blue-700 hover:underline transition shrink-0">
+                      View Company →
+                    </button>
+                  )}
+                </div>
                 <p className="text-sm text-gray-500 mt-0.5">💼 {app.role}</p>
                 <div className="mt-2">
                   <AppStatusChanger app={app} onStatusChanged={handleStatusChanged} />
@@ -394,9 +514,10 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
 
         {/* Body */}
         {app && (
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
 
-            <div className="mb-4">
+            {/* Application details */}
+            <div>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Application Details</p>
               <Row label="Applied On"   value={app.applicationDate ? new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : null} />
               <Row label="Deadline"     value={app.deadline ? new Date(app.deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : null} />
@@ -405,7 +526,7 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
             </div>
 
             {app.notes && (
-              <div className="mb-4">
+              <div>
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Notes</p>
                 <div className="bg-gray-50 rounded-xl px-4 py-3">
                   <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{app.notes}</p>
@@ -414,7 +535,7 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
             )}
 
             {(app.resume || app.coverLetter) && (
-              <div className="mb-2">
+              <div>
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Documents</p>
                 <div className="flex gap-2 flex-wrap">
                   {app.resume && (
@@ -432,12 +553,131 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
                 </div>
               </div>
             )}
+
+            {/* ── Interview Rounds ── */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                  Interview Rounds {interviews.length > 0 && `(${interviews.length})`}
+                </p>
+                <button
+                  onClick={() => { setShowAddForm(v => !v); setAddError('') }}
+                  className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border transition ${
+                    showAddForm
+                      ? 'bg-purple-600 text-white border-purple-600'
+                      : 'border-purple-200 text-purple-600 bg-white hover:bg-purple-600 hover:text-white hover:border-purple-600'
+                  }`}>
+                  {showAddForm ? '✕ Cancel' : '+ Add Round'}
+                </button>
+              </div>
+
+              {ivFlash && (
+                <div className="mb-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 text-green-700 text-xs font-medium">
+                  {ivFlash}
+                </div>
+              )}
+
+              {/* Add round form */}
+              {showAddForm && (
+                <form onSubmit={handleAddSubmit} className="mb-4 bg-purple-50 rounded-xl p-3 space-y-2.5">
+                  {addError && <p className="text-xs text-red-500">{addError}</p>}
+                  <InterviewFormFields form={addForm} setField={setAddField} inputCls={inputCls} />
+                  <button type="submit" disabled={addSaving}
+                    className="w-full py-2 text-xs font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition disabled:opacity-60 flex items-center justify-center gap-2">
+                    {addSaving && <CircularProgress size={11} color="inherit" />}
+                    Add Round
+                  </button>
+                </form>
+              )}
+
+              {/* Timeline */}
+              {interviewsLoading ? (
+                <div className="flex justify-center py-4"><CircularProgress size={20} /></div>
+              ) : interviews.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">No rounds yet — add one above.</p>
+              ) : (
+                <div className="relative">
+                  {interviews.length > 1 && (
+                    <div className="absolute left-[15px] top-[30px] bottom-[30px] w-0.5 bg-gray-100 z-0" />
+                  )}
+                  <div className="space-y-3">
+                    {interviews.map((iv, idx) => {
+                      const outcomeCfg = INTERVIEW_OUTCOME_CONFIG[iv.outcome] || INTERVIEW_OUTCOME_CONFIG.AWAITING_RESPONSE
+                      const isProc = processingId === iv.id
+                      const isEditingThis = editingId === iv.id
+                      const dotBg =
+                        iv.outcome === 'PASSED'      ? 'bg-green-500 ring-green-100'  :
+                        iv.outcome === 'FAILED'      ? 'bg-red-400 ring-red-100'      :
+                        iv.outcome === 'NO_SHOW'     ? 'bg-gray-400 ring-gray-100'    :
+                        iv.outcome === 'RESCHEDULED' ? 'bg-blue-400 ring-blue-100'    :
+                                                       'bg-amber-400 ring-amber-100'
+                      return (
+                        <div key={iv.id} className="relative flex gap-3 z-10">
+                          {/* Dot */}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0 ring-4 ${dotBg}`}>
+                            {idx + 1}
+                          </div>
+                          {/* Card */}
+                          <div className="flex-1 min-w-0 bg-gray-50 border border-gray-100 rounded-xl p-3">
+                            {isEditingThis ? (
+                              <form onSubmit={handleEditSubmit} className="space-y-2">
+                                <p className="text-[10px] font-semibold text-purple-600 uppercase tracking-wide">Editing Round {idx + 1}</p>
+                                <InterviewFormFields form={editForm} setField={setEditField} inputCls={inputCls} />
+                                <div className="flex gap-2 pt-1">
+                                  <button type="submit" disabled={editSaving}
+                                    className="flex-1 py-1.5 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition disabled:opacity-60 flex items-center justify-center gap-1.5">
+                                    {editSaving && <CircularProgress size={10} color="inherit" />}
+                                    Save
+                                  </button>
+                                  <button type="button" onClick={() => setEditingId(null)}
+                                    className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition">
+                                    Cancel
+                                  </button>
+                                </div>
+                              </form>
+                            ) : (
+                              <div className="flex items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                                    <span className="text-xs font-bold text-gray-800">{iv.round || `Round ${idx + 1}`}</span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${outcomeCfg.cls}`}>{outcomeCfg.label}</span>
+                                  </div>
+                                  <p className="text-[11px] text-gray-400 mb-1">🗓 {fmtDateTime(iv.scheduledAt)}</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {iv.interviewType && <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-md font-medium">{INTERVIEW_TYPE_LABELS[iv.interviewType]}</span>}
+                                    {iv.location && <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-md font-medium truncate max-w-[140px]" title={iv.location}>📍 {iv.location}</span>}
+                                    {iv.interviewerName && <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-md font-medium">👤 {iv.interviewerName}</span>}
+                                  </div>
+                                  {iv.questionsAsked && <p className="mt-1 text-[11px] text-gray-400"><span className="font-semibold not-italic">Q:</span> <span className="italic line-clamp-2">{iv.questionsAsked}</span></p>}
+                                  {iv.feedbackReceived && <p className="mt-0.5 text-[11px] text-gray-400"><span className="font-semibold not-italic">FB:</span> <span className="italic line-clamp-2">{iv.feedbackReceived}</span></p>}
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                  <button onClick={() => startEdit(iv)} disabled={isProc}
+                                    className="px-2 py-1 text-[10px] font-semibold rounded-lg border border-gray-200 text-gray-500 bg-white hover:bg-gray-700 hover:text-white hover:border-gray-700 transition disabled:opacity-50">
+                                    Edit
+                                  </button>
+                                  <button onClick={() => handleDeleteRound(iv.id)} disabled={isProc}
+                                    className="px-2 py-1 text-[10px] font-semibold rounded-lg border border-red-200 text-red-400 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition disabled:opacity-50 flex items-center">
+                                    {isProc ? <CircularProgress size={9} color="inherit" /> : '×'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
         {/* Footer */}
         {app && (
-          <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+          <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl shrink-0">
             <button onClick={() => { onClose(); onEdit(app) }}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-700 transition">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -1110,6 +1350,74 @@ function FollowUpRow({ fu, onDone, onUndo, onDelete, onReschedule, loading }) {
   )
 }
 
+// ─── Interview Modal ──────────────────────────────────────────────────────────
+const INTERVIEW_TYPE_LABELS = {
+  PHONE_SCREEN: 'Phone Screen', VIDEO_CALL: 'Video Call', ONSITE: 'Onsite',
+  TECHNICAL: 'Technical', HR: 'HR', BEHAVIORAL: 'Behavioral',
+  CASE_STUDY: 'Case Study', GROUP: 'Group', OTHER: 'Other',
+}
+
+const INTERVIEW_OUTCOME_CONFIG = {
+  AWAITING_RESPONSE: { label: 'Awaiting Response', cls: 'bg-amber-100 text-amber-700'   },
+  PASSED:            { label: 'Passed',             cls: 'bg-green-100 text-green-700'   },
+  FAILED:            { label: 'Failed',             cls: 'bg-red-100 text-red-600'       },
+  NO_SHOW:           { label: 'No Show',            cls: 'bg-gray-100 text-gray-500'     },
+  RESCHEDULED:       { label: 'Rescheduled',        cls: 'bg-blue-100 text-blue-700'     },
+}
+
+const EMPTY_INTERVIEW_FORM = {
+  scheduledAt: '', round: '', interviewType: '', location: '', interviewerName: '',
+  questionsAsked: '', feedbackReceived: '', outcome: 'AWAITING_RESPONSE',
+}
+
+function InterviewFormFields({ form, setField, inputCls }) {
+  return (
+    <>
+      <div>
+        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Date & Time <span className="text-red-500">*</span></label>
+        <input type="datetime-local" value={form.scheduledAt} onChange={setField('scheduledAt')} className={inputCls} />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Round Name</label>
+          <input type="text" value={form.round} onChange={setField('round')} placeholder="e.g. HR Round" className={inputCls} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Type</label>
+          <select value={form.interviewType} onChange={setField('interviewType')} className={inputCls}>
+            <option value="">Select type</option>
+            {Object.entries(INTERVIEW_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Location / Link</label>
+          <input type="text" value={form.location} onChange={setField('location')} placeholder="Zoom / office" className={inputCls} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Interviewer</label>
+          <input type="text" value={form.interviewerName} onChange={setField('interviewerName')} placeholder="Name" className={inputCls} />
+        </div>
+      </div>
+      <div>
+        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Outcome</label>
+        <select value={form.outcome} onChange={setField('outcome')} className={inputCls}>
+          {Object.entries(INTERVIEW_OUTCOME_CONFIG).map(([v, { label }]) => <option key={v} value={v}>{label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Questions Asked</label>
+        <textarea value={form.questionsAsked} onChange={setField('questionsAsked')} rows={2} placeholder="What questions were asked?" className={`${inputCls} resize-none`} />
+      </div>
+      <div>
+        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Feedback Received</label>
+        <textarea value={form.feedbackReceived} onChange={setField('feedbackReceived')} rows={2} placeholder="What feedback did you get?" className={`${inputCls} resize-none`} />
+      </div>
+    </>
+  )
+}
+
 // ─── Delete Modal ─────────────────────────────────────────────────────────────
 function DeleteModal({ open, app, onClose, onDeleted }) {
   return (
@@ -1719,7 +2027,7 @@ export default function Applications() {
       )}
 
       <DetailModal open={!!viewTarget} app={viewTarget}
-        onClose={() => setViewTarget(null)} onEdit={openEdit} onDelete={setDeleteTarget} onStatusChanged={handleStatusChanged} />
+        onClose={() => setViewTarget(null)} onEdit={openEdit} onDelete={setDeleteTarget} onStatusChanged={handleStatusChanged} onCompany={setCompanyDetailId} />
       <AddEditModal open={modalOpen} app={editTarget} companies={companies}
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
       <DeleteModal open={!!deleteTarget} app={deleteTarget}
