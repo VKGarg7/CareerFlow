@@ -2,6 +2,8 @@ package com.careerflow.interview;
 
 import com.careerflow.application.ApplicationRepository;
 import com.careerflow.application.JobApplication;
+import com.careerflow.audit.AuditAction;
+import com.careerflow.audit.AuditLogService;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.interview.dto.InterviewRequest;
@@ -21,6 +23,7 @@ public class InterviewService {
     private final InterviewRepository interviewRepository;
     private final ApplicationRepository applicationRepository;
     private final SecurityUtils securityUtils;
+    private final AuditLogService auditLogService;
 
     public InterviewResponse create(Long applicationId, InterviewRequest request) {
         User user = securityUtils.getCurrentUser();
@@ -39,7 +42,9 @@ public class InterviewService {
                 .outcome(request.getOutcome() != null ? request.getOutcome() : InterviewOutcome.AWAITING_RESPONSE)
                 .build();
 
-        return toResponse(interviewRepository.save(interview));
+        interview = interviewRepository.save(interview);
+        auditLogService.log(user, AuditAction.INTERVIEW_CREATED, describeInterview(interview));
+        return toResponse(interview);
     }
 
     public List<InterviewResponse> getForApplication(Long applicationId) {
@@ -63,13 +68,17 @@ public class InterviewService {
         if (request.getFeedbackReceived() != null) interview.setFeedbackReceived(request.getFeedbackReceived());
         if (request.getOutcome() != null)          interview.setOutcome(request.getOutcome());
 
-        return toResponse(interviewRepository.save(interview));
+        interview = interviewRepository.save(interview);
+        auditLogService.log(user, AuditAction.INTERVIEW_UPDATED, describeInterview(interview));
+        return toResponse(interview);
     }
 
     public void delete(Long id) {
         User user = securityUtils.getCurrentUser();
         Interview interview = findOwned(id, user.getId());
+        String description = describeInterview(interview);
         interviewRepository.delete(interview);
+        auditLogService.log(user, AuditAction.INTERVIEW_DELETED, description);
     }
 
     private Interview findOwned(Long id, Long userId) {
@@ -80,6 +89,12 @@ public class InterviewService {
     private JobApplication findOwnedApplication(Long applicationId, Long userId) {
         return applicationRepository.findByIdAndUserId(applicationId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
+    }
+
+    private String describeInterview(Interview interview) {
+        String round = interview.getRound() != null ? interview.getRound() : "Interview";
+        return round + " for " + interview.getApplication().getRole()
+                + " at " + interview.getApplication().getCompany().getName();
     }
 
     private InterviewResponse toResponse(Interview i) {

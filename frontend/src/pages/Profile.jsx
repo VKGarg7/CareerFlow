@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Alert, CircularProgress, IconButton, Tooltip } from '@mui/material'
 import { Delete, Download, Visibility, Upload } from '@mui/icons-material'
 import Layout from '../components/Layout'
@@ -46,6 +47,7 @@ function formatSize(b) {
 }
 
 export default function Profile() {
+  const navigate = useNavigate()
   const [profile,  setProfile]  = useState(null)
   const [editing,  setEditing]  = useState(false)
   const [form,     setForm]     = useState(emptyForm)
@@ -164,12 +166,18 @@ export default function Profile() {
     <Layout>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">My Profile</h2>
-        {!editing && (
-          <button onClick={() => { setEditing(true); setError(''); setSuccess('') }}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition">
-            {profile ? 'Edit Profile' : 'Create Profile'}
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/activity')}
+            className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition">
+            My Activity
           </button>
-        )}
+          {!editing && (
+            <button onClick={() => { setEditing(true); setError(''); setSuccess('') }}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition">
+              {profile ? 'Edit Profile' : 'Create Profile'}
+            </button>
+          )}
+        </div>
       </div>
 
       {success  && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 2, borderRadius: 2 }}>{success}</Alert>}

@@ -3,6 +3,8 @@ package com.careerflow.application;
 import com.careerflow.application.dto.ApplicationRequest;
 import com.careerflow.application.dto.ApplicationResponse;
 import com.careerflow.application.dto.ApplicationUpdateRequest;
+import com.careerflow.audit.AuditAction;
+import com.careerflow.audit.AuditLogService;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.SortHelper;
 import com.careerflow.company.Company;
@@ -51,6 +53,7 @@ public class ApplicationService {
     private final DocumentRepository documentRepository;
     private final SecurityUtils securityUtils;
     private final com.careerflow.user.UserResumeRepository userResumeRepository;
+    private final AuditLogService auditLogService;
 
     public ApplicationResponse addApplication(ApplicationRequest request) {
         User user = securityUtils.getCurrentUser();
@@ -68,7 +71,9 @@ public class ApplicationService {
                 .notes(request.getNotes())
                 .build();
 
-        return toResponse(applicationRepository.save(application));
+        application = applicationRepository.save(application);
+        auditLogService.log(user, AuditAction.APPLICATION_CREATED, "Applied to " + describe(application));
+        return toResponse(application);
     }
 
     public List<ApplicationResponse> getMyApplications(
@@ -115,7 +120,9 @@ public class ApplicationService {
         if (request.getNotes() != null)
             application.setNotes(request.getNotes());
 
-        return toResponse(applicationRepository.save(application));
+        application = applicationRepository.save(application);
+        auditLogService.log(user, AuditAction.APPLICATION_UPDATED, "Updated application for " + describe(application));
+        return toResponse(application);
     }
 
     public void deleteApplication(Long id) {
@@ -123,6 +130,7 @@ public class ApplicationService {
         JobApplication application = findOwned(id, user.getId());
         application.softDelete();
         applicationRepository.save(application);
+        auditLogService.log(user, AuditAction.APPLICATION_DELETED, "Deleted application for " + describe(application));
     }
 
     @Transactional
@@ -229,6 +237,10 @@ public class ApplicationService {
     private Company findOwnedCompany(Long companyId, Long userId) {
         return companyRepository.findByIdAndUserId(companyId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found"));
+    }
+
+    private String describe(JobApplication application) {
+        return application.getRole() + " at " + application.getCompany().getName();
     }
 
     private Map<Long, LocalDate> buildNearestFollowUpMap(List<JobApplication> apps) {

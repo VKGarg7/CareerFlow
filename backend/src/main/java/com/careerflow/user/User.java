@@ -69,6 +69,18 @@ public class User {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private Role role = Role.USER;
+
+    @Getter(AccessLevel.NONE)
+    @Builder.Default
+    private Boolean active = true;
+
+    public boolean isActive() {
+        return active == null || active;
+    }
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

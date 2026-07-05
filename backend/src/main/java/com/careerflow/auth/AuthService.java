@@ -1,5 +1,7 @@
 package com.careerflow.auth;
 
+import com.careerflow.audit.AuditAction;
+import com.careerflow.audit.AuditLogService;
 import com.careerflow.auth.dto.*;
 import com.careerflow.config.JwtUtil;
 import com.careerflow.exception.BadRequestException;
@@ -10,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,6 +36,7 @@ public class AuthService {
     private final BlacklistedTokenRepository blacklistedTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
+    private final AuditLogService auditLogService;
 
     public RegisterResponse register(RegisterRequest request) {
         if (!request.getPassword().equals(request.getConfirmPassword())) {
@@ -50,6 +54,7 @@ public class AuthService {
                 .build();
 
         User saved = userRepository.save(user);
+        auditLogService.log(saved, AuditAction.USER_REGISTERED, "Account created for " + saved.getEmail());
 
         return RegisterResponse.builder()
                 .id(saved.getId())
@@ -68,6 +73,8 @@ public class AuthService {
                             request.getPassword()
                     )
             );
+        } catch (DisabledException e) {
+            throw new BadRequestException("This account has been deactivated");
         } catch (AuthenticationException e) {
             throw new BadRequestException("Invalid email or password");
         }
@@ -76,9 +83,11 @@ public class AuthService {
                 .orElseThrow(() -> new BadRequestException("Invalid email or password"));
 
         String token = jwtUtil.generateToken(user.getEmail());
+        auditLogService.log(user, AuditAction.USER_LOGIN, "Logged in");
 
         return LoginResponse.builder()
                 .token(token)
+                .role(user.getRole())
                 .build();
     }
 
@@ -101,6 +110,9 @@ public class AuthService {
                         .expiresAt(expiresAt)
                         .build()
         );
+
+        userRepository.findByEmail(jwtUtil.extractEmail(token))
+                .ifPresent(user -> auditLogService.log(user, AuditAction.USER_LOGOUT, "Logged out"));
 
         return Map.of("message", "Logged out successfully");
     }
@@ -153,6 +165,7 @@ public class AuthService {
         userRepository.save(user);
 
         passwordResetTokenRepository.delete(resetToken);
+        auditLogService.log(user, AuditAction.PASSWORD_RESET, "Password reset via email link");
 
         return Map.of("message", "Password reset successfully");
     }
@@ -173,6 +186,7 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+        auditLogService.log(user, AuditAction.PASSWORD_CHANGED, "Password changed");
 
         return Map.of("message", "Password changed successfully");
     }

@@ -24,4 +24,14 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
     @Modifying
     @Query("UPDATE JobApplication a SET a.deletedAt = :now WHERE a.company.id = :companyId AND a.deletedAt IS NULL")
     void softDeleteAllByCompanyId(@Param("companyId") Long companyId, @Param("now") LocalDateTime now);
+
+    long count();
+
+    @Query("SELECT a.status AS status, COUNT(a) AS total FROM JobApplication a GROUP BY a.status")
+    List<StatusCount> countByStatusGrouped();
+
+    interface StatusCount {
+        ApplicationStatus getStatus();
+        long getTotal();
+    }
 }

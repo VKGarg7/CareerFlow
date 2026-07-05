@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { register } from '../api/auth'
+import { register, login } from '../api/auth'
 
 const EyeIcon = ({ open }) =>
   open ? (
@@ -36,11 +36,21 @@ export default function Signup() {
     setLoading(true)
     try {
       await register(form)
-      navigate('/login', { state: { message: 'Account created! Please sign in.' } })
     } catch (err) {
       const data = err.response?.data
       if (data?.errors) setErrors(data.errors)
       else setErrors({ general: data?.message || 'Registration failed.' })
+      setLoading(false)
+      return
+    }
+
+    try {
+      const res = await login({ email: form.email, password: form.password })
+      localStorage.setItem('token', res.data.token)
+      if (res.data.role) localStorage.setItem('role', res.data.role)
+      navigate('/dashboard')
+    } catch {
+      navigate('/login', { state: { message: 'Account created! Please sign in.' } })
     } finally {
       setLoading(false)
     }
