@@ -17,6 +17,7 @@ import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
 import CompanyDetailModal from '../components/CompanyDetailModal'
 import InlineStatusChanger from '../components/InlineStatusChanger'
+import { EntityCard, EntityDirectoryCard } from '../components/EntityCard'
 
 const STATUS_CONFIG = {
   SAVED:               { label: 'Saved',               badge: 'bg-gray-100 text-gray-600',    border: 'border-l-gray-300',    dot: 'bg-gray-400'    },
@@ -72,116 +73,100 @@ function AppStatusChanger({ app, onStatusChanged }) {
 function ApplicationCard({ app, onView, onEdit, onDelete, onFollowUp, onCompany, onStatusChanged }) {
   const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
   return (
-    <div onClick={() => onView(app)} className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${cfg.border} p-5 hover:shadow-md transition-all duration-200 cursor-pointer`}>
-      <div className="flex items-start gap-4">
-        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
-          {initials(app.companyName)}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="min-w-0 mb-2">
-            <span className="block w-full text-base font-bold text-gray-800 truncate mb-1.5">
-              {app.companyName}
+    <EntityCard
+      onClick={() => onView(app)}
+      accentColor={cfg.border}
+      avatarColor={cfg.dot}
+      avatarText={initials(app.companyName)}
+      titleSlot={
+        <>
+          <span className="block w-full text-base font-bold text-gray-800 truncate mb-1.5">
+            {app.companyName}
+          </span>
+          <div><AppStatusChanger app={app} onStatusChanged={onStatusChanged} /></div>
+          <p className="text-sm font-medium text-gray-600 mt-2">💼 {app.role}</p>
+        </>
+      }
+      chips={
+        <>
+          {app.applicationDate && (
+            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
+              📅 {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
             </span>
-            <div><AppStatusChanger app={app} onStatusChanged={onStatusChanged} /></div>
-          </div>
-          <p className="text-sm font-medium text-gray-600 mb-2">💼 {app.role}</p>
-          <div className="flex flex-wrap gap-2">
-            {app.applicationDate && (
-              <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-                📅 {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-            )}
-            {app.source && (
-              <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-                via {SOURCE_LABELS[app.source] || app.source}
-              </span>
-            )}
-            {app.expectedSalary && (
-              <span className="inline-flex items-center text-xs px-2.5 py-1 bg-green-50 text-green-600 rounded-full">
-                💰 {app.expectedSalary}
-              </span>
-            )}
-            {app.deadline && (() => {
-              const today = new Date().toISOString().slice(0, 10)
-              const daysLeft = Math.round((new Date(app.deadline) - new Date(today)) / 86400000)
-              const isUrgent = daysLeft <= 3
-              const isPast   = daysLeft < 0
-              return (
-                <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${
-                  isPast ? 'bg-red-100 text-red-600' : isUrgent ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-500'
-                }`}>
-                  ⏰ {isPast ? 'Deadline passed' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`}
-                </span>
-              )
-            })()}
-            {app.nextFollowUpDate && (() => {
-              const today = new Date().toISOString().slice(0, 10)
-              const isOverdue = app.nextFollowUpDate < today
-              const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-              const showUpcoming = isOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
-              return (
-                <>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); onFollowUp(app) }} className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium hover:opacity-80 transition ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                    🔔 {fmt(app.nextFollowUpDate)}
-                    {isOverdue && <span className="ml-1 text-[10px] font-bold">Overdue</span>}
-                  </button>
-                  {showUpcoming && (
-                    <button type="button" onClick={(e) => { e.stopPropagation(); onFollowUp(app) }} className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium hover:opacity-80 transition">
-                      🔔 {fmt(app.nextUpcomingFollowUpDate)}
-                    </button>
-                  )}
-                </>
-              )
-            })()}
-            {app.resume && (
-              <button type="button"
-                onClick={(e) => { e.stopPropagation(); triggerDocView(app.resume) }}
-                className="inline-flex items-center text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition"
-                title={`View ${app.resume.originalName}`}>
-                📄 {app.resume.originalName.replace(/\.[^/.]+$/, '')}
-              </button>
-            )}
-            {app.coverLetter && (
-              <button type="button" onClick={(e) => { e.stopPropagation(); triggerDocView(app.coverLetter) }}
-                className="inline-flex items-center text-xs px-2.5 py-1 bg-violet-50 text-violet-600 rounded-full hover:bg-violet-100 transition"
-                title={`View ${app.coverLetter.originalName}`}>
-                ✉ Cover Letter
-              </button>
-            )}
-          </div>
-          {app.notes && (
-            <p className="mt-1.5 text-xs text-gray-400 line-clamp-1 italic">"{app.notes}"</p>
           )}
-        </div>
-
-        <div className="flex gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
-          <button onClick={() => onFollowUp(app)}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-200 text-amber-600 bg-white hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all"
-            title="Schedule follow-up">
+          {app.source && (
+            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
+              via {SOURCE_LABELS[app.source] || app.source}
+            </span>
+          )}
+          {app.expectedSalary && (
+            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-green-50 text-green-600 rounded-full">
+              💰 {app.expectedSalary}
+            </span>
+          )}
+          {app.deadline && (() => {
+            const today = new Date().toISOString().slice(0, 10)
+            const daysLeft = Math.round((new Date(app.deadline) - new Date(today)) / 86400000)
+            const isUrgent = daysLeft <= 3
+            const isPast   = daysLeft < 0
+            return (
+              <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${
+                isPast ? 'bg-red-100 text-red-600' : isUrgent ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-500'
+              }`}>
+                ⏰ {isPast ? 'Deadline passed' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`}
+              </span>
+            )
+          })()}
+          {app.nextFollowUpDate && (() => {
+            const today = new Date().toISOString().slice(0, 10)
+            const isOverdue = app.nextFollowUpDate < today
+            const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+            const showUpcoming = isOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
+            return (
+              <>
+                <button type="button" onClick={(e) => { e.stopPropagation(); onFollowUp(app) }} className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium hover:opacity-80 transition ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                  🔔 {fmt(app.nextFollowUpDate)}
+                  {isOverdue && <span className="ml-1 text-[10px] font-bold">Overdue</span>}
+                </button>
+                {showUpcoming && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); onFollowUp(app) }} className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium hover:opacity-80 transition">
+                    🔔 {fmt(app.nextUpcomingFollowUpDate)}
+                  </button>
+                )}
+              </>
+            )
+          })()}
+          {app.resume && (
+            <button type="button"
+              onClick={(e) => { e.stopPropagation(); triggerDocView(app.resume) }}
+              className="inline-flex items-center text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition"
+              title={`View ${app.resume.originalName}`}>
+              📄 {app.resume.originalName.replace(/\.[^/.]+$/, '')}
+            </button>
+          )}
+          {app.coverLetter && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); triggerDocView(app.coverLetter) }}
+              className="inline-flex items-center text-xs px-2.5 py-1 bg-violet-50 text-violet-600 rounded-full hover:bg-violet-100 transition"
+              title={`View ${app.coverLetter.originalName}`}>
+              ✉ Cover Letter
+            </button>
+          )}
+        </>
+      }
+      note={app.notes}
+      actions={[
+        {
+          label: 'Follow-Up', tone: 'accent', onClick: () => onFollowUp(app),
+          icon: (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
               <path d="M4.214 3.227a.75.75 0 00-1.156-.956 8.97 8.97 0 00-1.856 3.826.75.75 0 001.466.316 7.47 7.47 0 011.546-3.186zM16.942 2.271a.75.75 0 00-1.156.956 7.47 7.47 0 011.547 3.186.75.75 0 001.466-.316 8.971 8.971 0 00-1.857-3.826zM10 6a4 4 0 00-4 4v.667l-1.166 2.333a.75.75 0 000 .666.75.75 0 00.666.334h9a.75.75 0 00.666-.334.75.75 0 000-.666L14 10.667V10a4 4 0 00-4-4zm0 13a2.5 2.5 0 01-2.45-2h4.9A2.5 2.5 0 0110 19z"/>
             </svg>
-            Follow-Up
-          </button>
-          <button onClick={() => onEdit(app)}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-              <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z"/>
-              <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z"/>
-            </svg>
-            Edit
-          </button>
-          <button onClick={() => onDelete(app)}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-              <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd"/>
-            </svg>
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
+          ),
+        },
+        { label: 'Edit', icon: 'edit', onClick: () => onEdit(app) },
+        { label: 'Delete', icon: 'delete', onClick: () => onDelete(app), tone: 'danger' },
+      ]}
+    />
   )
 }
 
@@ -195,117 +180,84 @@ function ApplicationDirectoryCard({ app, onView, onEdit, onDelete, onFollowUp, o
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
   return (
-    <div onClick={() => onView(app)} style={{ borderTopColor: dotHex(app.status) }}
-      className="bg-white rounded-2xl border border-gray-100 border-t-4 shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col cursor-pointer overflow-hidden group">
-
-      {/* Card body */}
-      <div className="p-4 flex flex-col gap-3 flex-1">
-        {/* Avatar + company + role */}
-        <div className="flex items-start gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
-            {initials(app.companyName)}
+    <EntityDirectoryCard
+      onClick={() => onView(app)}
+      borderTopColor={dotHex(app.status)}
+      avatarColor={cfg.dot}
+      avatarText={initials(app.companyName)}
+      titleSlot={
+        <>
+          <span className="block text-sm font-bold text-gray-800 truncate leading-tight">
+            {app.companyName}
+          </span>
+          <p className="text-xs text-gray-500 truncate mt-0.5">{app.role}</p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+            <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
+            {app.applicationDate && (
+              <span className="text-[11px] text-gray-400 shrink-0">
+                {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <span className="block text-sm font-bold text-gray-800 truncate leading-tight">
-              {app.companyName}
-            </span>
-            <p className="text-xs text-gray-500 truncate mt-0.5">{app.role}</p>
-          </div>
-        </div>
-
-        {/* Status + date row */}
-        <div className="flex items-center justify-between gap-2">
-          <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
-          {app.applicationDate && (
-            <span className="text-[11px] text-gray-400 shrink-0">
-              {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </>
+      }
+      chips={
+        <>
+          {app.deadline && (() => {
+            const todayStr = new Date().toISOString().slice(0, 10)
+            const daysLeft = Math.round((new Date(app.deadline) - new Date(todayStr)) / 86400000)
+            const isPast   = daysLeft < 0
+            const isUrgent = daysLeft >= 0 && daysLeft <= 3
+            return (
+              <span className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                isPast ? 'bg-red-100 text-red-600' : isUrgent ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-500'
+              }`}>
+                ⏰ {isPast ? 'Deadline passed' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`}
+              </span>
+            )
+          })()}
+          {hasOverdue && (
+            <button type="button" onClick={() => onFollowUp(app)}
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-red-50 text-red-600 hover:bg-red-100 transition">
+              🔔 {fmtDate(app.nextFollowUpDate)} · Overdue
+            </button>
+          )}
+          {(hasUpcoming && !hasOverdue) && (
+            <button type="button" onClick={() => onFollowUp(app)}
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
+              🔔 {fmtDate(app.nextFollowUpDate)}
+            </button>
+          )}
+          {showUpcoming && (
+            <button type="button" onClick={() => onFollowUp(app)}
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
+              🔔 {fmtDate(app.nextUpcomingFollowUpDate)}
+            </button>
+          )}
+          {app.resume && (
+            <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-medium">
+              📄 Resume
             </span>
           )}
-        </div>
-
-        {/* Deadline chip */}
-        {app.deadline && (() => {
-          const todayStr = new Date().toISOString().slice(0, 10)
-          const daysLeft = Math.round((new Date(app.deadline) - new Date(todayStr)) / 86400000)
-          const isPast   = daysLeft < 0
-          const isUrgent = daysLeft >= 0 && daysLeft <= 3
-          return (
-            <span className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full font-medium ${
-              isPast ? 'bg-red-100 text-red-600' : isUrgent ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-500'
-            }`}>
-              ⏰ {isPast ? 'Deadline passed' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`}
+          {app.coverLetter && (
+            <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-violet-50 text-violet-600 rounded-full font-medium">
+              ✉ Cover Letter
             </span>
-          )
-        })()}
-
-        {/* Follow-up chips */}
-        {(hasOverdue || hasUpcoming || showUpcoming) && (
-          <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-            {hasOverdue && (
-              <button type="button" onClick={() => onFollowUp(app)}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-red-50 text-red-600 hover:bg-red-100 transition">
-                🔔 {fmtDate(app.nextFollowUpDate)} · Overdue
-              </button>
-            )}
-            {(hasUpcoming && !hasOverdue) && (
-              <button type="button" onClick={() => onFollowUp(app)}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
-                🔔 {fmtDate(app.nextFollowUpDate)}
-              </button>
-            )}
-            {showUpcoming && (
-              <button type="button" onClick={() => onFollowUp(app)}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
-                🔔 {fmtDate(app.nextUpcomingFollowUpDate)}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Doc + salary indicators */}
-        {(app.resume || app.coverLetter || app.expectedSalary) && (
-          <div className="flex flex-wrap gap-1.5">
-            {app.resume && (
-              <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-medium">
-                📄 Resume
-              </span>
-            )}
-            {app.coverLetter && (
-              <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-violet-50 text-violet-600 rounded-full font-medium">
-                ✉ Cover Letter
-              </span>
-            )}
-            {app.expectedSalary && (
-              <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-green-50 text-green-600 rounded-full font-medium">
-                {app.expectedSalary}
-              </span>
-            )}
-          </div>
-        )}
-
-        {app.notes && (
-          <p className="text-[11px] text-gray-400 line-clamp-1 italic">"{app.notes}"</p>
-        )}
-      </div>
-
-      {/* Action footer */}
-      <div className="flex border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-        <button onClick={() => onFollowUp(app)}
-          className="flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors">
-          🔔 Follow-Up
-        </button>
-        <div className="w-px bg-gray-100" />
-        <button onClick={() => onEdit(app)}
-          className="flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
-          ✏️ Edit
-        </button>
-        <div className="w-px bg-gray-100" />
-        <button onClick={() => onDelete(app)}
-          className="flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition-colors">
-          🗑️ Delete
-        </button>
-      </div>
-    </div>
+          )}
+          {app.expectedSalary && (
+            <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-green-50 text-green-600 rounded-full font-medium">
+              {app.expectedSalary}
+            </span>
+          )}
+        </>
+      }
+      note={app.notes}
+      actions={[
+        { label: 'Follow-Up', icon: '🔔', onClick: () => onFollowUp(app), tone: 'accent' },
+        { label: 'Edit', icon: '✏️', onClick: () => onEdit(app) },
+        { label: 'Delete', icon: '🗑️', onClick: () => onDelete(app), tone: 'danger' },
+      ]}
+    />
   )
 }
 
@@ -1661,9 +1613,11 @@ export default function Applications() {
       <PageHeader
         title="Applications"
         subtitle="Track every job application you submit"
+        icon="📨"
+        gradient="from-violet-500 to-purple-600"
         action={
           <button onClick={openAdd}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl hover:shadow-lg hover:shadow-purple-200 hover:-translate-y-0.5 transition-all shadow-sm">
             <Add fontSize="small" />Add Application
           </button>
         }
@@ -1676,7 +1630,7 @@ export default function Applications() {
       {!loading && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
           {[
-            { label: 'Total Submitted', value: applications.length, icon: '📨', color: 'text-blue-600',   bg: 'bg-blue-50'   },
+            { label: 'Submitted', value: applications.length, icon: '📨', color: 'text-blue-600',   bg: 'bg-blue-50'   },
             { label: 'This Month',      value: thisMonth,           icon: '📅', color: 'text-violet-600', bg: 'bg-violet-50' },
             { label: 'Active',          value: activeCount,         icon: '⚡', color: 'text-amber-600',  bg: 'bg-amber-50'  },
           ].map(({ label, value, icon, color, bg }) => (
@@ -1724,11 +1678,11 @@ export default function Applications() {
           {/* Monthly trend chart */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-4 pb-3">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Monthly Trend</p>
-            <div className="flex items-end gap-1.5 h-24">
+            <div className="flex items-end gap-1.5 h-24 overflow-x-auto sm:overflow-visible">
               {monthlyTrend.map(({ label, fullLabel, count, isCurrent }) => {
                 const heightPct = trendMax > 0 ? (count / trendMax) * 100 : 0
                 return (
-                  <div key={fullLabel} className="flex-1 flex flex-col items-center gap-1 group relative">
+                  <div key={fullLabel} className="flex-1 min-w-[24px] sm:min-w-0 flex flex-col items-center gap-1 group relative">
                     <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 z-10
                       hidden group-hover:flex flex-col items-center pointer-events-none">
                       <div className="bg-gray-800 text-white text-[11px] font-semibold px-2 py-1 rounded-lg whitespace-nowrap shadow-lg">
@@ -1855,8 +1809,8 @@ export default function Applications() {
       )}
 
       {/* Filters + view toggle */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3 mb-3">
+        <div className="relative">
           <input
             type="text"
             value={search}
@@ -1871,38 +1825,40 @@ export default function Applications() {
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1.5">
-          <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pr-1">Sort</span>
-          {SORT_OPTIONS.map((opt) => {
-            const isActive = sortBy === opt.value
-            const dir = isActive ? order : null
-            return (
-              <button
-                key={opt.value}
-                onClick={() => {
-                  if (isActive) {
-                    setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
-                  } else {
-                    setSortBy(opt.value)
-                    setOrder('desc')
-                  }
-                }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  isActive
-                    ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-white'
-                }`}
-              >
-                {opt.label}
-                {isActive && (
-                  <span className="text-gray-400 text-[11px]">{dir === 'desc' ? '↓' : '↑'}</span>
-                )}
-              </button>
-            )
-          })}
-        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1.5 overflow-x-auto flex-1 min-w-0">
+            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pr-1 shrink-0">Sort</span>
+            {SORT_OPTIONS.map((opt) => {
+              const isActive = sortBy === opt.value
+              const dir = isActive ? order : null
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    if (isActive) {
+                      setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
+                    } else {
+                      setSortBy(opt.value)
+                      setOrder('desc')
+                    }
+                  }}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+                    isActive
+                      ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
+                      : 'text-gray-400 hover:text-gray-600 hover:bg-white'
+                  }`}
+                >
+                  {opt.label}
+                  {isActive && (
+                    <span className="text-gray-400 text-[11px]">{dir === 'desc' ? '↓' : '↑'}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
 
-        <ViewToggle value={viewMode} onChange={setViewMode} />
+          <ViewToggle value={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
       {/* Date range filter */}
@@ -2018,7 +1974,7 @@ export default function Applications() {
               <span className="ml-1 text-gray-400">of {applications.length}</span>
             )}
           </p>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {displayApplications.map((a) => (
               <ApplicationDirectoryCard key={a.id} app={a} {...cardProps} />
             ))}
