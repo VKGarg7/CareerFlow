@@ -138,13 +138,13 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
               {applications.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-3">No applications yet.</p>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {applications.map((app) => (
                     <div key={app.id} className="flex flex-col gap-1.5 p-3 rounded-xl border border-gray-100 bg-gray-50">
                       <p className="text-sm font-semibold text-gray-700 truncate">💼 {app.role}</p>
                       <div className="flex items-center justify-between gap-2">
                         {app.applicationDate && (
-                          <p className="text-xs text-gray-400">{fmtDate(app.applicationDate)}</p>
+                          <p className="text-xs text-gray-400 whitespace-nowrap">{fmtDate(app.applicationDate)}</p>
                         )}
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${APP_STATUS_BADGE[app.status] || 'bg-gray-100 text-gray-600'}`}>
                           {APP_STATUS_LABEL[app.status] || app.status}

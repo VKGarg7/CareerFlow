@@ -13,6 +13,7 @@ import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
 import InlineStatusChanger from '../components/InlineStatusChanger'
+import { EntityCard, EntityDirectoryCard } from '../components/EntityCard'
 import { initials, fmt } from '../utils/followup'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -73,24 +74,17 @@ function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusC
   const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
 
   return (
-    <div
+    <EntityCard
       onClick={() => onView(recruiter)}
-      className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${cfg.border} p-5 hover:shadow-md transition-all duration-200 cursor-pointer`}
-    >
-      <div className="flex items-start gap-4">
-
-        {/* Avatar */}
-        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
-          {initials(recruiter.name)}
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
+      accentColor={cfg.border}
+      avatarColor={cfg.dot}
+      avatarText={initials(recruiter.name)}
+      titleSlot={
+        <>
           <div className="flex items-center flex-wrap gap-2 mb-0.5">
             <h3 className="text-base font-bold text-gray-800">{recruiter.name}</h3>
             <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />
           </div>
-
           {(recruiter.jobTitle || recruiter.company) && (
             <p className="text-sm text-gray-500 mb-2">
               {recruiter.jobTitle && <span className="font-medium text-gray-600">{recruiter.jobTitle}</span>}
@@ -98,47 +92,43 @@ function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusC
               {recruiter.company && <span>{recruiter.company}</span>}
             </p>
           )}
-
-          {/* Contact chips */}
-          <div className="flex flex-wrap gap-2 mb-2">
-            {recruiter.email && (
-              <a href={`mailto:${recruiter.email}`} onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition">
-                <Email sx={{ fontSize: 12 }} />{recruiter.email}
-              </a>
-            )}
-            {recruiter.phone && (
-              <a href={`tel:${recruiter.phone}`} onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-gray-50 text-gray-600 rounded-full hover:bg-gray-100 transition">
-                <Phone sx={{ fontSize: 12 }} />{recruiter.phone}
-              </a>
-            )}
-            {recruiter.linkedIn && (
-              <a href={recruiter.linkedIn} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition">
-                <LinkedIn sx={{ fontSize: 12 }} />LinkedIn
-              </a>
-            )}
-            {recruiter.source && (
-              <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-                via {SOURCE_LABELS[recruiter.source] || recruiter.source}
-              </span>
-            )}
-            {recruiter.lastContactedAt && (
-              <span className="inline-flex items-center text-xs px-2.5 py-1 bg-purple-50 text-purple-600 rounded-full">
-                Last contact: {new Date(recruiter.lastContactedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-            )}
-          </div>
-
-          {recruiter.notes && (
-            <p className="text-xs text-gray-400 line-clamp-1 italic">"{recruiter.notes}"</p>
+        </>
+      }
+      chips={
+        <>
+          {recruiter.email && (
+            <a href={`mailto:${recruiter.email}`} onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition">
+              <Email sx={{ fontSize: 12 }} />{recruiter.email}
+            </a>
           )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {/* Notes button */}
+          {recruiter.phone && (
+            <a href={`tel:${recruiter.phone}`} onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-gray-50 text-gray-600 rounded-full hover:bg-gray-100 transition">
+              <Phone sx={{ fontSize: 12 }} />{recruiter.phone}
+            </a>
+          )}
+          {recruiter.linkedIn && (
+            <a href={recruiter.linkedIn} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition">
+              <LinkedIn sx={{ fontSize: 12 }} />LinkedIn
+            </a>
+          )}
+          {recruiter.source && (
+            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
+              via {SOURCE_LABELS[recruiter.source] || recruiter.source}
+            </span>
+          )}
+          {recruiter.lastContactedAt && (
+            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-purple-50 text-purple-600 rounded-full">
+              Last contact: {new Date(recruiter.lastContactedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
+          )}
+        </>
+      }
+      note={recruiter.notes}
+      actionsSlot={
+        <div className="flex flex-col gap-2">
           <button onClick={() => onNotes(recruiter)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all
               border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600">
@@ -150,9 +140,7 @@ function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusC
               </span>
             )}
           </button>
-
           <div className="flex gap-1.5">
-            {/* Edit button */}
             <button onClick={() => onEdit(recruiter)}
               className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
@@ -161,8 +149,6 @@ function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusC
               </svg>
               Edit
             </button>
-
-            {/* Delete button */}
             <button onClick={() => onDelete(recruiter)}
               className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
@@ -172,8 +158,8 @@ function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusC
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      }
+    />
   )
 }
 
@@ -183,38 +169,31 @@ function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusC
   const noteCount = recruiter.noteCount ?? 0
 
   return (
-    <div onClick={() => onView(recruiter)} style={{ borderTopColor: borderColor(recruiter.status) }}
-      className="bg-white rounded-2xl border border-gray-100 border-t-4 shadow-sm hover:shadow-lg transition-all duration-200 cursor-pointer flex flex-col overflow-hidden">
-
-      {/* Card body */}
-      <div className="p-4 flex flex-col gap-3 flex-1">
-        {/* Avatar + name + title */}
-        <div className="flex items-start gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
-            {initials(recruiter.name)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-gray-800 truncate leading-tight">{recruiter.name}</p>
-            {(recruiter.jobTitle || recruiter.company) && (
-              <p className="text-xs text-gray-500 truncate mt-0.5">
-                {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
-              </p>
+    <EntityDirectoryCard
+      onClick={() => onView(recruiter)}
+      borderTopColor={borderColor(recruiter.status)}
+      avatarColor={cfg.dot}
+      avatarText={initials(recruiter.name)}
+      titleSlot={
+        <>
+          <p className="text-sm font-bold text-gray-800 truncate leading-tight">{recruiter.name}</p>
+          {(recruiter.jobTitle || recruiter.company) && (
+            <p className="text-xs text-gray-500 truncate mt-0.5">
+              {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5" onClick={(e) => e.stopPropagation()}>
+            <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />
+            {noteCount > 0 && (
+              <span className="text-[11px] text-blue-500 font-medium shrink-0">
+                {noteCount} note{noteCount > 1 ? 's' : ''}
+              </span>
             )}
           </div>
-        </div>
-
-        {/* Status + note count row */}
-        <div className="flex items-center justify-between gap-2">
-          <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />
-          {noteCount > 0 && (
-            <span className="text-[11px] text-blue-500 font-medium">
-              {noteCount} note{noteCount > 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-
-        {/* Contact chips */}
-        <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+        </>
+      }
+      chips={
+        <>
           {recruiter.email && (
             <a href={`mailto:${recruiter.email}`} title={recruiter.email}
               className="p-1.5 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
@@ -238,32 +217,15 @@ function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusC
               {new Date(recruiter.lastContactedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
             </span>
           )}
-        </div>
-
-        {recruiter.notes && (
-          <p className="text-[11px] text-gray-400 line-clamp-1 italic">"{recruiter.notes}"</p>
-        )}
-      </div>
-
-      {/* Action footer */}
-      <div className="flex border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-        <button onClick={() => onNotes(recruiter)}
-          className="flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition-colors">
-          <EditNote sx={{ fontSize: 13 }} />
-          Notes{noteCount > 0 && ` (${noteCount})`}
-        </button>
-        <div className="w-px bg-gray-100" />
-        <button onClick={() => onEdit(recruiter)}
-          className="flex-1 flex items-center justify-center py-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
-          ✏️ Edit
-        </button>
-        <div className="w-px bg-gray-100" />
-        <button onClick={() => onDelete(recruiter)}
-          className="flex-1 flex items-center justify-center py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition-colors">
-          🗑️ Delete
-        </button>
-      </div>
-    </div>
+        </>
+      }
+      note={recruiter.notes}
+      actions={[
+        { key: 'notes', label: `Notes${noteCount > 0 ? ` (${noteCount})` : ''}`, icon: <EditNote sx={{ fontSize: 13 }} />, onClick: () => onNotes(recruiter), tone: 'info' },
+        { key: 'edit', label: 'Edit', icon: '✏️', onClick: () => onEdit(recruiter) },
+        { key: 'delete', label: 'Delete', icon: '🗑️', onClick: () => onDelete(recruiter), tone: 'danger' },
+      ]}
+    />
   )
 }
 
@@ -984,9 +946,11 @@ export default function Recruiters() {
       <PageHeader
         title="Recruiter Directory"
         subtitle="Your complete recruiter network at a glance"
+        icon="🤝"
+        gradient="from-indigo-500 to-violet-600"
         action={
           <button onClick={openAdd}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl hover:shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5 transition-all shadow-sm">
             <Add fontSize="small" />Add Recruiter
           </button>
         }
@@ -1006,8 +970,8 @@ export default function Recruiters() {
       )}
 
       {/* Filters + view toggle */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3 mb-6">
+        <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none flex">
             <Search fontSize="small" />
           </span>
@@ -1016,35 +980,37 @@ export default function Recruiters() {
             className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition" />
         </div>
 
-        <div className="relative">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-            className="appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-            <option value="">All Statuses</option>
-            {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-              <option key={val} value={val}>{label}</option>
-            ))}
-          </select>
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-            <KeyboardArrowDown fontSize="small" />
-          </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[9rem]">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
+              <option value="">All Statuses</option>
+              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
+                <option key={val} value={val}>{label}</option>
+              ))}
+            </select>
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+              <KeyboardArrowDown fontSize="small" />
+            </span>
+          </div>
+
+          <div className="relative flex-1 min-w-[9rem]">
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+              className="w-full appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
+              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+              <KeyboardArrowDown fontSize="small" />
+            </span>
+          </div>
+
+          <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+            className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition bg-white whitespace-nowrap">
+            {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+          </button>
+
+          <ViewToggle value={viewMode} onChange={setViewMode} />
         </div>
-
-        <div className="relative">
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-            className="appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-            <KeyboardArrowDown fontSize="small" />
-          </span>
-        </div>
-
-        <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
-          className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition bg-white whitespace-nowrap">
-          {order === 'desc' ? '↓ Desc' : '↑ Asc'}
-        </button>
-
-        <ViewToggle value={viewMode} onChange={setViewMode} />
       </div>
 
       {/* Content */}
@@ -1076,7 +1042,7 @@ export default function Recruiters() {
           <p className="text-xs text-gray-400 font-medium mb-4">
             {recruiters.length} {recruiters.length === 1 ? 'recruiter' : 'recruiters'}
           </p>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {recruiters.map((r) => (
               <DirectoryCard key={r.id} recruiter={r} {...cardProps} />
             ))}

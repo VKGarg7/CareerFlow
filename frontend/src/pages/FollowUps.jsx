@@ -105,14 +105,14 @@ function FollowUpCard({ fu, onDone, onDelete, onReschedule, onCompany }) {
     : 'border-l-blue-300'
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${borderColor} p-4 hover:shadow-md transition-all duration-200`}>
-      <div className="flex items-start gap-4">
-        <div className="flex-1 min-w-0">
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${borderColor} p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`}>
+      <div className="flex flex-wrap sm:flex-nowrap items-start gap-4">
+        <div className="flex-1 min-w-[12rem] sm:min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-sm font-bold ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
+            <span className={`text-sm font-bold whitespace-nowrap ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
               📅 {fmtDate(fu.followUpDate)}
             </span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${
               isOverdue ? 'bg-red-100 text-red-600'
               : fu.followUpDate === todayStr() ? 'bg-amber-100 text-amber-600'
               : 'bg-blue-50 text-blue-600'
@@ -130,7 +130,7 @@ function FollowUpCard({ fu, onDone, onDelete, onReschedule, onCompany }) {
           )}
         </div>
 
-        <div className="flex gap-1.5 shrink-0 items-start flex-wrap justify-end">
+        <div className="flex gap-1.5 w-full sm:w-auto shrink-0 items-start flex-wrap sm:justify-end">
           <button onClick={onDone}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-green-200 text-green-600 bg-white hover:bg-green-500 hover:text-white hover:border-green-500 transition-all">
             Done
@@ -160,15 +160,15 @@ function FollowUpCard({ fu, onDone, onDelete, onReschedule, onCompany }) {
 // ─── History card (completed follow-ups) ──────────────────────────────────────
 function HistoryCard({ fu, onUndo, onDelete, onCompany }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-green-300 p-4 hover:shadow-md transition-all duration-200">
-      <div className="flex items-start gap-4">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-green-300 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+      <div className="flex flex-wrap sm:flex-nowrap items-start gap-4">
         <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-600">
             <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
           </svg>
         </div>
 
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-[10rem] sm:min-w-0">
           <p className="text-sm text-gray-800 flex items-center gap-1 flex-wrap mb-1">
             <button type="button" onClick={() => onCompany(fu.companyId)}
               className="font-bold hover:text-blue-600 transition">{fu.companyName}</button>
@@ -191,7 +191,7 @@ function HistoryCard({ fu, onUndo, onDelete, onCompany }) {
           )}
         </div>
 
-        <div className="flex gap-1.5 shrink-0 items-start">
+        <div className="flex gap-1.5 w-full sm:w-auto shrink-0 items-start">
           <button onClick={onUndo}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-500 bg-white hover:bg-gray-100 transition-all">
             Undo
@@ -307,6 +307,8 @@ export default function FollowUps() {
       <PageHeader
         title="Follow-Ups"
         subtitle="Stay on top of every job search action item"
+        icon="🔔"
+        gradient="from-amber-400 to-orange-500"
         action={
           <button onClick={() => navigate('/applications')}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm">

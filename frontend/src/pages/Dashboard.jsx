@@ -49,15 +49,31 @@ function ProgressRing({ pct, size = 100 }) {
 }
 
 // ─── Colored gradient stat card ───────────────────────────────────────────────
-function StatCard({ icon, label, value, gradient, glow, onClick }) {
+function StatCard({ icon, label, value, hint, gradient, glow, onClick }) {
   return (
     <button onClick={onClick}
-      className={`relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br ${gradient} text-white shadow-lg ${glow} text-left w-full group hover:scale-[1.02] transition-transform`}>
-      <div className="absolute -right-3 -bottom-3 w-16 h-16 rounded-full bg-white/10" />
-      <div className="absolute -right-1 -top-6 w-24 h-24 rounded-full bg-white/5" />
-      <p className="text-3xl font-black mb-1">{value}</p>
-      <p className="text-xs font-semibold opacity-75 uppercase tracking-wide">{label}</p>
-      <span className="absolute top-4 right-4 text-xl opacity-60">{icon}</span>
+      className={`relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br ${gradient} text-white shadow-lg ${glow} text-left w-full group hover:scale-[1.02] hover:shadow-xl transition-all duration-200`}>
+      {/* Ambient texture */}
+      <div className="absolute -right-4 -bottom-6 w-24 h-24 rounded-full bg-white/10 blur-[1px]" />
+      <div className="absolute -left-6 -top-8 w-20 h-20 rounded-full bg-white/5" />
+      <div className="absolute inset-0 opacity-[0.15]"
+        style={{ backgroundImage: 'radial-gradient(circle at 85% 15%, white 0%, transparent 60%)' }} />
+
+      <div className="relative z-10">
+        <div className="flex items-start justify-between mb-4">
+          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-lg shadow-sm">
+            {icon}
+          </div>
+          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 opacity-0 group-hover:opacity-70 transition -translate-x-1 group-hover:translate-x-0 duration-200">
+            <path fillRule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06L7.28 11.78a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" />
+          </svg>
+        </div>
+        <p className="text-3xl font-black leading-none mb-1.5">{value}</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="text-xs font-semibold opacity-75 uppercase tracking-wide truncate">{label}</p>
+          {hint && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/20 shrink-0">{hint}</span>}
+        </div>
+      </div>
     </button>
   )
 }
@@ -237,18 +253,22 @@ export default function Dashboard() {
       )}
 
       {/* ── Hero ── */}
-      <div className="relative rounded-3xl overflow-hidden mb-8 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 p-8 text-white shadow-xl shadow-blue-200">
+      <div className="relative rounded-3xl overflow-hidden mb-8 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 p-5 sm:p-8 text-white shadow-xl shadow-blue-200">
+        {/* Dot-grid texture */}
+        <div className="absolute inset-0 opacity-[0.07]"
+          style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '18px 18px' }} />
         <div className="absolute inset-0 opacity-20"
           style={{ backgroundImage: 'radial-gradient(circle at 75% 30%, white 0%, transparent 55%)' }} />
         <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-white/5" />
         <div className="absolute -right-6 -bottom-10 w-36 h-36 rounded-full bg-indigo-500/30" />
+        <div className="absolute left-1/3 -bottom-20 w-40 h-40 rounded-full bg-blue-400/10 blur-xl" />
 
         <div className="relative z-10 flex items-center justify-between gap-6">
           <div className="flex-1 min-w-0">
             <p className="text-blue-200 text-sm font-medium mb-2 flex items-center gap-1.5">
               {greetEmoji} {greeting}
             </p>
-            <h1 className="text-3xl font-black mb-2 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black mb-2 tracking-tight break-words">
               Welcome back, {name}!
             </h1>
             <p className="text-blue-100 text-sm leading-relaxed max-w-md mb-6">
@@ -256,16 +276,16 @@ export default function Dashboard() {
                 ? 'Start tracking your job search — add a company and log your first application.'
                 : <>You have <span className="text-white font-bold">{applications.length} application{applications.length !== 1 ? 's' : ''}</span> tracked across <span className="text-white font-bold">{companies.length} {companies.length !== 1 ? 'companies' : 'company'}</span>.</>}
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button onClick={() => navigate('/applications')}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-blue-600 text-sm font-bold rounded-xl hover:bg-blue-50 transition shadow-sm">
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-blue-600 text-sm font-bold rounded-xl hover:bg-blue-50 transition shadow-sm whitespace-nowrap">
                 View Applications
-                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
                   <path fillRule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06L7.28 11.78a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" />
                 </svg>
               </button>
               <button onClick={() => navigate('/companies')}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/15 text-white text-sm font-semibold rounded-xl hover:bg-white/25 transition border border-white/20">
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/15 text-white text-sm font-semibold rounded-xl hover:bg-white/25 transition border border-white/20 whitespace-nowrap">
                 Add Company
               </button>
             </div>
@@ -281,15 +301,19 @@ export default function Dashboard() {
       {/* ── Stats — now real job-search metrics ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard icon="🏢" label="Companies"    value={companies.length}
+          hint={companies.length > 0 ? 'Targeting' : null}
           gradient="from-blue-500 to-blue-600"     glow="shadow-blue-200/60 shadow-lg"
           onClick={() => navigate('/companies')} />
         <StatCard icon="📨" label="Applications" value={applications.length}
+          hint={statusCounts['INTERVIEW'] ? `${statusCounts['INTERVIEW']} interviewing` : null}
           gradient="from-violet-500 to-purple-600" glow="shadow-purple-200/60 shadow-lg"
           onClick={() => navigate('/applications')} />
         <StatCard icon="🤝" label="Recruiters"   value={recruiters.length}
+          hint={recruiters.length > 0 ? 'In network' : null}
           gradient="from-emerald-500 to-green-600" glow="shadow-green-200/60 shadow-lg"
           onClick={() => navigate('/recruiters')} />
         <StatCard icon="✅" label="Offers"       value={statusCounts['OFFER'] || 0}
+          hint={statusCounts['OFFER'] > 0 ? '🎉 Nice!' : null}
           gradient="from-amber-400 to-orange-500"  glow="shadow-orange-200/60 shadow-lg"
           onClick={() => navigate('/applications')} />
       </div>
@@ -299,8 +323,8 @@ export default function Dashboard() {
         <div className="rounded-2xl border border-orange-100 bg-orange-50 px-5 py-4 mb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-base">⏰</span>
+              <div className="flex items-center gap-2.5 mb-3">
+                <span className="w-7 h-7 rounded-lg bg-orange-100 flex items-center justify-center text-sm shrink-0">⏰</span>
                 <p className="text-sm font-bold text-orange-700">
                   {deadlineReminders.length === 1
                     ? 'Application deadline approaching'
@@ -342,8 +366,8 @@ export default function Dashboard() {
         <div className="rounded-2xl border border-purple-100 bg-purple-50 px-5 py-4 mb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-base">🎤</span>
+              <div className="flex items-center gap-2.5 mb-3">
+                <span className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center text-sm shrink-0">🎤</span>
                 <p className="text-sm font-bold text-purple-700">
                   {interviewReminders.length === 1
                     ? 'Interview reminder'
@@ -394,8 +418,12 @@ export default function Dashboard() {
         }`}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-base">🔔</span>
+              <div className="flex items-center gap-2.5 mb-3">
+                <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 ${
+                  overdueFollowUps.length > 0 ? 'bg-red-100'
+                  : todayFollowUps.length > 0 ? 'bg-amber-100'
+                  : 'bg-blue-100'
+                }`}>🔔</span>
                 <p className={`text-sm font-bold ${
                   overdueFollowUps.length > 0 ? 'text-red-700'
                   : todayFollowUps.length > 0 ? 'text-amber-700'
@@ -457,10 +485,10 @@ export default function Dashboard() {
       )}
 
       {/* ── Main grid ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
         {/* Recent Applications */}
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recent Applications</h2>
             <button onClick={() => navigate('/applications')}
@@ -532,7 +560,7 @@ export default function Dashboard() {
                 { key: 'OFFER',     label: 'Offers',     color: 'text-green-600',  bg: 'bg-green-50'  },
                 { key: 'REJECTED',  label: 'Rejected',   color: 'text-red-500',    bg: 'bg-red-50'    },
               ].map(({ key, label, color, bg }) => (
-                <div key={key} className={`${bg} rounded-xl p-3 text-center`}>
+                <div key={key} className={`${bg} rounded-xl p-3 text-center hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200`}>
                   <p className={`text-xl font-black ${color}`}>{statusCounts[key] || 0}</p>
                   <p className="text-xs text-gray-500 font-medium mt-0.5">{label}</p>
                 </div>

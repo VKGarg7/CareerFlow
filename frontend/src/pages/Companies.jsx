@@ -11,7 +11,8 @@ import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
 import CompanyDetailModal from '../components/CompanyDetailModal'
 import InlineStatusChanger from '../components/InlineStatusChanger'
-import { initials } from '../utils/followup'
+import { EntityCard, EntityDirectoryCard } from '../components/EntityCard'
+import { initials, fmtDate } from '../utils/followup'
 
 const STATUS_CONFIG = {
   TARGETING:    { label: 'Targeting',    badge: 'bg-blue-100 text-blue-700',   border: 'border-l-blue-400',    dot: 'bg-blue-500'    },
@@ -58,123 +59,109 @@ function CompanyStatusChanger({ company, onStatusChanged }) {
 function CompanyCard({ company, onEdit, onDelete, onView, onStatusChanged }) {
   const cfg = STATUS_CONFIG[company.status] || STATUS_CONFIG.TARGETING
   return (
-    <div onClick={() => onView(company.id)}
-      className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${cfg.border} p-5 hover:shadow-md transition-all duration-200 cursor-pointer`}>
-      <div className="flex items-start gap-4">
-        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
-          {initials(company.name)}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="min-w-0 mb-2">
-            <h3 className="text-base font-bold text-gray-800 truncate mb-1.5">{company.name}</h3>
-            <CompanyStatusChanger company={company} onStatusChanged={onStatusChanged} />
-          </div>
-          <div className="flex flex-wrap gap-2 mb-1.5">
-            {company.industry && (
-              <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-                🏭 {company.industry}
-              </span>
-            )}
-            {company.location && (
-              <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-                📍 {company.location}
-              </span>
-            )}
-            {company.website && (
-              <a href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
-                target="_blank" rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition">
-                <Language sx={{ fontSize: 12 }} />
-                {company.website.replace(/^https?:\/\/(www\.)?/, '')}
-              </a>
-            )}
-          </div>
-          {company.notes && (
-            <p className="text-xs text-gray-400 line-clamp-1 italic">"{company.notes}"</p>
+    <EntityCard
+      onClick={() => onView(company.id)}
+      accentColor={cfg.border}
+      avatarColor={cfg.dot}
+      avatarText={initials(company.name)}
+      titleSlot={
+        <>
+          <h3 className="text-base font-bold text-gray-800 truncate mb-1.5">{company.name}</h3>
+          <CompanyStatusChanger company={company} onStatusChanged={onStatusChanged} />
+        </>
+      }
+      chips={
+        <>
+          {company.industry && (
+            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
+              🏭 {company.industry}
+            </span>
           )}
-        </div>
-
-        <div className="flex gap-1.5 shrink-0">
-          <button onClick={(e) => { e.stopPropagation(); onEdit(company) }}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-              <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z"/>
-              <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z"/>
-            </svg>
-            Edit
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(company) }}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-              <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd"/>
-            </svg>
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
+          {company.location && (
+            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
+              📍 {company.location}
+            </span>
+          )}
+          {company.website && (
+            <a href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
+              target="_blank" rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition">
+              <Language sx={{ fontSize: 12 }} />
+              {company.website.replace(/^https?:\/\/(www\.)?/, '')}
+            </a>
+          )}
+          {!company.industry && !company.location && !company.website && company.createdAt && (
+            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-400 rounded-full">
+              Added {fmtDate(company.createdAt)}
+            </span>
+          )}
+        </>
+      }
+      note={company.notes}
+      actions={[
+        { label: 'Edit', icon: 'edit', onClick: () => onEdit(company) },
+        { label: 'Delete', icon: 'delete', onClick: () => onDelete(company), tone: 'danger' },
+      ]}
+    />
   )
 }
 
 // ─── Company Directory Card (compact grid) ────────────────────────────────────
 function CompanyDirectoryCard({ company, onEdit, onDelete, onView, onStatusChanged }) {
-  const cfg = STATUS_CONFIG[company.status] || STATUS_CONFIG.TARGETING
   return (
-    <div onClick={() => onView(company.id)}
-      className={`bg-white rounded-xl border border-gray-100 border-t-4 p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col gap-3 cursor-pointer`}
-      style={{ borderTopColor: dotHex(company.status) }}>
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
-          {initials(company.name)}
-        </div>
-        <div className="flex-1 min-w-0">
+    <EntityDirectoryCard
+      onClick={() => onView(company.id)}
+      borderTopColor={dotHex(company.status)}
+      avatarColor={STATUS_CONFIG[company.status]?.dot || STATUS_CONFIG.TARGETING.dot}
+      avatarText={initials(company.name)}
+      titleSlot={
+        <>
           <p className="text-sm font-bold text-gray-800 truncate">{company.name}</p>
           {company.industry && (
             <p className="text-xs text-gray-400 truncate">🏭 {company.industry}</p>
           )}
-        </div>
-      </div>
+          <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+            <CompanyStatusChanger company={company} onStatusChanged={onStatusChanged} />
+          </div>
+        </>
+      }
+      chips={
+        <>
+          {company.location && (
+            <span className="text-[11px] text-gray-400">📍 {company.location}</span>
+          )}
+          {company.website && (
+            <a href={company.website} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-0.5 text-[11px] text-blue-500 hover:underline">
+              <Language sx={{ fontSize: 11 }} />Website
+            </a>
+          )}
+        </>
+      }
+      note={company.notes}
+      actions={[
+        { label: 'Edit', icon: <EditGlyph />, onClick: () => onEdit(company) },
+        { label: 'Delete', icon: <DeleteGlyph />, onClick: () => onDelete(company), tone: 'danger' },
+      ]}
+    />
+  )
+}
 
-      <div className="self-start" onClick={e => e.stopPropagation()}>
-        <CompanyStatusChanger company={company} onStatusChanged={onStatusChanged} />
-      </div>
+function EditGlyph() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+      <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z" />
+      <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9a.75.75 0 0 1 1.5 0v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z" />
+    </svg>
+  )
+}
 
-      <div className="flex flex-wrap gap-1.5">
-        {company.location && (
-          <span className="text-[11px] text-gray-400">📍 {company.location}</span>
-        )}
-        {company.website && (
-          <a href={company.website} target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-0.5 text-[11px] text-blue-500 hover:underline">
-            <Language sx={{ fontSize: 11 }} />Website
-          </a>
-        )}
-      </div>
-
-      {company.notes && (
-        <p className="text-[11px] text-gray-400 line-clamp-2 italic">"{company.notes}"</p>
-      )}
-
-      <div className="flex gap-1.5 pt-1 border-t border-gray-50">
-        <button onClick={(e) => { e.stopPropagation(); onEdit(company) }}
-          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-            <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z" />
-            <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9a.75.75 0 0 1 1.5 0v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z" />
-          </svg>
-          Edit
-        </button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(company) }}
-          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-            <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
-          </svg>
-          Delete
-        </button>
-      </div>
-    </div>
+function DeleteGlyph() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+      <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
+    </svg>
   )
 }
 
@@ -402,9 +389,11 @@ export default function Companies() {
       <PageHeader
         title="Companies"
         subtitle="Track companies you're targeting in your job search"
+        icon="🏢"
+        gradient="from-blue-500 to-blue-600"
         action={
           <button onClick={openAdd}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl hover:shadow-lg hover:shadow-blue-200 hover:-translate-y-0.5 transition-all shadow-sm">
             <Add fontSize="small" />Add Company
           </button>
         }
@@ -415,17 +404,19 @@ export default function Companies() {
 
       {/* Status summary bar */}
       {!loading && companies.length > 0 && (
-        <StatusSummaryBar
-          items={companies}
-          statusConfig={STATUS_CONFIG}
-          activeFilter={statusFilter}
-          onFilter={setStatusFilter}
-        />
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 mb-6 [&>div]:mb-0">
+          <StatusSummaryBar
+            items={companies}
+            statusConfig={STATUS_CONFIG}
+            activeFilter={statusFilter}
+            onFilter={setStatusFilter}
+          />
+        </div>
       )}
 
       {/* Filters + view toggle */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3 mb-6">
+        <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none flex">
             <Search fontSize="small" />
           </span>
@@ -434,35 +425,37 @@ export default function Companies() {
             className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition" />
         </div>
 
-        <div className="relative">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-            className="appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-            <option value="">All Statuses</option>
-            {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-              <option key={val} value={val}>{label}</option>
-            ))}
-          </select>
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-            <KeyboardArrowDown fontSize="small" />
-          </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[9rem]">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
+              <option value="">All Statuses</option>
+              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
+                <option key={val} value={val}>{label}</option>
+              ))}
+            </select>
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+              <KeyboardArrowDown fontSize="small" />
+            </span>
+          </div>
+
+          <div className="relative flex-1 min-w-[9rem]">
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+              className="w-full appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
+              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+              <KeyboardArrowDown fontSize="small" />
+            </span>
+          </div>
+
+          <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+            className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition bg-white whitespace-nowrap">
+            {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+          </button>
+
+          <ViewToggle value={viewMode} onChange={setViewMode} />
         </div>
-
-        <div className="relative">
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-            className="appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-            <KeyboardArrowDown fontSize="small" />
-          </span>
-        </div>
-
-        <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
-          className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition bg-white whitespace-nowrap">
-          {order === 'desc' ? '↓ Desc' : '↑ Asc'}
-        </button>
-
-        <ViewToggle value={viewMode} onChange={setViewMode} />
       </div>
 
       {/* Content */}
@@ -482,17 +475,17 @@ export default function Companies() {
         />
       ) : viewMode === 'list' ? (
         <div className="space-y-3">
-          <p className="text-xs text-gray-400 font-medium">
-            {companies.length} {companies.length === 1 ? 'company' : 'companies'}
-          </p>
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
+            {companies.length} {companies.length === 1 ? 'Company' : 'Companies'}
+          </h2>
           {companies.map((c) => <CompanyCard key={c.id} company={c} {...cardProps} />)}
         </div>
       ) : (
         <div>
-          <p className="text-xs text-gray-400 font-medium mb-4">
-            {companies.length} {companies.length === 1 ? 'company' : 'companies'}
-          </p>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
+            {companies.length} {companies.length === 1 ? 'Company' : 'Companies'}
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {companies.map((c) => (
               <CompanyDirectoryCard key={c.id} company={c} {...cardProps} />
             ))}

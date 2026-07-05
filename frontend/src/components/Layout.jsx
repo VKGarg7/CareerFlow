@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, Link, useNavigate } from 'react-router-dom'
 import {
   DashboardOutlined, BusinessOutlined, WorkOutlined,
   PeopleOutlined, PersonOutlined, LogoutOutlined,
@@ -19,17 +19,18 @@ const NAV = [
 
 const ADMIN_NAV = { to: '/admin', Icon: AdminPanelSettingsOutlined, label: 'Admin' }
 
-function Brand() {
+function Brand({ onNavigate }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-sm shrink-0">
+    <Link to="/dashboard" onClick={onNavigate}
+      className="flex items-center gap-3 group rounded-lg -m-1 p-1 hover:bg-gray-50 active:scale-95 transition">
+      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-sm shrink-0 group-hover:shadow-md transition-shadow">
         <span className="text-white text-[11px] font-black tracking-tight">CF</span>
       </div>
       <div className="leading-tight">
         <p className="text-sm font-bold text-gray-900">CareerFlow</p>
         <p className="text-[10px] text-gray-400">Job Search Tracker</p>
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -41,7 +42,7 @@ function SidebarContent({ onClose, onLogout }) {
     <div className="flex flex-col h-full">
       {/* Brand header */}
       <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100 shrink-0">
-        <Brand />
+        <Brand onNavigate={onClose} />
         {onClose && (
           <button onClick={onClose} className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
             <Close fontSize="small" />

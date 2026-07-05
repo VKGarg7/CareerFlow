@@ -47,7 +47,12 @@ export default function Activity() {
         Back to Profile
       </button>
 
-      <PageHeader title="My Activity" subtitle="A history of actions taken on your account" />
+      <PageHeader
+        title="My Activity"
+        subtitle="A history of actions taken on your account"
+        icon="📜"
+        gradient="from-slate-500 to-gray-600"
+      />
 
       {error && (
         <div className="rounded-xl border border-red-100 bg-red-50 text-red-700 text-sm px-4 py-3 mb-6">
@@ -68,7 +73,7 @@ export default function Activity() {
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50 shadow-sm overflow-hidden">
           {logs.map((l) => (
-            <div key={l.id} className="flex items-center gap-4 px-5 py-4">
+            <div key={l.id} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors">
               <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 shrink-0">
                 {l.action.replaceAll('_', ' ')}
               </span>

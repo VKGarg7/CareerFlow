@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CircularProgress } from '@mui/material'
+import { Alert, CircularProgress } from '@mui/material'
 import Layout from '../components/Layout'
 import PageHeader from '../components/PageHeader'
 import ActionFilterSelect from '../components/ActionFilterSelect'
@@ -24,7 +24,7 @@ function HealthCard({ health }) {
     : 0
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm mb-8">
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm mb-8 hover:shadow-md transition-shadow duration-200">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">System Health</h3>
         <span className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
@@ -62,7 +62,7 @@ function HealthCard({ health }) {
 
 function StatCard({ icon, label, value, gradient, glow }) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br ${gradient} text-white shadow-lg ${glow}`}>
+    <div className={`relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br ${gradient} text-white shadow-lg ${glow} hover:scale-[1.02] transition-transform`}>
       <div className="absolute -right-3 -bottom-3 w-16 h-16 rounded-full bg-white/10" />
       <div className="absolute -right-1 -top-6 w-24 h-24 rounded-full bg-white/5" />
       <p className="text-3xl font-black mb-1">{value}</p>
@@ -76,7 +76,7 @@ function BreakdownCard({ title, data }) {
   const entries = Object.entries(data || {})
   const total = entries.reduce((sum, [, v]) => sum + v, 0)
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">{title}</h3>
       {entries.length === 0 ? (
         <p className="text-sm text-gray-400">No data</p>
@@ -187,13 +187,14 @@ export default function AdminDashboard() {
 
   return (
     <Layout>
-      <PageHeader title="Admin Dashboard" subtitle="Platform-wide statistics and user management" />
+      <PageHeader
+        title="Admin Dashboard"
+        subtitle="Platform-wide statistics and user management"
+        icon="🛠️"
+        gradient="from-slate-600 to-gray-800"
+      />
 
-      {error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 text-red-700 text-sm px-4 py-3 mb-6">
-          {error}
-        </div>
-      )}
+      {error && <Alert severity="error" onClose={() => setError('')} sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
 
       <HealthCard health={health} />
 
@@ -228,12 +229,12 @@ export default function AdminDashboard() {
           value={userSearch}
           onChange={(e) => searchUsers(e.target.value)}
           placeholder="Search by name or email…"
-          className="text-xs font-medium border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 bg-white w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="text-xs font-medium border border-gray-200 rounded-xl px-3 py-2 text-gray-600 bg-white w-56 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
         />
       </div>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs font-bold text-gray-400 uppercase tracking-wide">
                 <th className="px-5 py-3">Name</th>
@@ -246,11 +247,11 @@ export default function AdminDashboard() {
             <tbody className="divide-y divide-gray-50">
               {users.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3 font-semibold text-gray-800">
+                  <td className="px-5 py-3 font-semibold text-gray-800 whitespace-nowrap">
                     {u.firstName} {u.lastName}
                   </td>
-                  <td className="px-5 py-3 text-gray-500">{u.email}</td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{u.email}</td>
+                  <td className="px-5 py-3 whitespace-nowrap">
                     <select
                       value={u.role}
                       disabled={busyId === u.id}
@@ -263,18 +264,18 @@ export default function AdminDashboard() {
                       <option value="ADMIN">ADMIN</option>
                     </select>
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 whitespace-nowrap">
                     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
                       u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
                     }`}>
                       {u.active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="px-5 py-3 text-right whitespace-nowrap">
                     <button
                       disabled={busyId === u.id}
                       onClick={() => toggleActive(u)}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50 ${
+                      className={`text-xs font-bold px-3 py-1.5 rounded-xl transition disabled:opacity-50 ${
                         u.active
                           ? 'bg-red-50 text-red-600 hover:bg-red-100'
                           : 'bg-green-50 text-green-700 hover:bg-green-100'
@@ -300,7 +301,7 @@ export default function AdminDashboard() {
       </div>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs font-bold text-gray-400 uppercase tracking-wide">
                 <th className="px-5 py-3">Actor</th>
@@ -312,14 +313,14 @@ export default function AdminDashboard() {
             <tbody className="divide-y divide-gray-50">
               {logs.map((l) => (
                 <tr key={l.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3 text-gray-500">{l.actorEmail || '—'}</td>
+                  <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{l.actorEmail || '—'}</td>
                   <td className="px-5 py-3">
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 whitespace-nowrap">
                       {l.action.replaceAll('_', ' ')}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-gray-700">{l.description}</td>
-                  <td className="px-5 py-3 text-right text-gray-400 text-xs">{fmtDateTime(l.occurredAt)}</td>
+                  <td className="px-5 py-3 text-right text-gray-400 text-xs whitespace-nowrap">{fmtDateTime(l.occurredAt)}</td>
                 </tr>
               ))}
             </tbody>
