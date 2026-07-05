@@ -1,5 +1,6 @@
 package com.careerflow.config;
 
+import com.careerflow.user.Role;
 import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -16,10 +17,15 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         return userRepository.findByEmail(email.toLowerCase())
-                .map(user -> org.springframework.security.core.userdetails.User
-                        .withUsername(user.getEmail())
-                        .password(user.getPassword())
-                        .build())
+                .map(user -> {
+                    Role role = user.getRole() != null ? user.getRole() : Role.USER;
+                    return org.springframework.security.core.userdetails.User
+                            .withUsername(user.getEmail())
+                            .password(user.getPassword())
+                            .disabled(!user.isActive())
+                            .authorities("ROLE_" + role.name())
+                            .build();
+                })
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }
 }

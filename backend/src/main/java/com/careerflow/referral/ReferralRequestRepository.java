@@ -46,4 +46,14 @@ public interface ReferralRequestRepository extends JpaRepository<ReferralRequest
             @Param("status") ReferralStatus status,
             @Param("q") String q,
             Sort sort);
+
+    long count();
+
+    @Query("SELECT r.status AS status, COUNT(r) AS total FROM ReferralRequest r GROUP BY r.status")
+    List<StatusCount> countByStatusGrouped();
+
+    interface StatusCount {
+        ReferralStatus getStatus();
+        long getTotal();
+    }
 }

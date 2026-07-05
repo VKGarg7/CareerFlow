@@ -37,6 +37,7 @@ export default function Login() {
     try {
       const res = await login(form)
       localStorage.setItem('token', res.data.token)
+      if (res.data.role) localStorage.setItem('role', res.data.role)
       navigate('/dashboard')
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed. Please try again.')

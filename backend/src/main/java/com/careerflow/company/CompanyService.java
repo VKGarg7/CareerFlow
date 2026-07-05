@@ -1,6 +1,8 @@
 package com.careerflow.company;
 
 import com.careerflow.application.ApplicationService;
+import com.careerflow.audit.AuditAction;
+import com.careerflow.audit.AuditLogService;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.SortHelper;
 import com.careerflow.company.dto.CompanyRequest;
@@ -28,6 +30,7 @@ public class CompanyService {
 
     private final CompanyRepository companyRepository;
     private final SecurityUtils securityUtils;
+    private final AuditLogService auditLogService;
     @Lazy
     private final ApplicationService applicationService;
 
@@ -45,7 +48,9 @@ public class CompanyService {
                 .notes(request.getNotes())
                 .status(request.getStatus() != null ? request.getStatus() : CompanyStatus.TARGETING)
                 .build();
-        return toResponse(companyRepository.save(company));
+        company = companyRepository.save(company);
+        auditLogService.log(user, AuditAction.COMPANY_CREATED, "Added company " + company.getName());
+        return toResponse(company);
     }
 
     public List<CompanyResponse> getMyCompanies(Long id, String search, String sortBy, String order) {
@@ -77,7 +82,9 @@ public class CompanyService {
         if (request.getNotes() != null) company.setNotes(request.getNotes());
         if (request.getStatus() != null) company.setStatus(request.getStatus());
 
-        return toResponse(companyRepository.save(company));
+        company = companyRepository.save(company);
+        auditLogService.log(user, AuditAction.COMPANY_UPDATED, "Updated company " + company.getName());
+        return toResponse(company);
     }
 
     public void deleteCompany(Long id, boolean force) {
@@ -91,6 +98,7 @@ public class CompanyService {
         if (hasApplications) applicationService.deleteAllByCompany(id);
         company.softDelete();
         companyRepository.save(company);
+        auditLogService.log(user, AuditAction.COMPANY_DELETED, "Deleted company " + company.getName());
     }
 
     private Company findOwned(Long companyId, Long userId) {

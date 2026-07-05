@@ -11,10 +11,18 @@ import Applications from './pages/Applications'
 import Recruiters from './pages/Recruiters'
 import FollowUps from './pages/FollowUps'
 import Referrals from './pages/Referrals'
+import AdminDashboard from './pages/AdminDashboard'
+import Activity from './pages/Activity'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
   return token ? children : <Navigate to="/login" replace />
+}
+
+function AdminRoute({ children }) {
+  const token = localStorage.getItem('token')
+  if (!token) return <Navigate to="/login" replace />
+  return localStorage.getItem('role') === 'ADMIN' ? children : <Navigate to="/dashboard" replace />
 }
 
 export default function App() {
@@ -87,6 +95,22 @@ export default function App() {
           element={
             <PrivateRoute>
               <ChangePassword />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminDashboard />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/activity"
+          element={
+            <PrivateRoute>
+              <Activity />
             </PrivateRoute>
           }
         />

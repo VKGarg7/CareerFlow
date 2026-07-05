@@ -1,5 +1,7 @@
 package com.careerflow.referral;
 
+import com.careerflow.audit.AuditAction;
+import com.careerflow.audit.AuditLogService;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.SortHelper;
 import com.careerflow.exception.BadRequestException;
@@ -32,6 +34,7 @@ public class ReferralRequestService {
     private final ReferralRequestRepository referralRepository;
     private final ReferralStatusHistoryRepository historyRepository;
     private final SecurityUtils securityUtils;
+    private final AuditLogService auditLogService;
 
     // ── CRUD ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +66,7 @@ public class ReferralRequestService {
 
         // Record initial status entry
         recordHistory(referral, user, null, initialStatus, null);
+        auditLogService.log(user, AuditAction.REFERRAL_CREATED, "Requested referral for " + describe(referral));
 
         return toResponse(referral, null);
     }
@@ -147,6 +151,7 @@ public class ReferralRequestService {
             referral.setNotes(req.getNotes().isBlank() ? null : req.getNotes());
 
         referral = referralRepository.save(referral);
+        auditLogService.log(user, AuditAction.REFERRAL_UPDATED, "Updated referral for " + describe(referral));
 
         List<ReferralStatusHistoryResponse> history = fetchHistory(id, user.getId());
         return toResponse(referral, history);
@@ -163,6 +168,7 @@ public class ReferralRequestService {
         ReferralRequest referral = findOwned(id, user.getId());
         referral.softDelete();
         referralRepository.save(referral);
+        auditLogService.log(user, AuditAction.REFERRAL_DELETED, "Deleted referral for " + describe(referral));
     }
 
     @Transactional
@@ -234,6 +240,10 @@ public class ReferralRequestService {
     private ReferralRequest findOwned(Long id, Long userId) {
         return referralRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Referral request not found"));
+    }
+
+    private String describe(ReferralRequest referral) {
+        return referral.getTargetRole() + " via " + referral.getReferrerName();
     }
 
     private void checkDuplicate(Long userId, String email, String role, Long excludeId) {

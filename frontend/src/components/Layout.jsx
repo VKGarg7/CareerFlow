@@ -4,6 +4,7 @@ import {
   DashboardOutlined, BusinessOutlined, WorkOutlined,
   PeopleOutlined, PersonOutlined, LogoutOutlined,
   Menu, Close, NotificationsNoneOutlined, Handshake,
+  AdminPanelSettingsOutlined,
 } from '@mui/icons-material'
 
 const NAV = [
@@ -15,6 +16,8 @@ const NAV = [
   { to: '/referrals',    Icon: Handshake,                 label: 'Referrals'    },
   { to: '/profile',      Icon: PersonOutlined,            label: 'Profile'      },
 ]
+
+const ADMIN_NAV = { to: '/admin', Icon: AdminPanelSettingsOutlined, label: 'Admin' }
 
 function Brand() {
   return (
@@ -31,6 +34,9 @@ function Brand() {
 }
 
 function SidebarContent({ onClose, onLogout }) {
+  const isAdmin = localStorage.getItem('role') === 'ADMIN'
+  const items = isAdmin ? [...NAV, ADMIN_NAV] : NAV
+
   return (
     <div className="flex flex-col h-full">
       {/* Brand header */}
@@ -45,7 +51,7 @@ function SidebarContent({ onClose, onLogout }) {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ to, Icon, label }) => (
+        {items.map(({ to, Icon, label }) => (
           <NavLink
             key={to}
             to={to}
@@ -84,6 +90,7 @@ export default function Layout({ children }) {
 
   const handleLogout = () => {
     localStorage.removeItem('token')
+    localStorage.removeItem('role')
     navigate('/login')
   }
 
