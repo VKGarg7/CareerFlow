@@ -27,6 +27,9 @@ spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
 app.frontend-url=http://localhost:3000
 
+# CORS (comma-separated list of allowed origins)
+app.cors.allowed-origins=http://localhost:5173
+
 # JWT
 jwt.secret=your_hex_encoded_256bit_secret
 jwt.expiration-ms=86400000
