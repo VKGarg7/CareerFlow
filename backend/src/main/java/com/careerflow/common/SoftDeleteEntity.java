@@ -4,12 +4,15 @@ import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 
+/**
+ * Subclasses must repeat {@code @SQLRestriction("deleted_at IS NULL")} on the
+ * concrete {@code @Entity} class — Hibernate does not inherit this annotation
+ * from a {@code @MappedSuperclass}, so placing it only here is a no-op.
+ */
 @MappedSuperclass
-@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
 @SuperBuilder
