@@ -27,9 +27,10 @@ public class CompanyController {
     public ResponseEntity<List<CompanyResponse>> getMyCompanies(
             @RequestParam(required = false) Long id,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) CompanyStatus status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String order) {
-        return ResponseEntity.ok(companyService.getMyCompanies(id, search, sortBy, order));
+        return ResponseEntity.ok(companyService.getMyCompanies(id, search, status, sortBy, order));
     }
 
     @PatchMapping("/{id}")

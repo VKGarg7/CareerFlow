@@ -53,16 +53,23 @@ public class CompanyService {
         return toResponse(company);
     }
 
-    public List<CompanyResponse> getMyCompanies(Long id, String search, String sortBy, String order) {
+    public List<CompanyResponse> getMyCompanies(Long id, String search, CompanyStatus status, String sortBy, String order) {
         User user = securityUtils.getCurrentUser();
         if (id != null) {
             return List.of(toResponse(findOwned(id, user.getId())));
         }
         Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
         boolean hasSearch = search != null && !search.isBlank();
-        List<Company> results = hasSearch
-                ? companyRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), sort)
-                : companyRepository.findAllByUserId(user.getId(), sort);
+        List<Company> results;
+        if (status != null && hasSearch) {
+            results = companyRepository.findAllByUserIdAndStatusAndNameContainingIgnoreCase(user.getId(), status, search.trim(), sort);
+        } else if (status != null) {
+            results = companyRepository.findAllByUserIdAndStatus(user.getId(), status, sort);
+        } else if (hasSearch) {
+            results = companyRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), sort);
+        } else {
+            results = companyRepository.findAllByUserId(user.getId(), sort);
+        }
         return results.stream().map(this::toResponse).toList();
     }
 

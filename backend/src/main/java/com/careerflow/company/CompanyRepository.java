@@ -9,6 +9,8 @@ import java.util.Optional;
 public interface CompanyRepository extends JpaRepository<Company, Long> {
     List<Company> findAllByUserId(Long userId, Sort sort);
     List<Company> findAllByUserIdAndNameContainingIgnoreCase(Long userId, String name, Sort sort);
+    List<Company> findAllByUserIdAndStatus(Long userId, CompanyStatus status, Sort sort);
+    List<Company> findAllByUserIdAndStatusAndNameContainingIgnoreCase(Long userId, CompanyStatus status, String name, Sort sort);
     Optional<Company> findByIdAndUserId(Long id, Long userId);
     boolean existsByIdAndUserId(Long id, Long userId);
     boolean existsByUserIdAndNameIgnoreCase(Long userId, String name);
