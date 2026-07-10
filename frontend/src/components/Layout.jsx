@@ -4,11 +4,12 @@ import {
   DashboardOutlined, BusinessOutlined, WorkOutlined,
   PeopleOutlined, PersonOutlined, LogoutOutlined,
   Menu, Close, NotificationsNoneOutlined, Handshake,
-  AdminPanelSettingsOutlined,
+  AdminPanelSettingsOutlined, FolderOutlined,
 } from '@mui/icons-material'
 
 const NAV = [
   { to: '/dashboard',    Icon: DashboardOutlined,        label: 'Dashboard'    },
+  { to: '/workspaces',   Icon: FolderOutlined,            label: 'Workspaces'   },
   { to: '/companies',    Icon: BusinessOutlined,          label: 'Companies'    },
   { to: '/applications', Icon: WorkOutlined,              label: 'Applications' },
   { to: '/follow-ups',   Icon: NotificationsNoneOutlined, label: 'Follow-Ups'   },

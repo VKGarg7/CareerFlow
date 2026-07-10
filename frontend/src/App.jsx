@@ -6,6 +6,7 @@ import ResetPassword from './pages/ResetPassword'
 import ChangePassword from './pages/ChangePassword'
 import Dashboard from './pages/Dashboard'
 import Profile from './pages/Profile'
+import Workspaces from './pages/Workspaces'
 import Companies from './pages/Companies'
 import Applications from './pages/Applications'
 import Recruiters from './pages/Recruiters'
@@ -47,6 +48,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <Profile />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/workspaces"
+          element={
+            <PrivateRoute>
+              <Workspaces />
             </PrivateRoute>
           }
         />
