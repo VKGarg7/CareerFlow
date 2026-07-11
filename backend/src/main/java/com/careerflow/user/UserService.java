@@ -52,7 +52,9 @@ public class UserService {
     // ─── Profile CRUD ──────────────────────────────────────────────────────────
 
     public UserProfileResponse getMyProfile() {
-        return toProfileResponse(getCurrentUser());
+        User user = userRepository.findByEmailWithResumes(securityUtils.getCurrentUserEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return toProfileResponse(user);
     }
 
     public void deleteProfile() {

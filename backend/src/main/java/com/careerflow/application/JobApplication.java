@@ -12,7 +12,11 @@ import org.hibernate.annotations.SQLRestriction;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "job_applications")
+@Table(name = "job_applications", indexes = {
+        @Index(name = "idx_job_applications_user_deleted", columnList = "user_id, deleted_at"),
+        @Index(name = "idx_job_applications_company_id", columnList = "company_id"),
+        @Index(name = "idx_job_applications_status", columnList = "status")
+})
 @SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
