@@ -12,7 +12,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "recruiter_contacts")
+@Table(name = "recruiter_contacts", indexes = {
+        @Index(name = "idx_recruiter_contacts_user_deleted", columnList = "user_id, deleted_at"),
+        @Index(name = "idx_recruiter_contacts_status", columnList = "status")
+})
 @SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter

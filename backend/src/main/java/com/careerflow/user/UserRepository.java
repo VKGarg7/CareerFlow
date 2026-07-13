@@ -1,5 +1,6 @@
 package com.careerflow.user;
 
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -15,6 +16,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByRole(Role role);
     long countByActiveTrue();
 
+    List<User> findAllBy(Sort sort, Limit limit);
+
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.resumes WHERE u.email = :email")
+    Optional<User> findByEmailWithResumes(@Param("email") String email);
+
     @Modifying
     @Query(value = "UPDATE users SET role = 'USER' WHERE role IS NULL", nativeQuery = true)
     void backfillNullRoles();
@@ -29,5 +35,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
                OR LOWER(u.lastName)  LIKE LOWER(CONCAT('%', :q, '%'))
                OR LOWER(u.email)     LIKE LOWER(CONCAT('%', :q, '%'))
             """)
-    List<User> search(@Param("q") String q, Sort sort);
+    List<User> search(@Param("q") String q, Sort sort, Limit limit);
 }

@@ -9,9 +9,18 @@ import java.util.List;
 import java.util.Optional;
 
 public interface FollowUpRepository extends JpaRepository<FollowUp, Long> {
-    List<FollowUp> findAllByUserIdAndApplicationIdOrderByFollowUpDateAsc(Long userId, Long applicationId);
-    List<FollowUp> findAllByUserIdOrderByFollowUpDateAsc(Long userId);
-    List<FollowUp> findAllByUserIdAndStatusOrderByFollowUpDateAsc(Long userId, FollowUpStatus status);
+    @Query("SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company " +
+            "WHERE f.user.id = :userId AND f.application.id = :applicationId ORDER BY f.followUpDate ASC")
+    List<FollowUp> findAllByUserIdAndApplicationIdOrderByFollowUpDateAsc(@Param("userId") Long userId, @Param("applicationId") Long applicationId);
+
+    @Query("SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company " +
+            "WHERE f.user.id = :userId ORDER BY f.followUpDate ASC")
+    List<FollowUp> findAllByUserIdOrderByFollowUpDateAsc(@Param("userId") Long userId);
+
+    @Query("SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company " +
+            "WHERE f.user.id = :userId AND f.status = :status ORDER BY f.followUpDate ASC")
+    List<FollowUp> findAllByUserIdAndStatusOrderByFollowUpDateAsc(@Param("userId") Long userId, @Param("status") FollowUpStatus status);
+
     Optional<FollowUp> findByIdAndUserId(Long id, Long userId);
     long countByApplicationIdAndStatus(Long applicationId, FollowUpStatus status);
 

@@ -16,6 +16,7 @@ import com.careerflow.user.Role;
 import com.careerflow.user.User;
 import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ public class AdminService {
     private static final Set<String> SORTABLE_FIELDS = Set.of(
             "firstName", "lastName", "email", "createdAt"
     );
+    private static final Limit MAX_USERS_RESULTS = Limit.of(500);
 
     private final UserRepository userRepository;
     private final ApplicationRepository applicationRepository;
@@ -75,8 +77,8 @@ public class AdminService {
     public List<AdminUserResponse> getAllUsers(String search, String sortBy, String order) {
         Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
         List<User> results = (search != null && !search.isBlank())
-                ? userRepository.search(search.trim(), sort)
-                : userRepository.findAll(sort);
+                ? userRepository.search(search.trim(), sort, MAX_USERS_RESULTS)
+                : userRepository.findAllBy(sort, MAX_USERS_RESULTS);
         return results.stream().map(this::toResponse).toList();
     }
 

@@ -10,7 +10,10 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "follow_ups")
+@Table(name = "follow_ups", indexes = {
+        @Index(name = "idx_follow_ups_user_application", columnList = "user_id, application_id"),
+        @Index(name = "idx_follow_ups_status", columnList = "status")
+})
 @Getter
 @Setter
 @NoArgsConstructor

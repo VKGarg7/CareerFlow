@@ -11,11 +11,21 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ApplicationRepository extends JpaRepository<JobApplication, Long> {
-    List<JobApplication> findAllByUserId(Long userId, Sort sort);
-    List<JobApplication> findAllByUserIdAndCompanyId(Long userId, Long companyId, Sort sort);
-    List<JobApplication> findAllByUserIdAndStatus(Long userId, ApplicationStatus status, Sort sort);
-    List<JobApplication> findAllByUserIdAndSource(Long userId, ApplicationSource source, Sort sort);
-    List<JobApplication> findAllByUserIdAndCompanyIdAndStatus(Long userId, Long companyId, ApplicationStatus status, Sort sort);
+    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId")
+    List<JobApplication> findAllByUserId(@Param("userId") Long userId, Sort sort);
+
+    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.company.id = :companyId")
+    List<JobApplication> findAllByUserIdAndCompanyId(@Param("userId") Long userId, @Param("companyId") Long companyId, Sort sort);
+
+    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.status = :status")
+    List<JobApplication> findAllByUserIdAndStatus(@Param("userId") Long userId, @Param("status") ApplicationStatus status, Sort sort);
+
+    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.source = :source")
+    List<JobApplication> findAllByUserIdAndSource(@Param("userId") Long userId, @Param("source") ApplicationSource source, Sort sort);
+
+    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.company.id = :companyId AND a.status = :status")
+    List<JobApplication> findAllByUserIdAndCompanyIdAndStatus(@Param("userId") Long userId, @Param("companyId") Long companyId, @Param("status") ApplicationStatus status, Sort sort);
+
     Optional<JobApplication> findByIdAndUserId(Long id, Long userId);
     Optional<JobApplication> findByResumeIdAndUserId(Long resumeId, Long userId);
     Optional<JobApplication> findByCoverLetterIdAndUserId(Long coverLetterId, Long userId);
