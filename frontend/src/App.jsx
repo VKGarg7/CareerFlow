@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import ForgotPassword from './pages/ForgotPassword'
@@ -25,11 +26,16 @@ function AdminRoute({ children }) {
   return localStorage.getItem('role') === 'ADMIN' ? children : <Navigate to="/dashboard" replace />
 }
 
+function RootRoute() {
+  const token = localStorage.getItem('token')
+  return token ? <Navigate to="/dashboard" replace /> : <Landing />
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
