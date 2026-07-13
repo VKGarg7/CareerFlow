@@ -14,8 +14,11 @@ public class SecurityUtils {
     private final UserRepository userRepository;
 
     public User getCurrentUser() {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        return userRepository.findByEmail(email)
+        return userRepository.findByEmail(getCurrentUserEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+
+    public String getCurrentUserEmail() {
+        return SecurityContextHolder.getContext().getAuthentication().getName();
     }
 }
