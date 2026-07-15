@@ -17,9 +17,9 @@ import CompanyLogo from '../components/CompanyLogo'
 import StatusBadge from '../components/StatusBadge'
 import { todayStr } from '../utils/followup'
 import { getProfile } from '../api/user'
-import { getCompanies } from '../api/company'
-import { getApplications } from '../api/application'
-import { getRecruiters } from '../api/recruiter'
+import { getCompanies, getCompanyStats } from '../api/company'
+import { getApplications, getApplicationStats } from '../api/application'
+import { getRecruiters, getRecruiterStats } from '../api/recruiter'
 import { getAllFollowUps } from '../api/followup'
 
 const STATUS_CFG = {
@@ -292,6 +292,9 @@ export default function Dashboard() {
   const [applications, setApplications] = useState([])
   const [recruiters,   setRecruiters]   = useState([])
   const [followUps,    setFollowUps]    = useState([])
+  const [companyStats,     setCompanyStats]     = useState(null)
+  const [applicationStats, setApplicationStats] = useState(null)
+  const [recruiterStats,   setRecruiterStats]   = useState(null)
   const [loading,      setLoading]      = useState(true)
   const [summaryDismissed, setSummaryDismissed] = useState(
     () => localStorage.getItem('cf_summary_dismissed') === todayStr()
@@ -300,13 +303,17 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.allSettled([
-      getProfile(), getCompanies(), getApplications(), getRecruiters(), getAllFollowUps({ status: 'PENDING' }),
-    ]).then(([p, c, a, r, f]) => {
+      getProfile(), getCompanies({ size: 1000 }), getApplications({ size: 1000 }), getRecruiters({ size: 1000 }), getAllFollowUps({ status: 'PENDING', size: 1000 }),
+      getCompanyStats(), getApplicationStats(), getRecruiterStats(),
+    ]).then(([p, c, a, r, f, cs, as, rs]) => {
       if (p.status === 'fulfilled') setProfile(p.value.data)
       if (c.status === 'fulfilled') setCompanies(c.value.data  || [])
       if (a.status === 'fulfilled') setApplications(a.value.data || [])
       if (r.status === 'fulfilled') setRecruiters(r.value.data  || [])
       if (f.status === 'fulfilled') setFollowUps(f.value.data   || [])
+      if (cs.status === 'fulfilled') setCompanyStats(cs.value.data)
+      if (as.status === 'fulfilled') setApplicationStats(as.value.data)
+      if (rs.status === 'fulfilled') setRecruiterStats(rs.value.data)
       setLoading(false)
     })
   }, [])
@@ -358,7 +365,7 @@ export default function Dashboard() {
     setSummaryDismissed(true)
   }
 
-  const offerCount = applications.filter((a) => a.status === 'OFFER_RECEIVED').length
+  const offerCount = applicationStats?.byStatus?.OFFER_RECEIVED ?? applications.filter((a) => a.status === 'OFFER_RECEIVED').length
   const summaryItems = [
     overdueFollowUps.length  > 0 && { Icon: ScheduleOutlined, text: `${overdueFollowUps.length} overdue follow-up${overdueFollowUps.length !== 1 ? 's' : ''}` },
     todayFollowUps.length    > 0 && { Icon: NotificationsNoneOutlined, text: `${todayFollowUps.length} follow-up${todayFollowUps.length !== 1 ? 's' : ''} due today` },
@@ -375,7 +382,12 @@ export default function Dashboard() {
     [companies]
   )
 
-  const statusCounts = applications.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + 1; return acc }, {})
+  const statusCounts = applicationStats?.byStatus
+    ?? applications.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + 1; return acc }, {})
+
+  const totalCompanies    = companyStats?.total    ?? companies.length
+  const totalApplications = applicationStats?.total ?? applications.length
+  const totalRecruiters   = recruiterStats?.total   ?? recruiters.length
 
   const weekTrend = useMemo(() => {
     const thisWeekStart = Date.now() - 7 * 86400000
@@ -431,9 +443,9 @@ export default function Dashboard() {
           Welcome back, {name}
         </h1>
         <p className="mb-6 max-w-2xl text-[15px] leading-relaxed text-white/45">
-          {applications.length === 0
+          {totalApplications === 0
             ? 'Start tracking your job search — add a company and log your first application.'
-            : <>You're tracking <span className="font-medium text-white/85">{applications.length} application{applications.length !== 1 ? 's' : ''}</span> across <span className="font-medium text-white/85">{companies.length} {companies.length !== 1 ? 'companies' : 'company'}</span>{offerCount > 0 && <> with <span className="font-medium text-app-success">{offerCount} offer{offerCount !== 1 ? 's' : ''}</span></>}.</>}
+            : <>You're tracking <span className="font-medium text-white/85">{totalApplications} application{totalApplications !== 1 ? 's' : ''}</span> across <span className="font-medium text-white/85">{totalCompanies} {totalCompanies !== 1 ? 'companies' : 'company'}</span>{offerCount > 0 && <> with <span className="font-medium text-app-success">{offerCount} offer{offerCount !== 1 ? 's' : ''}</span></>}.</>}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={() => navigate('/applications')}
@@ -451,16 +463,16 @@ export default function Dashboard() {
       {/* ── KPI row ── */}
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiWidget
-          icon={<BusinessOutlined sx={{ fontSize: 18 }} />} label="Companies" value={companies.length}
+          icon={<BusinessOutlined sx={{ fontSize: 18 }} />} label="Companies" value={totalCompanies}
           trend={null} tint="#8184F5"
           onClick={() => navigate('/companies')} />
         <KpiWidget
-          icon={<WorkOutlined sx={{ fontSize: 18 }} />} label="Applications" value={applications.length}
+          icon={<WorkOutlined sx={{ fontSize: 18 }} />} label="Applications" value={totalApplications}
           trend={weekTrend} trendLabel="vs last week" tint="#8184F5"
           sparkline={sparkline14}
           onClick={() => navigate('/applications')} />
         <KpiWidget
-          icon={<PeopleOutlined sx={{ fontSize: 18 }} />} label="Recruiters" value={recruiters.length}
+          icon={<PeopleOutlined sx={{ fontSize: 18 }} />} label="Recruiters" value={totalRecruiters}
           trend={null} tint="#8184F5"
           onClick={() => navigate('/recruiters')} />
         <KpiWidget
@@ -472,11 +484,11 @@ export default function Dashboard() {
       <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
         <Surface className="flex items-center justify-center p-5 lg:col-span-1">
           <h2 className="sr-only">Application Overview</h2>
-          {applications.length === 0 ? (
+          {totalApplications === 0 ? (
             <p className="relative py-6 text-center text-xs text-white/35">No applications tracked yet.</p>
           ) : (
             <div className="relative flex w-full items-center gap-6">
-              <StatusDonut statusCounts={statusCounts} total={applications.length} />
+              <StatusDonut statusCounts={statusCounts} total={totalApplications} />
               <div className="grid flex-1 grid-cols-1 gap-1.5">
                 {Object.entries(STATUS_CFG).filter(([k]) => statusCounts[k]).map(([k, cfg]) => (
                   <div key={k} className="flex items-center gap-2">

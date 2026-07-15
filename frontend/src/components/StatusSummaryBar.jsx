@@ -8,6 +8,8 @@ export default function StatusSummaryBar({
   statusConfig = {},
   activeFilter = '',
   onFilter,
+  counts: countsOverride,
+  total: totalOverride,
 }) {
   const scrollRef = useRef(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
@@ -36,9 +38,9 @@ export default function StatusSummaryBar({
     scrollRef.current?.scrollBy({ left: dir * 220, behavior: 'smooth' })
   }
 
-  const counts = countByStatus(items, statusKey, statusConfig)
+  const counts = countsOverride ?? countByStatus(items, statusKey, statusConfig)
 
-  const total = items.length
+  const total = totalOverride ?? items.length
   const statuses = Object.entries(statusConfig)
   const allActive = activeFilter === ''
 

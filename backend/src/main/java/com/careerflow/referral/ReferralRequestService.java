@@ -2,8 +2,10 @@ package com.careerflow.referral;
 
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
-import com.careerflow.common.SortHelper;
+import com.careerflow.common.StatusCountsResponse;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
@@ -14,6 +16,8 @@ import com.careerflow.referral.dto.ReferralStatusHistoryResponse;
 import com.careerflow.referral.dto.ReferralUpdateRequest;
 import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +40,6 @@ public class ReferralRequestService {
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
 
-    // ── CRUD ──────────────────────────────────────────────────────────────────
 
     @Transactional
     public ReferralResponse create(ReferralRequestDto req) {
@@ -64,33 +67,37 @@ public class ReferralRequestService {
 
         referral = referralRepository.save(referral);
 
-        // Record initial status entry
         recordHistory(referral, user, null, initialStatus, null);
         auditLogService.log(user, AuditAction.REFERRAL_CREATED, "Requested referral for " + describe(referral));
 
         return toResponse(referral, null);
     }
 
-    public List<ReferralResponse> getMyReferrals(String search, String status, String sortBy, String order) {
+    public PageResponse<ReferralResponse> getMyReferrals(
+            String search, String status, String sortBy, String order, int page, int size) {
         User user = securityUtils.getCurrentUser();
-        Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
+        Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
 
         boolean hasSearch = search != null && !search.isBlank();
         ReferralStatus statusFilter = parseStatus(status);
 
-        List<ReferralRequest> results;
+        Page<ReferralRequest> results;
         if (hasSearch && statusFilter != null) {
-            results = referralRepository.searchByUserIdAndStatus(user.getId(), statusFilter, search.trim(), sort);
+            results = referralRepository.searchByUserIdAndStatus(user.getId(), statusFilter, search.trim(), pageable);
         } else if (hasSearch) {
-            results = referralRepository.searchByUserId(user.getId(), search.trim(), sort);
+            results = referralRepository.searchByUserId(user.getId(), search.trim(), pageable);
         } else if (statusFilter != null) {
-            results = referralRepository.findAllByUserIdAndStatus(user.getId(), statusFilter, sort);
+            results = referralRepository.findAllByUserIdAndStatus(user.getId(), statusFilter, pageable);
         } else {
-            results = referralRepository.findAllByUserId(user.getId(), sort);
+            results = referralRepository.findAllByUserId(user.getId(), pageable);
         }
 
-        // History is null in list responses for performance
-        return results.stream().map(r -> toResponse(r, null)).toList();
+        return PageResponse.of(results.map(r -> toResponse(r, null)));
+    }
+
+    public StatusCountsResponse getMyReferralStats() {
+        User user = securityUtils.getCurrentUser();
+        return StatusCountsResponse.fromGroupedCounts(referralRepository.countByStatusGroupedForUser(user.getId()));
     }
 
     @Transactional

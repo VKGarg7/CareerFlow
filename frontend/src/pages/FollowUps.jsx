@@ -255,10 +255,10 @@ export default function FollowUps() {
     setLoading(true)
     setError('')
     try {
-      const params = { status: tab === 'history' ? 'DONE' : 'PENDING' }
+      const params = { status: tab === 'history' ? 'DONE' : 'PENDING', size: 1000 }
       const res = await getAllFollowUps(params)
       setFollowUps(res.data)
-      if (tab === 'history') setCompletedCount(res.data.length)
+      if (tab === 'history') setCompletedCount(res.data.totalElements)
     } catch {
       setError('Failed to load follow-ups.')
     } finally {
@@ -273,7 +273,7 @@ export default function FollowUps() {
 
   useEffect(() => {
     if (tab === 'active') {
-      getAllFollowUps({ status: 'DONE' }).then((res) => setCompletedCount(res.data.length)).catch(() => {})
+      getAllFollowUps({ status: 'DONE' }).then((res) => setCompletedCount(res.data.totalElements)).catch(() => {})
     }
   }, [tab])
 

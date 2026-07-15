@@ -1,6 +1,8 @@
 package com.careerflow.application;
 
-import org.springframework.data.domain.Sort;
+import com.careerflow.common.GroupedCountRow;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -11,20 +13,25 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ApplicationRepository extends JpaRepository<JobApplication, Long> {
-    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId")
-    List<JobApplication> findAllByUserId(@Param("userId") Long userId, Sort sort);
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId",
+            countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId")
+    Page<JobApplication> findAllByUserId(@Param("userId") Long userId, Pageable pageable);
 
-    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.company.id = :companyId")
-    List<JobApplication> findAllByUserIdAndCompanyId(@Param("userId") Long userId, @Param("companyId") Long companyId, Sort sort);
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.company.id = :companyId",
+            countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.company.id = :companyId")
+    Page<JobApplication> findAllByUserIdAndCompanyId(@Param("userId") Long userId, @Param("companyId") Long companyId, Pageable pageable);
 
-    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.status = :status")
-    List<JobApplication> findAllByUserIdAndStatus(@Param("userId") Long userId, @Param("status") ApplicationStatus status, Sort sort);
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.status = :status",
+            countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.status = :status")
+    Page<JobApplication> findAllByUserIdAndStatus(@Param("userId") Long userId, @Param("status") ApplicationStatus status, Pageable pageable);
 
-    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.source = :source")
-    List<JobApplication> findAllByUserIdAndSource(@Param("userId") Long userId, @Param("source") ApplicationSource source, Sort sort);
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.source = :source",
+            countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.source = :source")
+    Page<JobApplication> findAllByUserIdAndSource(@Param("userId") Long userId, @Param("source") ApplicationSource source, Pageable pageable);
 
-    @Query("SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.company.id = :companyId AND a.status = :status")
-    List<JobApplication> findAllByUserIdAndCompanyIdAndStatus(@Param("userId") Long userId, @Param("companyId") Long companyId, @Param("status") ApplicationStatus status, Sort sort);
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.company.id = :companyId AND a.status = :status",
+            countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.company.id = :companyId AND a.status = :status")
+    Page<JobApplication> findAllByUserIdAndCompanyIdAndStatus(@Param("userId") Long userId, @Param("companyId") Long companyId, @Param("status") ApplicationStatus status, Pageable pageable);
 
     Optional<JobApplication> findByIdAndUserId(Long id, Long userId);
     Optional<JobApplication> findByResumeIdAndUserId(Long resumeId, Long userId);
@@ -40,8 +47,9 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
     @Query("SELECT a.status AS status, COUNT(a) AS total FROM JobApplication a GROUP BY a.status")
     List<StatusCount> countByStatusGrouped();
 
-    interface StatusCount {
-        ApplicationStatus getStatus();
-        long getTotal();
+    @Query("SELECT a.status AS status, COUNT(a) AS total FROM JobApplication a WHERE a.user.id = :userId GROUP BY a.status")
+    List<StatusCount> countByStatusGroupedForUser(@Param("userId") Long userId);
+
+        interface StatusCount extends GroupedCountRow<ApplicationStatus> {
     }
 }

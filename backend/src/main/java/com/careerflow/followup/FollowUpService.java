@@ -2,6 +2,8 @@ package com.careerflow.followup;
 
 import com.careerflow.application.ApplicationRepository;
 import com.careerflow.application.JobApplication;
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.followup.dto.FollowUpRequest;
@@ -9,6 +11,10 @@ import com.careerflow.followup.dto.FollowUpResponse;
 import com.careerflow.followup.dto.FollowUpUpdateRequest;
 import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -45,12 +51,15 @@ public class FollowUpService {
                 .stream().map(this::toResponse).toList();
     }
 
-    public List<FollowUpResponse> getAllFollowUps(FollowUpStatus status) {
+    public PageResponse<FollowUpResponse> getAllFollowUps(FollowUpStatus status, int page, int size) {
         User user = securityUtils.getCurrentUser();
-        List<FollowUp> results = status != null
-                ? followUpRepository.findAllByUserIdAndStatusOrderByFollowUpDateAsc(user.getId(), status)
-                : followUpRepository.findAllByUserIdOrderByFollowUpDateAsc(user.getId());
-        return results.stream().map(this::toResponse).toList();
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? PaginationHelper.DEFAULT_SIZE : Math.min(size, PaginationHelper.MAX_SIZE);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "followUpDate"));
+        Page<FollowUp> results = status != null
+                ? followUpRepository.findAllByUserIdAndStatusOrderByFollowUpDateAsc(user.getId(), status, pageable)
+                : followUpRepository.findAllByUserIdOrderByFollowUpDateAsc(user.getId(), pageable);
+        return PageResponse.of(results.map(this::toResponse));
     }
 
     public FollowUpResponse updateFollowUp(Long id, FollowUpUpdateRequest request) {

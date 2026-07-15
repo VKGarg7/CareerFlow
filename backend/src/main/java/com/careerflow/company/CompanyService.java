@@ -3,8 +3,10 @@ package com.careerflow.company;
 import com.careerflow.application.ApplicationService;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
-import com.careerflow.common.SortHelper;
+import com.careerflow.common.StatusCountsResponse;
 import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
 import com.careerflow.company.dto.CompanyUpdateRequest;
@@ -14,10 +16,10 @@ import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.Set;
 
 @SuppressWarnings("null")
@@ -53,24 +55,31 @@ public class CompanyService {
         return toResponse(company);
     }
 
-    public List<CompanyResponse> getMyCompanies(Long id, String search, CompanyStatus status, String sortBy, String order) {
+    public PageResponse<CompanyResponse> getMyCompanies(
+            Long id, String search, CompanyStatus status, String sortBy, String order, int page, int size) {
         User user = securityUtils.getCurrentUser();
         if (id != null) {
-            return List.of(toResponse(findOwned(id, user.getId())));
+            CompanyResponse single = toResponse(findOwned(id, user.getId()));
+            return PageResponse.single(single);
         }
-        Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
+        Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
         boolean hasSearch = search != null && !search.isBlank();
-        List<Company> results;
+        Page<Company> results;
         if (status != null && hasSearch) {
-            results = companyRepository.findAllByUserIdAndStatusAndNameContainingIgnoreCase(user.getId(), status, search.trim(), sort);
+            results = companyRepository.findAllByUserIdAndStatusAndNameContainingIgnoreCase(user.getId(), status, search.trim(), pageable);
         } else if (status != null) {
-            results = companyRepository.findAllByUserIdAndStatus(user.getId(), status, sort);
+            results = companyRepository.findAllByUserIdAndStatus(user.getId(), status, pageable);
         } else if (hasSearch) {
-            results = companyRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), sort);
+            results = companyRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), pageable);
         } else {
-            results = companyRepository.findAllByUserId(user.getId(), sort);
+            results = companyRepository.findAllByUserId(user.getId(), pageable);
         }
-        return results.stream().map(this::toResponse).toList();
+        return PageResponse.of(results.map(this::toResponse));
+    }
+
+    public StatusCountsResponse getMyCompanyStats() {
+        User user = securityUtils.getCurrentUser();
+        return StatusCountsResponse.fromGroupedCounts(companyRepository.countByStatusGroupedForUser(user.getId()));
     }
 
     public CompanyResponse updateCompany(Long id, CompanyUpdateRequest request) {

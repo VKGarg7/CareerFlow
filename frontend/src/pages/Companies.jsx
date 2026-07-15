@@ -9,9 +9,10 @@ import {
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
+import Pagination from '../components/Pagination'
 import StatTilesBar from '../components/StatTilesBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
-import { getCompanies, addCompany, updateCompany, deleteCompany } from '../api/company'
+import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats } from '../api/company'
 import { getApplications } from '../api/application'
 import { getAllFollowUps } from '../api/followup'
 import { getRecruiters } from '../api/recruiter'
@@ -26,6 +27,8 @@ import FilterSelect from '../components/FilterSelect'
 import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
+import usePagedList from '../hooks/usePagedList'
+import useFetchOnce from '../hooks/useFetchOnce'
 import { DrawerShell } from '../components/DrawerShell'
 import { FormFooterButtons } from '../components/formKit'
 import { CloseGlyphIcon } from '../components/CloseGlyphIcon'
@@ -386,10 +389,6 @@ function DeleteModal({ open, company, onClose, onDeleted }) {
 }
 
 export default function Companies() {
-  const [companies, setCompanies] = useState([])
-  const [allCompanies, setAllCompanies] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [success, setSuccess] = useTransientMessage()
 
   const [search, setSearch] = useState('')
@@ -402,6 +401,22 @@ export default function Companies() {
   const [viewMode, setViewMode] = useState('list')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const searchInputRef = React.useRef(null)
+
+  const {
+    items: companies, setItems: setCompanies, loading, error, setError,
+    setPage, refetch: fetchCompanies,
+  } = usePagedList(
+    useCallback(
+      (page) => getCompanies({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page }),
+      [search, statusFilter, sortBy, order]
+    ),
+    'Failed to load companies.'
+  )
+
+  const { data: allCompanies, setData: setAllCompanies, refetch: fetchAllCompanies } = useFetchOnce(
+    useCallback(() => getCompanies({ sortBy, order, size: 1000 }), [sortBy, order]), []
+  )
+  const { data: stats, refetch: fetchStats } = useFetchOnce(getCompanyStats)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -433,33 +448,10 @@ export default function Companies() {
     return result
   }, [allCompanies])
 
-  const fetchCompanies = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await getCompanies({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order })
-      setCompanies(res.data)
-    } catch {
-      setError('Failed to load companies.')
-    } finally {
-      setLoading(false)
-    }
-  }, [search, statusFilter, sortBy, order])
-
-  const fetchAllCompanies = useCallback(async () => {
-    try {
-      const res = await getCompanies({ sortBy, order })
-      setAllCompanies(res.data)
-    } catch {
-    }
-  }, [sortBy, order])
-
-  useEffect(() => { fetchCompanies() }, [fetchCompanies])
-  useEffect(() => { fetchAllCompanies() }, [fetchAllCompanies])
-
   useSearchShortcut(searchInputRef)
 
   useEffect(() => {
-    Promise.allSettled([getApplications(), getAllFollowUps({ status: 'PENDING' }), getRecruiters()])
+    Promise.allSettled([getApplications({ size: 1000 }), getAllFollowUps({ status: 'PENDING', size: 1000 }), getRecruiters({ size: 1000 })])
       .then(([a, f, r]) => {
         if (a.status === 'fulfilled') setApplications(a.value.data || [])
         if (f.status === 'fulfilled') setFollowUps(f.value.data || [])
@@ -543,6 +535,7 @@ export default function Companies() {
     setSuccess(editTarget ? 'Company updated.' : 'Company added.')
     fetchCompanies()
     fetchAllCompanies()
+    fetchStats()
   }
 
   const handleDeleted = () => {
@@ -550,11 +543,13 @@ export default function Companies() {
     setSuccess('Company removed.')
     fetchCompanies()
     fetchAllCompanies()
+    fetchStats()
   }
 
   const handleStatusChanged = (updated) => {
     setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c))
     setAllCompanies(prev => prev.map(c => c.id === updated.id ? updated : c))
+    fetchStats()
   }
 
   const activeFilterCount = [statusFilter, industryFilter, locationFilter, recruiterFilter].filter(Boolean).length
@@ -593,10 +588,12 @@ export default function Companies() {
       <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
       <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
-      {!loading && allCompanies.length > 0 && (
+      {!loading && stats && stats.total > 0 && (
         <div className="mb-8">
           <StatTilesBar
             items={allCompanies}
+            counts={stats.byStatus}
+            total={stats.total}
             statusConfig={STATUS_CONFIG}
             activeFilter={statusFilter}
             onFilter={setStatusFilter}
@@ -703,6 +700,8 @@ export default function Companies() {
                 order={order} onToggleOrder={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))} />
             ))}
           </div>
+          <Pagination page={companies.page} totalPages={companies.totalPages}
+            totalElements={companies.totalElements} size={companies.size} onPageChange={setPage} />
         </div>
       ) : (
         <div>
@@ -714,6 +713,8 @@ export default function Companies() {
               <CompanyDirectoryCard key={c.id} company={c} {...cardProps} stats={getCardStats(c)} />
             ))}
           </div>
+          <Pagination page={companies.page} totalPages={companies.totalPages}
+            totalElements={companies.totalElements} size={companies.size} onPageChange={setPage} />
         </div>
       )}
       </div>
