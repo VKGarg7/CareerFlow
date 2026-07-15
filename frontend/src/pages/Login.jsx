@@ -2,18 +2,25 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { login } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
-import { AuthCard, AuthField, authInputCls, AuthErrorBanner, AuthSubmitButton, EyeIcon, AuthFormSide, AuthDecoTile } from '../components/AuthFormKit'
+import {
+  AuthCard, AuthField, authInputIconCls, AuthInputIcon, AuthErrorBanner, AuthSubmitButton,
+  EyeIcon, AuthFormSide, AuthDecoTile, MailIcon, LockIcon, AuthCheckbox, AuthDivider,
+  AuthSocialRow, AuthTrustFooter,
+} from '../components/AuthFormKit'
+
+const PROVIDER_NAMES = { google: 'Google', linkedin: 'LinkedIn', github: 'GitHub' }
 
 const FEATURES = [
-  { icon: '🏢', text: "Track every company you're targeting" },
-  { icon: '📋', text: 'Manage all your job applications' },
-  { icon: '🤝', text: 'Build your recruiter network' },
-  { icon: '📊', text: 'Dashboard insights at a glance' },
+  { icon: '🏢', title: 'Track every company', text: 'Stay organized with your target companies' },
+  { icon: '💼', title: 'Manage applications', text: 'Track every application and its progress' },
+  { icon: '🤝', title: 'Build your network', text: 'Keep all your recruiters in one place' },
+  { icon: '📊', title: 'Get insights', text: 'Powerful analytics to improve your search' },
 ]
 
 export default function Login() {
   const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', password: '' })
+  const [remember, setRemember] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -37,12 +44,14 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-[#05060B]">
+    <div className="flex h-screen overflow-hidden bg-[#05060B]">
       <AuthPanel
         eyebrow="Welcome back"
-        title={<>Your job search,<br />organized.</>}
+        width="w-[380px]"
+        title={<>Your job search,<br /><span className="text-[#A78BFA]">organized.</span></>}
         subtitle="Everything you need to land your next role — all in one place."
         items={FEATURES}
+        illustration
       />
 
       <AuthFormSide>
@@ -50,35 +59,38 @@ export default function Login() {
 
         <div className="relative">
           <AuthDecoTile label="This week" value="3 interviews booked" sub="Across 2 companies" className="-right-12 -top-8 -rotate-2" />
-          <AuthDecoTile label="Streak" value="12 days logged" sub="Keep the thread going" className="-left-12 -bottom-8 rotate-2" style={{ animationDelay: '1.2s' }} />
 
-          <AuthCard>
+          <AuthCard compact>
             <h1 className="mb-1 font-display text-xl font-bold text-white">Welcome back</h1>
-            <p className="mb-6 text-sm text-white/45">Sign in to your CareerFlow account</p>
+            <p className="mb-4 text-sm text-white/45">Sign in to your CareerFlow account</p>
 
             <AuthErrorBanner>{error}</AuthErrorBanner>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <AuthField label="Email">
-                <input
-                  type="email" name="email" value={form.email} onChange={handleChange} required
-                  placeholder="you@example.com"
-                  className={authInputCls(false)}
-                />
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <AuthField label="Email address">
+                <div className="relative">
+                  <AuthInputIcon><MailIcon /></AuthInputIcon>
+                  <input
+                    type="email" name="email" value={form.email} onChange={handleChange} required
+                    placeholder="you@example.com"
+                    className={authInputIconCls(false)}
+                  />
+                </div>
               </AuthField>
 
               <div>
-                <div className="mb-1.5 flex items-center justify-between">
+                <div className="mb-1 flex items-center justify-between">
                   <label className="block text-xs font-semibold uppercase tracking-wide text-white/40">Password</label>
                   <Link to="/forgot-password" className="text-xs font-medium text-[#8184F5] hover:text-[#A78BFA]">
                     Forgot password?
                   </Link>
                 </div>
                 <div className="relative">
+                  <AuthInputIcon><LockIcon /></AuthInputIcon>
                   <input
                     type={showPassword ? 'text' : 'password'} name="password"
                     value={form.password} onChange={handleChange} required placeholder="••••••••"
-                    className={authInputCls(false) + ' pr-10'}
+                    className={authInputIconCls(false) + ' pr-10'}
                   />
                   <button type="button" tabIndex={-1} onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
@@ -87,16 +99,27 @@ export default function Login() {
                 </div>
               </div>
 
-              <AuthSubmitButton loading={loading} loadingText="Signing in…">Sign in</AuthSubmitButton>
+              <AuthCheckbox checked={remember} onChange={(e) => setRemember(e.target.checked)}>
+                Remember me
+              </AuthCheckbox>
+
+              <AuthSubmitButton loading={loading} loadingText="Signing in…" arrow>Sign in</AuthSubmitButton>
             </form>
 
-            <p className="mt-6 text-center text-sm text-white/45">
+            <AuthDivider>Or continue with</AuthDivider>
+            <AuthSocialRow
+              providers={['google', 'linkedin', 'github']}
+              onSelect={(provider) => setError(`${PROVIDER_NAMES[provider]} sign-in is not available yet.`)}
+            />
+
+            <p className="mt-4 text-center text-sm text-white/45">
               Don't have an account?{' '}
               <Link to="/signup" className="font-semibold text-[#8184F5] hover:text-[#A78BFA]">
                 Sign up
               </Link>
             </p>
           </AuthCard>
+          <AuthTrustFooter />
         </div>
       </AuthFormSide>
     </div>

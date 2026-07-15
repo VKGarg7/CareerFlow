@@ -1,15 +1,24 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Alert, CircularProgress } from '@mui/material'
+import PageSpinner from '../components/PageSpinner'
+import PageAlert from '../components/PageAlert'
+import {
+  NotificationsActiveRounded, EventBusyRounded, TodayRounded, EventAvailableRounded,
+  CheckCircleRounded, CheckRounded, EventRepeatRounded, DeleteOutlineRounded,
+  UndoRounded, WorkOutlineRounded, ChevronRightRounded, CalendarMonthRounded,
+  KeyboardArrowDownRounded, EventNoteRounded,
+} from '@mui/icons-material'
 import Layout from '../components/Layout'
-import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
+import { ConfirmDeleteModal } from '../components/ModalShell'
 import { getAllFollowUps, updateFollowUp, deleteFollowUp } from '../api/followup'
-import { todayStr, fmtDate, fmtDateTime, daysLabel } from '../utils/followup'
+import { todayStr, fmtDate, fmtDateTime, daysLabel, initials } from '../utils/followup'
+import useTransientMessage from '../hooks/useTransientMessage'
 import RescheduleInline from '../components/RescheduleInline'
 import CompanyDetailModal from '../components/CompanyDetailModal'
+import { CardMenu } from '../components/EntityCard'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function monthKey(dtStr) {
   const d = new Date(dtStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -42,107 +51,132 @@ function groupByMonth(followUps) {
   return Object.entries(map).sort(([a], [b]) => b.localeCompare(a))
 }
 
-// ─── Tab toggle ───────────────────────────────────────────────────────────────
+function avatarHex(fu) {
+  if (fu.overdue) return '#F43F5E'
+  if (fu.followUpDate === todayStr()) return '#F59E0B'
+  return '#5B5FEF'
+}
+
 function TabToggle({ active, onChange }) {
   const tabs = [
-    { key: 'active',  label: 'Active',  icon: '🔔' },
-    { key: 'history', label: 'History', icon: '✅' },
+    { key: 'active',  label: 'Active',  Icon: NotificationsActiveRounded },
+    { key: 'history', label: 'History', Icon: CheckCircleRounded },
   ]
   return (
-    <div className="inline-flex bg-gray-100 rounded-xl p-1 gap-1 mb-6">
-      {tabs.map(({ key, label, icon }) => (
+    <div className="inline-flex bg-white/[0.04] rounded-xl p-1 gap-1 mb-6">
+      {tabs.map(({ key, label, Icon }) => (
         <button key={key} onClick={() => onChange(key)}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
             active === key
-              ? 'bg-white text-gray-800 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'bg-app-accent text-white shadow-card'
+              : 'text-white/50 hover:text-white/80'
           }`}>
-          <span>{icon}</span>{label}
+          <Icon sx={{ fontSize: 16 }} />{label}
         </button>
       ))}
     </div>
   )
 }
 
-// ─── Summary chips (active tab) ───────────────────────────────────────────────
-function SummaryChip({ label, count, color, onClick, active: isActive }) {
-  const colorMap = {
-    red:   { base: 'bg-red-50 text-red-600 border-red-200',    active: 'bg-red-600 text-white border-red-600'    },
-    amber: { base: 'bg-amber-50 text-amber-600 border-amber-200', active: 'bg-amber-500 text-white border-amber-500' },
-    blue:  { base: 'bg-blue-50 text-blue-600 border-blue-200', active: 'bg-blue-600 text-white border-blue-600'  },
-  }
-  const cls = colorMap[color] || colorMap.blue
+function StatTile({ Icon, tint, value, label, onClick, active: isActive }) {
   return (
     <button onClick={onClick}
-      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all hover:scale-[1.02] ${isActive ? cls.active : cls.base}`}>
-      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-black ${isActive ? 'bg-white/30' : ''}`}>
-        {count}
+      className={`text-left relative overflow-hidden rounded-card border px-4 py-3.5 flex items-center gap-3 transition-all ${
+        isActive ? 'border-current' : 'border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.02]'
+      }`}
+      style={isActive ? { color: tint, background: `${tint}14` } : undefined}>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg shadow-inner-highlight"
+        style={{ background: `linear-gradient(160deg, ${tint}26, ${tint}0D)`, color: tint }}>
+        <Icon sx={{ fontSize: 18 }} />
       </span>
-      {label}
+      <div className="min-w-0">
+        <p className="text-2xl font-display font-black leading-none text-white">{value}</p>
+        <p className="text-[11px] text-white/40 font-medium mt-1 truncate">{label}</p>
+      </div>
     </button>
   )
 }
 
-// ─── Section header ───────────────────────────────────────────────────────────
-function SectionHeader({ icon, label, count, accent }) {
+function SectionHeader({ Icon, label, count, accent, collapsed, onToggle }) {
   return (
-    <div className="flex items-center gap-3 mb-3">
-      <span className="text-base">{icon}</span>
+    <button type="button" onClick={onToggle}
+      className="flex items-center gap-2 mb-3 w-full text-left group">
+      <Icon sx={{ fontSize: 15 }} className={accent} />
       <span className={`text-xs font-bold uppercase tracking-widest ${accent}`}>{label}</span>
-      <div className="flex-1 h-px bg-gray-100" />
-      <span className="text-xs text-gray-400 font-medium">{count}</span>
+      <div className="flex-1 h-px bg-white/[0.06]" />
+      <span className="text-xs text-white/35 font-medium">{count}</span>
+      <KeyboardArrowDownRounded sx={{ fontSize: 18 }}
+        className={`text-white/30 transition-transform group-hover:text-white/60 ${collapsed ? '-rotate-90' : ''}`} />
+    </button>
+  )
+}
+
+function SectionEmptyRow({ title, description }) {
+  return (
+    <div className="flex items-center justify-center gap-3 rounded-card border border-white/[0.04] bg-app-surface/60 py-8 px-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-white/35">
+        <EventNoteRounded sx={{ fontSize: 19 }} />
+      </span>
+      <div className="text-center sm:text-left">
+        <p className="text-sm font-semibold text-white/70">{title}</p>
+        <p className="text-xs text-white/35 mt-0.5">{description}</p>
+      </div>
     </div>
   )
 }
 
-// ─── Active follow-up card ────────────────────────────────────────────────────
 function FollowUpCard({ fu, onDone, onDelete, onReschedule, onCompany }) {
   const isOverdue = fu.overdue
+  const isToday = fu.followUpDate === todayStr()
   const [editing, setEditing] = useState(false)
 
-  const borderColor = isOverdue ? 'border-l-red-400'
-    : fu.followUpDate === todayStr() ? 'border-l-amber-400'
-    : 'border-l-blue-300'
+  const borderColor = isOverdue ? 'border-l-app-danger'
+    : isToday ? 'border-l-app-warning'
+    : 'border-l-app-accent/60'
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 ${borderColor} p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`}>
+    <div className={`relative overflow-hidden rounded-card border border-white/[0.04] border-l-4 ${borderColor} bg-app-surface shadow-card p-4 transition-all duration-300 hover:-translate-y-[1px] hover:border-white/[0.07] hover:shadow-card-hover`}>
       <div className="flex flex-wrap sm:flex-nowrap items-start gap-4">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight"
+          style={{ background: avatarHex(fu) }}>
+          {initials(fu.companyName)}
+        </div>
+
         <div className="flex-1 min-w-[12rem] sm:min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-sm font-bold whitespace-nowrap ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
-              📅 {fmtDate(fu.followUpDate)}
+            <span className={`flex items-center gap-1 text-sm font-bold whitespace-nowrap ${isOverdue ? 'text-app-danger' : 'text-white/85'}`}>
+              <CalendarMonthRounded sx={{ fontSize: 14 }} /> {fmtDate(fu.followUpDate)}
             </span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${
-              isOverdue ? 'bg-red-100 text-red-600'
-              : fu.followUpDate === todayStr() ? 'bg-amber-100 text-amber-600'
-              : 'bg-blue-50 text-blue-600'
+              isOverdue ? 'bg-app-danger/10 text-app-danger'
+              : isToday ? 'bg-app-warning/10 text-app-warning'
+              : 'bg-app-accent/10 text-app-accent-soft'
             }`}>
               {daysLabel(fu.followUpDate)}
             </span>
           </div>
-          <p className="text-sm text-gray-700 flex items-center gap-1 flex-wrap">
+          <p className="text-sm text-white/70 flex items-center gap-1 flex-wrap">
             <button type="button" onClick={() => onCompany(fu.companyId)}
-              className="font-semibold hover:text-blue-600 transition">{fu.companyName}</button>
-            <span className="text-gray-400 font-normal">· {fu.role}</span>
+              className="font-semibold text-white/85 hover:text-app-accent-soft transition">{fu.companyName}</button>
+            <span className="text-white/35 font-normal">· {fu.role}</span>
           </p>
           {fu.note && (
-            <p className="text-xs mt-1 text-gray-500 line-clamp-2">"{fu.note}"</p>
+            <p className="text-xs mt-1 text-white/40 line-clamp-2">"{fu.note}"</p>
           )}
         </div>
 
-        <div className="flex gap-1.5 w-full sm:w-auto shrink-0 items-start flex-wrap sm:justify-end">
+        <div className="flex gap-1.5 w-full sm:w-auto shrink-0 items-start sm:justify-end">
           <button onClick={onDone}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-green-200 text-green-600 bg-white hover:bg-green-500 hover:text-white hover:border-green-500 transition-all">
-            Done
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-app-success/20 text-app-success bg-app-success/[0.04] hover:bg-app-success hover:text-white hover:border-app-success transition-all">
+            <CheckRounded sx={{ fontSize: 14 }} /> Done
           </button>
           <button onClick={() => setEditing((e) => !e)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${editing ? 'bg-amber-500 text-white border-amber-500' : 'border-amber-200 text-amber-600 bg-white hover:bg-amber-500 hover:text-white hover:border-amber-500'}`}>
-            Reschedule
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${editing ? 'bg-app-warning text-white border-app-warning' : 'border-app-warning/20 text-app-warning bg-app-warning/[0.04] hover:bg-app-warning hover:text-white hover:border-app-warning'}`}>
+            <EventRepeatRounded sx={{ fontSize: 14 }} /> Reschedule
           </button>
-          <button onClick={onDelete}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
-            Delete
-          </button>
+          <CardMenu items={[
+            { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 15 }} />, onClick: onDelete, tone: 'danger' },
+          ]} />
         </div>
       </div>
 
@@ -157,56 +191,51 @@ function FollowUpCard({ fu, onDone, onDelete, onReschedule, onCompany }) {
   )
 }
 
-// ─── History card (completed follow-ups) ──────────────────────────────────────
 function HistoryCard({ fu, onUndo, onDelete, onCompany }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-green-300 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+    <div className="relative overflow-hidden rounded-card border border-white/[0.04] border-l-4 border-l-app-success/60 bg-app-surface shadow-card p-4 transition-all duration-300 hover:-translate-y-[1px] hover:border-white/[0.07] hover:shadow-card-hover">
       <div className="flex flex-wrap sm:flex-nowrap items-start gap-4">
-        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-600">
-            <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
-          </svg>
+        <div className="w-10 h-10 rounded-xl bg-app-success/10 flex items-center justify-center shrink-0">
+          <CheckCircleRounded sx={{ fontSize: 20 }} className="text-app-success" />
         </div>
 
         <div className="flex-1 min-w-[10rem] sm:min-w-0">
-          <p className="text-sm text-gray-800 flex items-center gap-1 flex-wrap mb-1">
+          <p className="text-sm text-white/80 flex items-center gap-1 flex-wrap mb-1">
             <button type="button" onClick={() => onCompany(fu.companyId)}
-              className="font-bold hover:text-blue-600 transition">{fu.companyName}</button>
-            <span className="text-gray-400 font-normal">· {fu.role}</span>
+              className="font-bold text-white/85 hover:text-app-accent-soft transition">{fu.companyName}</button>
+            <span className="text-white/35 font-normal">· {fu.role}</span>
           </p>
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/45">
             <span>
-              <span className="font-medium text-gray-600">Scheduled</span>
+              <span className="font-medium text-white/60">Scheduled</span>
               {' '}{fmtDate(fu.followUpDate)}
             </span>
             <span>
-              <span className="font-medium text-gray-600">Completed</span>
+              <span className="font-medium text-white/60">Completed</span>
               {' '}{fmtDateTime(fu.updatedAt)}
             </span>
           </div>
 
           {fu.note && (
-            <p className="text-xs mt-1.5 text-gray-400 line-clamp-2 italic">"{fu.note}"</p>
+            <p className="text-xs mt-1.5 text-white/35 line-clamp-2 italic">"{fu.note}"</p>
           )}
         </div>
 
         <div className="flex gap-1.5 w-full sm:w-auto shrink-0 items-start">
           <button onClick={onUndo}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-500 bg-white hover:bg-gray-100 transition-all">
-            Undo
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.08] text-white/50 bg-white/[0.02] hover:bg-white/[0.08] transition-all">
+            <UndoRounded sx={{ fontSize: 14 }} /> Undo
           </button>
-          <button onClick={onDelete}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
-            Delete
-          </button>
+          <CardMenu items={[
+            { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 15 }} />, onClick: onDelete, tone: 'danger' },
+          ]} />
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function FollowUps() {
   const navigate = useNavigate()
   const [tab, setTab] = useState('active')
@@ -214,8 +243,13 @@ export default function FollowUps() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [companyDetailId, setCompanyDetailId] = useState(null)
-  const [success, setSuccess] = useState('')
+  const [success, setSuccess] = useTransientMessage()
   const [activeChip, setActiveChip] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [collapsedSections, setCollapsedSections] = useState({})
+  const [completedCount, setCompletedCount] = useState(0)
+
+  const toggleSection = (key) => setCollapsedSections((s) => ({ ...s, [key]: !s[key] }))
 
   const fetch = useCallback(async () => {
     setLoading(true)
@@ -224,6 +258,7 @@ export default function FollowUps() {
       const params = { status: tab === 'history' ? 'DONE' : 'PENDING' }
       const res = await getAllFollowUps(params)
       setFollowUps(res.data)
+      if (tab === 'history') setCompletedCount(res.data.length)
     } catch {
       setError('Failed to load follow-ups.')
     } finally {
@@ -236,15 +271,19 @@ export default function FollowUps() {
     fetch()
   }, [fetch])
 
-  const flash = (msg) => {
-    setSuccess(msg)
-    setTimeout(() => setSuccess(''), 3000)
-  }
+  useEffect(() => {
+    if (tab === 'active') {
+      getAllFollowUps({ status: 'DONE' }).then((res) => setCompletedCount(res.data.length)).catch(() => {})
+    }
+  }, [tab])
+
+  const flash = setSuccess
 
   const handleDone = async (fu) => {
     try {
       await updateFollowUp(fu.id, { status: 'DONE' })
       flash('Marked as completed.')
+      setCompletedCount((c) => c + 1)
       fetch()
     } catch { setError('Failed to update follow-up.') }
   }
@@ -253,16 +292,18 @@ export default function FollowUps() {
     try {
       await updateFollowUp(fu.id, { status: 'PENDING' })
       flash('Moved back to pending.')
+      setCompletedCount((c) => Math.max(0, c - 1))
       fetch()
     } catch { setError('Failed to update follow-up.') }
   }
 
-  const handleDelete = async (id) => {
-    try {
-      await deleteFollowUp(id)
-      flash('Follow-up deleted.')
-      fetch()
-    } catch { setError('Failed to delete follow-up.') }
+  const handleDeleteConfirmed = async () => {
+    const wasCompleted = deleteTarget.status === 'DONE'
+    await deleteFollowUp(deleteTarget.id)
+    setDeleteTarget(null)
+    flash('Follow-up deleted.')
+    if (wasCompleted) setCompletedCount((c) => Math.max(0, c - 1))
+    fetch()
   }
 
   const handleReschedule = async (fu, newDate) => {
@@ -276,7 +317,6 @@ export default function FollowUps() {
     }
   }
 
-  // ── Active tab data ───────────────────────────────────────────────────────
   const { overdue, dueToday, upcoming } = partitionPending(followUps)
 
   const chipMatch = (fu) => {
@@ -288,94 +328,102 @@ export default function FollowUps() {
   }
 
   const activeGroups = [
-    overdue.length > 0  && { key: 'overdue',  icon: '🔴', label: 'Overdue',   accent: 'text-red-500',   items: overdue  },
-    dueToday.length > 0 && { key: 'today',    icon: '🔔', label: 'Due Today', accent: 'text-amber-500', items: dueToday },
-    upcoming.length > 0 && { key: 'upcoming', icon: '📋', label: 'Upcoming',  accent: 'text-blue-500',  items: upcoming },
-  ].filter(Boolean)
+    { key: 'overdue',  Icon: EventBusyRounded,      label: 'Overdue',   accent: 'text-app-danger',      items: overdue,
+      emptyTitle: 'No overdue follow-ups',   emptyDescription: "Nothing slipped through the cracks." },
+    { key: 'today',    Icon: TodayRounded,          label: 'Due Today', accent: 'text-app-warning',     items: dueToday,
+      emptyTitle: 'No follow-ups due today', emptyDescription: "You're all caught up for today!" },
+    { key: 'upcoming', Icon: EventAvailableRounded, label: 'Upcoming',  accent: 'text-app-accent-soft', items: upcoming,
+      emptyTitle: 'Nothing upcoming',        emptyDescription: 'Scheduled follow-ups will show up here.' },
+  ]
 
   const filteredGroups = activeChip
-    ? activeGroups
-        .map((g) => ({ ...g, items: g.items.filter(chipMatch) }))
-        .filter((g) => g.items.length > 0)
+    ? activeGroups.filter((g) => g.key === activeChip).map((g) => ({ ...g, items: g.items.filter(chipMatch) }))
     : activeGroups
 
-  // ── History tab data ──────────────────────────────────────────────────────
   const monthGroups = groupByMonth(followUps)
 
   return (
-    <Layout>
-      <PageHeader
-        title="Follow-Ups"
-        subtitle="Stay on top of every job search action item"
-        icon="🔔"
-        gradient="from-amber-400 to-orange-500"
-        action={
-          <button onClick={() => navigate('/applications')}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm">
-            View Applications
-          </button>
-        }
-      />
-
-      {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
-      {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+    <Layout
+      headerAction={
+        <button onClick={() => navigate('/applications')}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-white/70 bg-white/[0.04] border border-white/[0.08] rounded-xl hover:bg-white/[0.08] hover:text-white transition">
+          <WorkOutlineRounded sx={{ fontSize: 16 }} />
+          View Applications
+          <ChevronRightRounded sx={{ fontSize: 16 }} />
+        </button>
+      }
+    >
+      <div className="overflow-x-hidden">
+      <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
+      <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
       <TabToggle active={tab} onChange={setTab} />
 
-      {/* ── ACTIVE TAB ───────────────────────────────────────────────────── */}
       {tab === 'active' && (
         <>
           {!loading && (
-            <div className="flex flex-wrap gap-2 mb-6">
-              <SummaryChip label="Overdue"   count={overdue.length}  color="red"   onClick={() => setActiveChip(activeChip === 'overdue'  ? null : 'overdue')}  active={activeChip === 'overdue'}  />
-              <SummaryChip label="Due Today" count={dueToday.length} color="amber" onClick={() => setActiveChip(activeChip === 'today'    ? null : 'today')}    active={activeChip === 'today'}    />
-              <SummaryChip label="Upcoming"  count={upcoming.length} color="blue"  onClick={() => setActiveChip(activeChip === 'upcoming' ? null : 'upcoming')} active={activeChip === 'upcoming'} />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              <StatTile Icon={EventBusyRounded}      tint="#F43F5E" value={overdue.length}  label="Overdue"
+                onClick={() => setActiveChip(activeChip === 'overdue'  ? null : 'overdue')}  active={activeChip === 'overdue'}  />
+              <StatTile Icon={TodayRounded}          tint="#F59E0B" value={dueToday.length} label="Due Today"
+                onClick={() => setActiveChip(activeChip === 'today'    ? null : 'today')}    active={activeChip === 'today'}    />
+              <StatTile Icon={EventAvailableRounded} tint="#5B5FEF" value={upcoming.length} label="Upcoming"
+                onClick={() => setActiveChip(activeChip === 'upcoming' ? null : 'upcoming')} active={activeChip === 'upcoming'} />
+              <StatTile Icon={CheckCircleRounded}     tint="#22C55E" value={completedCount}  label="Completed"
+                onClick={() => setTab('history')} active={false} />
             </div>
           )}
 
           {loading ? (
-            <div className="flex justify-center py-16"><CircularProgress /></div>
+            <PageSpinner />
           ) : followUps.length === 0 ? (
             <EmptyState
               icon="🎉"
               title="No pending follow-ups"
               description="All caught up! You have no pending reminders. Completed ones are in the History tab."
             />
-          ) : filteredGroups.length === 0 ? (
-            <EmptyState icon="✅" title="Nothing in this group" description="Try a different filter." />
           ) : (
             <div className="space-y-8">
-              {filteredGroups.map(({ key, icon, label, accent, items }) => (
-                <section key={key}>
-                  <SectionHeader icon={icon} label={label} count={items.length} accent={accent} />
-                  <div className="space-y-2">
-                    {items.map((fu) => (
-                      <FollowUpCard key={fu.id} fu={fu}
-                        onDone={() => handleDone(fu)}
-                        onDelete={() => handleDelete(fu.id)}
-                        onReschedule={(d) => handleReschedule(fu, d)}
-                        onCompany={setCompanyDetailId}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+              {filteredGroups.map(({ key, Icon, label, accent, items, emptyTitle, emptyDescription }) => {
+                const collapsed = !!collapsedSections[key]
+                return (
+                  <section key={key}>
+                    <SectionHeader Icon={Icon} label={label} count={items.length} accent={accent}
+                      collapsed={collapsed} onToggle={() => toggleSection(key)} />
+                    {!collapsed && (
+                      items.length === 0 ? (
+                        <SectionEmptyRow title={emptyTitle} description={emptyDescription} />
+                      ) : (
+                        <div className="space-y-2">
+                          {items.map((fu) => (
+                            <FollowUpCard key={fu.id} fu={fu}
+                              onDone={() => handleDone(fu)}
+                              onDelete={() => setDeleteTarget(fu)}
+                              onReschedule={(d) => handleReschedule(fu, d)}
+                              onCompany={setCompanyDetailId}
+                            />
+                          ))}
+                        </div>
+                      )
+                    )}
+                  </section>
+                )
+              })}
             </div>
           )}
         </>
       )}
 
-      {/* ── HISTORY TAB ──────────────────────────────────────────────────── */}
       {tab === 'history' && (
         <>
           {!loading && followUps.length > 0 && (
-            <p className="text-xs text-gray-400 font-medium mb-6">
+            <p className="text-xs text-white/35 font-medium mb-6">
               {followUps.length} completed {followUps.length === 1 ? 'follow-up' : 'follow-ups'}
             </p>
           )}
 
           {loading ? (
-            <div className="flex justify-center py-16"><CircularProgress /></div>
+            <PageSpinner />
           ) : followUps.length === 0 ? (
             <EmptyState
               icon="📋"
@@ -383,33 +431,47 @@ export default function FollowUps() {
               description="Follow-ups you mark as done will appear here with their completion details."
               action={
                 <button onClick={() => setTab('active')}
-                  className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+                  className="px-6 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition shadow-glow shadow-app-accent/40">
                   View Active Follow-Ups
                 </button>
               }
             />
           ) : (
             <div className="space-y-8">
-              {monthGroups.map(([key, items]) => (
-                <section key={key}>
-                  <SectionHeader icon="📅" label={monthLabel(key)} count={items.length} accent="text-gray-500" />
-                  <div className="space-y-2">
-                    {items.map((fu) => (
-                      <HistoryCard key={fu.id} fu={fu}
-                        onUndo={() => handleUndo(fu)}
-                        onDelete={() => handleDelete(fu.id)}
-                        onCompany={setCompanyDetailId}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+              {monthGroups.map(([key, items]) => {
+                const collapsed = !!collapsedSections[key]
+                return (
+                  <section key={key}>
+                    <SectionHeader Icon={CalendarMonthRounded} label={monthLabel(key)} count={items.length} accent="text-white/45"
+                      collapsed={collapsed} onToggle={() => toggleSection(key)} />
+                    {!collapsed && (
+                      <div className="space-y-2">
+                        {items.map((fu) => (
+                          <HistoryCard key={fu.id} fu={fu}
+                            onUndo={() => handleUndo(fu)}
+                            onDelete={() => setDeleteTarget(fu)}
+                            onCompany={setCompanyDetailId}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )
+              })}
             </div>
           )}
         </>
       )}
+      </div>
       <CompanyDetailModal open={companyDetailId !== null} companyId={companyDetailId}
         onClose={() => setCompanyDetailId(null)} />
+      <ConfirmDeleteModal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirmed}
+        title="Delete Follow-Up"
+        message={deleteTarget && <>Remove the follow-up for <strong>{deleteTarget.companyName}</strong>? This can't be undone.</>}
+      />
     </Layout>
   )
 }
