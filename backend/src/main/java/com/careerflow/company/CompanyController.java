@@ -1,5 +1,7 @@
 package com.careerflow.company;
 
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.StatusCountsResponse;
 import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
 import com.careerflow.company.dto.CompanyUpdateRequest;
@@ -8,8 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/companies")
@@ -24,13 +24,20 @@ public class CompanyController {
     }
 
     @GetMapping
-    public ResponseEntity<List<CompanyResponse>> getMyCompanies(
+    public ResponseEntity<PageResponse<CompanyResponse>> getMyCompanies(
             @RequestParam(required = false) Long id,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) CompanyStatus status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String order) {
-        return ResponseEntity.ok(companyService.getMyCompanies(id, search, status, sortBy, order));
+            @RequestParam(defaultValue = "desc") String order,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(companyService.getMyCompanies(id, search, status, sortBy, order, page, size));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<StatusCountsResponse> getMyCompanyStats() {
+        return ResponseEntity.ok(companyService.getMyCompanyStats());
     }
 
     @PatchMapping("/{id}")

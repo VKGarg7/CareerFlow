@@ -8,10 +8,11 @@ import {
   VisibilityOutlined, EditOutlined, DeleteOutlineRounded,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
+import Pagination from '../components/Pagination'
 import ViewToggle from '../components/ViewToggle'
 import StatTilesBar from '../components/StatTilesBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
-import { getReferrals, getReferral, addReferral, updateReferral, deleteReferral, manageNote } from '../api/referral'
+import { getReferrals, getReferral, addReferral, updateReferral, deleteReferral, manageNote, getReferralStats } from '../api/referral'
 import EmptyState from '../components/EmptyState'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
 import InlineStatusChanger from '../components/InlineStatusChanger'
@@ -19,6 +20,8 @@ import { initials, fmt, fmtDate } from '../utils/followup'
 import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
+import usePagedList from '../hooks/usePagedList'
+import useFetchOnce from '../hooks/useFetchOnce'
 import { DrawerShell, DrawerHeader, CloseIconButton } from '../components/DrawerShell'
 import { fieldInputCls, FieldErrorText, FieldLabel, FormFooterButtons } from '../components/formKit'
 import EntityListRow from '../components/EntityListRow'
@@ -699,9 +702,6 @@ function AddEditDrawer({ open, referral, onClose, onSaved }) {
 }
 
 export default function Referrals() {
-  const [referrals, setReferrals] = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState('')
   const [success, setSuccess]     = useTransientMessage()
 
   const [search, setSearch]           = useState('')
@@ -718,23 +718,18 @@ export default function Referrals() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [viewTarget, setViewTarget]   = useState(null)
 
-  const fetchReferrals = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await getReferrals({
-        search: search.trim() || undefined,
-        status: statusFilter || undefined,
-        sortBy, order,
-      })
-      setReferrals(res.data)
-    } catch {
-      setError('Failed to load referral requests.')
-    } finally {
-      setLoading(false)
-    }
-  }, [search, statusFilter, sortBy, order])
+  const {
+    items: referrals, setItems: setReferrals, loading, error, setError,
+    setPage, refetch: fetchReferrals,
+  } = usePagedList(
+    useCallback(
+      (page) => getReferrals({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page }),
+      [search, statusFilter, sortBy, order]
+    ),
+    'Failed to load referral requests.'
+  )
 
-  useEffect(() => { fetchReferrals() }, [fetchReferrals])
+  const { data: stats, refetch: fetchStats } = useFetchOnce(getReferralStats)
 
   useSearchShortcut(searchInputRef)
 
@@ -748,10 +743,12 @@ export default function Referrals() {
     setModalOpen(false)
     setSuccess(editTarget ? 'Referral request updated.' : 'Referral request added.')
     fetchReferrals()
+    fetchStats()
   }
 
   const handleStatusChanged = (updated) => {
     setReferrals(prev => prev.map(r => r.id === updated.id ? updated : r))
+    fetchStats()
   }
 
   const handleDeleted = () => {
@@ -759,6 +756,7 @@ export default function Referrals() {
     setViewTarget(null)
     setSuccess('Referral request removed.')
     fetchReferrals()
+    fetchStats()
   }
 
   const isFiltered = search.trim() || statusFilter
@@ -785,10 +783,11 @@ export default function Referrals() {
       <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
       <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
-      {!loading && referrals.length > 0 && (
+      {!loading && stats && stats.total > 0 && (
         <div className="mb-8">
           <StatTilesBar
-            items={referrals}
+            counts={stats.byStatus}
+            total={stats.total}
             statusConfig={STATUS_CONFIG}
             activeFilter={statusFilter}
             onFilter={setStatusFilter}
@@ -898,6 +897,8 @@ export default function Referrals() {
               <ReferralListRow key={r.id} referral={r} {...cardProps} />
             ))}
           </div>
+          <Pagination page={referrals.page} totalPages={referrals.totalPages}
+            totalElements={referrals.totalElements} size={referrals.size} onPageChange={setPage} />
         </div>
       ) : (
         <div>
@@ -909,6 +910,8 @@ export default function Referrals() {
               <DirectoryCard key={r.id} referral={r} {...cardProps} />
             ))}
           </div>
+          <Pagination page={referrals.page} totalPages={referrals.totalPages}
+            totalElements={referrals.totalElements} size={referrals.size} onPageChange={setPage} />
         </div>
       )}
       </div>

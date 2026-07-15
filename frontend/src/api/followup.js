@@ -1,4 +1,4 @@
-import api from './apiClient'
+import api, { unwrapPage } from './apiClient'
 
 export const getFollowUpsForApplication = (applicationId) =>
   api.get(`/applications/${applicationId}/follow-ups`)
@@ -6,7 +6,7 @@ export const getFollowUpsForApplication = (applicationId) =>
 export const createFollowUp = (applicationId, data) =>
   api.post(`/applications/${applicationId}/follow-ups`, data)
 
-export const getAllFollowUps = (params) => api.get('/follow-ups', { params })
+export const getAllFollowUps = (params) => api.get('/follow-ups', { params }).then(unwrapPage)
 
 export const updateFollowUp = (id, data) => api.patch(`/follow-ups/${id}`, data)
 

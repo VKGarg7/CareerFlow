@@ -122,7 +122,7 @@ export default function AdminDashboard() {
 
   const load = () => {
     setLoading(true)
-    Promise.allSettled([getPlatformStats(), getAllUsers(), getAuditLogs(), getSystemHealth()]).then(([s, u, l, h]) => {
+    Promise.allSettled([getPlatformStats(), getAllUsers({ size: 1000 }), getAuditLogs({ size: 1000 }), getSystemHealth()]).then(([s, u, l, h]) => {
       if (s.status === 'fulfilled') setStats(s.value.data)
       if (u.status === 'fulfilled') setUsers(u.value.data || [])
       if (l.status === 'fulfilled') setLogs(l.value.data || [])
@@ -143,7 +143,7 @@ export default function AdminDashboard() {
 
   const filterLogs = (action) => {
     setLogAction(action)
-    getAuditLogs(action ? { action } : undefined)
+    getAuditLogs(action ? { action, size: 1000 } : { size: 1000 })
       .then((res) => setLogs(res.data || []))
       .catch(() => setError('Failed to load audit logs.'))
   }
@@ -177,7 +177,7 @@ export default function AdminDashboard() {
 
   const searchUsers = (value) => {
     setUserSearch(value)
-    getAllUsers(value ? { search: value } : undefined)
+    getAllUsers(value ? { search: value, size: 1000 } : { size: 1000 })
       .then((res) => setUsers(res.data || []))
       .catch(() => setError('Failed to search users.'))
   }

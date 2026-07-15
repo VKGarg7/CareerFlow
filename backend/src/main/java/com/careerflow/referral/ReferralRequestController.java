@@ -1,5 +1,7 @@
 package com.careerflow.referral;
 
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.StatusCountsResponse;
 import com.careerflow.referral.dto.ReferralNoteActionRequest;
 import com.careerflow.referral.dto.ReferralRequestDto;
 import com.careerflow.referral.dto.ReferralResponse;
@@ -26,12 +28,19 @@ public class ReferralRequestController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ReferralResponse>> getMyReferrals(
+    public ResponseEntity<PageResponse<ReferralResponse>> getMyReferrals(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String order) {
-        return ResponseEntity.ok(referralService.getMyReferrals(search, status, sortBy, order));
+            @RequestParam(defaultValue = "desc") String order,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(referralService.getMyReferrals(search, status, sortBy, order, page, size));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<StatusCountsResponse> getMyReferralStats() {
+        return ResponseEntity.ok(referralService.getMyReferralStats());
     }
 
     @GetMapping("/{id}")

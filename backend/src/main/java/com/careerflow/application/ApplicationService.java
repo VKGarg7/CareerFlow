@@ -5,8 +5,10 @@ import com.careerflow.application.dto.ApplicationResponse;
 import com.careerflow.application.dto.ApplicationUpdateRequest;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
-import com.careerflow.common.SortHelper;
+import com.careerflow.common.StatusCountsResponse;
 import com.careerflow.company.Company;
 import com.careerflow.company.CompanyRepository;
 import com.careerflow.config.FileStorageService;
@@ -20,7 +22,8 @@ import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -76,25 +79,31 @@ public class ApplicationService {
         return toResponse(application);
     }
 
-    public List<ApplicationResponse> getMyApplications(
-            Long companyId, ApplicationStatus status, String sortBy, String order) {
+    public PageResponse<ApplicationResponse> getMyApplications(
+            Long companyId, ApplicationStatus status, String sortBy, String order, int page, int size) {
         User user = securityUtils.getCurrentUser();
-        Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
+        Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
 
-        List<JobApplication> results;
+        Page<JobApplication> results;
         if (companyId != null && status != null) {
-            results = applicationRepository.findAllByUserIdAndCompanyIdAndStatus(user.getId(), companyId, status, sort);
+            results = applicationRepository.findAllByUserIdAndCompanyIdAndStatus(user.getId(), companyId, status, pageable);
         } else if (companyId != null) {
-            results = applicationRepository.findAllByUserIdAndCompanyId(user.getId(), companyId, sort);
+            results = applicationRepository.findAllByUserIdAndCompanyId(user.getId(), companyId, pageable);
         } else if (status != null) {
-            results = applicationRepository.findAllByUserIdAndStatus(user.getId(), status, sort);
+            results = applicationRepository.findAllByUserIdAndStatus(user.getId(), status, pageable);
         } else {
-            results = applicationRepository.findAllByUserId(user.getId(), sort);
+            results = applicationRepository.findAllByUserId(user.getId(), pageable);
         }
 
-        Map<Long, LocalDate> nearestFollowUps = buildNearestFollowUpMap(results);
-        Map<Long, LocalDate> upcomingFollowUps = buildUpcomingFollowUpMap(results);
-        return results.stream().map(a -> toResponse(a, nearestFollowUps.get(a.getId()), upcomingFollowUps.get(a.getId()))).toList();
+        List<JobApplication> content = results.getContent();
+        Map<Long, LocalDate> nearestFollowUps = buildNearestFollowUpMap(content);
+        Map<Long, LocalDate> upcomingFollowUps = buildUpcomingFollowUpMap(content);
+        return PageResponse.of(results.map(a -> toResponse(a, nearestFollowUps.get(a.getId()), upcomingFollowUps.get(a.getId()))));
+    }
+
+    public StatusCountsResponse getMyApplicationStats() {
+        User user = securityUtils.getCurrentUser();
+        return StatusCountsResponse.fromGroupedCounts(applicationRepository.countByStatusGroupedForUser(user.getId()));
     }
 
     public ApplicationResponse updateApplication(Long id, ApplicationUpdateRequest request) {

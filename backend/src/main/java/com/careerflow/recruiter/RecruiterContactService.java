@@ -1,13 +1,17 @@
 package com.careerflow.recruiter;
 
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
-import com.careerflow.common.SortHelper;
+import com.careerflow.common.StatusCountsResponse;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.recruiter.dto.*;
 import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
@@ -29,7 +33,6 @@ public class RecruiterContactService {
     private final RecruiterNoteRepository noteRepository;
     private final SecurityUtils securityUtils;
 
-    // ── Recruiter CRUD ────────────────────────────────────────────────────────
 
     public RecruiterContactResponse addRecruiter(RecruiterContactRequest request) {
         User user = securityUtils.getCurrentUser();
@@ -57,18 +60,19 @@ public class RecruiterContactService {
         return toSummaryResponse(recruiterRepository.save(recruiter), 0);
     }
 
-    public List<RecruiterContactResponse> getMyRecruiters(
-            Long id, String search, String status, String sortBy, String order) {
+    public PageResponse<RecruiterContactResponse> getMyRecruiters(
+            Long id, String search, String status, String sortBy, String order, int page, int size) {
 
         User user = securityUtils.getCurrentUser();
 
         if (id != null) {
             RecruiterContact r = findOwned(id, user.getId());
             List<RecruiterNoteResponse> notes = fetchNotes(id, user.getId());
-            return List.of(toDetailResponse(r, notes));
+            RecruiterContactResponse single = toDetailResponse(r, notes);
+            return PageResponse.single(single);
         }
 
-        Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
+        Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
         boolean hasSearch = search != null && !search.isBlank();
         RecruiterStatus statusFilter = null;
 
@@ -80,15 +84,15 @@ public class RecruiterContactService {
             }
         }
 
-        List<RecruiterContact> results;
+        Page<RecruiterContact> results;
         if (hasSearch && statusFilter != null) {
-            results = recruiterRepository.searchByUserIdAndStatus(user.getId(), statusFilter, search.trim(), sort);
+            results = recruiterRepository.searchByUserIdAndStatus(user.getId(), statusFilter, search.trim(), pageable);
         } else if (hasSearch) {
-            results = recruiterRepository.searchByUserId(user.getId(), search.trim(), sort);
+            results = recruiterRepository.searchByUserId(user.getId(), search.trim(), pageable);
         } else if (statusFilter != null) {
-            results = recruiterRepository.findAllByUserIdAndStatus(user.getId(), statusFilter, sort);
+            results = recruiterRepository.findAllByUserIdAndStatus(user.getId(), statusFilter, pageable);
         } else {
-            results = recruiterRepository.findAllByUserId(user.getId(), sort);
+            results = recruiterRepository.findAllByUserId(user.getId(), pageable);
         }
 
         Map<Long, Integer> noteCounts = noteRepository.countGroupedByRecruiterForUser(user.getId())
@@ -98,9 +102,12 @@ public class RecruiterContactService {
                         row -> ((Long) row[1]).intValue()
                 ));
 
-        return results.stream()
-                .map(r -> toSummaryResponse(r, noteCounts.getOrDefault(r.getId(), 0)))
-                .toList();
+        return PageResponse.of(results.map(r -> toSummaryResponse(r, noteCounts.getOrDefault(r.getId(), 0))));
+    }
+
+    public StatusCountsResponse getMyRecruiterStats() {
+        User user = securityUtils.getCurrentUser();
+        return StatusCountsResponse.fromGroupedCounts(recruiterRepository.countByStatusGroupedForUser(user.getId()));
     }
 
     public RecruiterContactResponse updateRecruiter(Long id, RecruiterContactUpdateRequest request) {

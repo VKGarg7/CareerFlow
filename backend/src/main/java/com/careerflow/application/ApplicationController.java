@@ -3,6 +3,8 @@ package com.careerflow.application;
 import com.careerflow.application.dto.ApplicationRequest;
 import com.careerflow.application.dto.ApplicationResponse;
 import com.careerflow.application.dto.ApplicationUpdateRequest;
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.StatusCountsResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -11,8 +13,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/applications")
@@ -27,12 +27,19 @@ public class ApplicationController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ApplicationResponse>> getMyApplications(
+    public ResponseEntity<PageResponse<ApplicationResponse>> getMyApplications(
             @RequestParam(required = false) Long companyId,
             @RequestParam(required = false) ApplicationStatus status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String order) {
-        return ResponseEntity.ok(applicationService.getMyApplications(companyId, status, sortBy, order));
+            @RequestParam(defaultValue = "desc") String order,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(applicationService.getMyApplications(companyId, status, sortBy, order, page, size));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<StatusCountsResponse> getMyApplicationStats() {
+        return ResponseEntity.ok(applicationService.getMyApplicationStats());
     }
 
     @PatchMapping("/{id}")

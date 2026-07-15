@@ -1,5 +1,7 @@
 package com.careerflow.followup;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,13 +15,13 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, Long> {
             "WHERE f.user.id = :userId AND f.application.id = :applicationId ORDER BY f.followUpDate ASC")
     List<FollowUp> findAllByUserIdAndApplicationIdOrderByFollowUpDateAsc(@Param("userId") Long userId, @Param("applicationId") Long applicationId);
 
-    @Query("SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company " +
-            "WHERE f.user.id = :userId ORDER BY f.followUpDate ASC")
-    List<FollowUp> findAllByUserIdOrderByFollowUpDateAsc(@Param("userId") Long userId);
+    @Query(value = "SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company WHERE f.user.id = :userId",
+            countQuery = "SELECT COUNT(f) FROM FollowUp f WHERE f.user.id = :userId")
+    Page<FollowUp> findAllByUserIdOrderByFollowUpDateAsc(@Param("userId") Long userId, Pageable pageable);
 
-    @Query("SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company " +
-            "WHERE f.user.id = :userId AND f.status = :status ORDER BY f.followUpDate ASC")
-    List<FollowUp> findAllByUserIdAndStatusOrderByFollowUpDateAsc(@Param("userId") Long userId, @Param("status") FollowUpStatus status);
+    @Query(value = "SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company WHERE f.user.id = :userId AND f.status = :status",
+            countQuery = "SELECT COUNT(f) FROM FollowUp f WHERE f.user.id = :userId AND f.status = :status")
+    Page<FollowUp> findAllByUserIdAndStatusOrderByFollowUpDateAsc(@Param("userId") Long userId, @Param("status") FollowUpStatus status, Pageable pageable);
 
     Optional<FollowUp> findByIdAndUserId(Long id, Long userId);
     long countByApplicationIdAndStatus(Long applicationId, FollowUpStatus status);
