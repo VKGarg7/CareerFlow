@@ -7,13 +7,12 @@ import com.careerflow.admin.dto.UserRoleUpdateRequest;
 import com.careerflow.admin.dto.UserStatusUpdateRequest;
 import com.careerflow.audit.AuditLogService;
 import com.careerflow.audit.dto.AuditLogResponse;
+import com.careerflow.common.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -31,11 +30,13 @@ public class AdminController {
     }
 
     @GetMapping("/users")
-    public ResponseEntity<List<AdminUserResponse>> getAllUsers(
+    public ResponseEntity<PageResponse<AdminUserResponse>> getAllUsers(
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String order) {
-        return ResponseEntity.ok(adminService.getAllUsers(search, sortBy, order));
+            @RequestParam(defaultValue = "desc") String order,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(adminService.getAllUsers(search, sortBy, order, page, size));
     }
 
     @PatchMapping("/users/{id}/status")
@@ -53,9 +54,11 @@ public class AdminController {
     }
 
     @GetMapping("/audit-logs")
-    public ResponseEntity<List<AuditLogResponse>> getAuditLogs(
-            @RequestParam(required = false) String action) {
-        return ResponseEntity.ok(auditLogService.getPlatformActivity(action));
+    public ResponseEntity<PageResponse<AuditLogResponse>> getAuditLogs(
+            @RequestParam(required = false) String action,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(auditLogService.getPlatformActivity(action, page, size));
     }
 
     @GetMapping("/health")

@@ -10,10 +10,11 @@ import {
   PlaceRounded, LanguageRounded,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
+import Pagination from '../components/Pagination'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
-import { getApplications, addApplication, updateApplication, deleteApplication, uploadApplicationDocuments, downloadApplicationDocument, viewApplicationDocument } from '../api/application'
+import { getApplications, addApplication, updateApplication, deleteApplication, uploadApplicationDocuments, downloadApplicationDocument, viewApplicationDocument, getApplicationStats } from '../api/application'
 import { getCompanies } from '../api/company'
 import { getProfile } from '../api/user'
 import { getFollowUpsForApplication, createFollowUp, updateFollowUp, deleteFollowUp } from '../api/followup'
@@ -33,6 +34,8 @@ import FilterSelect from '../components/FilterSelect'
 import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
+import usePagedList from '../hooks/usePagedList'
+import useFetchOnce from '../hooks/useFetchOnce'
 import ApplicationSourcesCard from '../components/ApplicationSourcesCard'
 import AnalyticsCard from '../components/AnalyticsCard'
 import { DrawerShell, CloseIconButton } from '../components/DrawerShell'
@@ -1389,11 +1392,7 @@ function DeleteModal({ open, app, onClose, onDeleted }) {
 }
 
 export default function Applications() {
-  const [applications, setApplications] = useState([])
-  const [allApplications, setAllApplications] = useState([])
   const [companies, setCompanies] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [success, setSuccess] = useTransientMessage()
 
   const [filterStatus, setFilterStatus] = useState('')
@@ -1418,38 +1417,31 @@ export default function Applications() {
   const [companyDetailId, setCompanyDetailId] = useState(null)
 
   useEffect(() => {
-    getCompanies({}).then((res) => setCompanies(res.data)).catch(() => {})
+    getCompanies({ size: 1000 }).then((res) => setCompanies(res.data)).catch(() => {})
   }, [])
 
   const activeSortOption = SORT_OPTIONS.find((o) => o.value === sortBy)
 
-  const fetchApplications = useCallback(async () => {
-    setLoading(true)
-    try {
+  const {
+    items: applications, setItems: setApplications, loading, error, setError,
+    setPage, refetch: fetchApplications,
+  } = usePagedList(
+    useCallback((page) => {
       const isClientSort = activeSortOption?.clientSide
-      const res = await getApplications({
+      return getApplications({
         status: filterStatus || undefined,
         sortBy: isClientSort ? 'createdAt' : sortBy,
         order: isClientSort ? 'desc' : order,
+        page,
       })
-      setApplications(res.data)
-    } catch {
-      setError('Failed to load applications.')
-    } finally {
-      setLoading(false)
-    }
-  }, [filterStatus, sortBy, order, activeSortOption])
+    }, [filterStatus, sortBy, order, activeSortOption]),
+    'Failed to load applications.'
+  )
 
-  const fetchAllApplications = useCallback(async () => {
-    try {
-      const res = await getApplications({})
-      setAllApplications(res.data)
-    } catch {
-    }
-  }, [])
-
-  useEffect(() => { fetchApplications() }, [fetchApplications])
-  useEffect(() => { fetchAllApplications() }, [fetchAllApplications])
+  const { data: allApplications, setData: setAllApplications, refetch: fetchAllApplications } = useFetchOnce(
+    useCallback(() => getApplications({ size: 1000 }), []), []
+  )
+  const { data: stats, refetch: fetchStats } = useFetchOnce(getApplicationStats)
 
   useSearchShortcut(searchInputRef)
 
@@ -1465,6 +1457,7 @@ export default function Applications() {
     setSuccess(editTarget ? 'Application updated.' : 'Application added.')
     fetchApplications()
     fetchAllApplications()
+    fetchStats()
   }
 
   const handleDeleted = () => {
@@ -1472,6 +1465,7 @@ export default function Applications() {
     setSuccess('Application removed.')
     fetchApplications()
     fetchAllApplications()
+    fetchStats()
   }
 
   const effectiveDateRange = (() => {
@@ -1567,9 +1561,10 @@ export default function Applications() {
   const activeTrend = pctChange(activeCreatedThisMonth, activeCreatedLastMonth)
 
   const totalTrend = thisMonthTrend
-  const offerCount = allApplications.filter((a) => a.status === 'OFFER_RECEIVED').length
-  const conversionRate = allApplications.length > 0
-    ? ((offerCount / allApplications.length) * 100).toFixed(1)
+  const totalApplications = stats?.total ?? allApplications.length
+  const offerCount = stats?.byStatus?.OFFER_RECEIVED ?? allApplications.filter((a) => a.status === 'OFFER_RECEIVED').length
+  const conversionRate = totalApplications > 0
+    ? ((offerCount / totalApplications) * 100).toFixed(1)
     : null
   const interviewsScheduled = allApplications.filter((a) => a.status === 'INTERVIEW_SCHEDULED').length
   const interviewsCleared   = allApplications.filter((a) => a.status === 'INTERVIEW_CLEARED').length
@@ -1644,6 +1639,7 @@ export default function Applications() {
     setApplications(prev => prev.map(a => a.id === updated.id ? updated : a))
     setAllApplications(prev => prev.map(a => a.id === updated.id ? updated : a))
     setViewTarget(prev => prev?.id === updated.id ? updated : prev)
+    fetchStats()
   }
 
   const cardProps = { onView: openView, onEdit: openEdit, onDelete: setDeleteTarget, onFollowUp: openFollowUp, onCompany: setCompanyDetailId, onStatusChanged: handleStatusChanged }
@@ -1665,14 +1661,14 @@ export default function Applications() {
       {!loading && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
           <AnalyticsTile icon={<WorkOutlineRounded sx={{ fontSize: 18 }} />} tint="#8184F5"
-            value={allApplications.length} label="Total Applications" trend={totalTrend} />
+            value={totalApplications} label="Total Applications" trend={totalTrend} />
           <AnalyticsTile icon={<SendRounded sx={{ fontSize: 18 }} />} tint="#8184F5"
             value={thisMonth} label="Applied This Month" trend={thisMonthTrend} />
           <AnalyticsTile icon={<BoltRounded sx={{ fontSize: 18 }} />} tint="#F59E0B"
             value={activeCount} label="Active Applications" trend={activeTrend} />
           <AnalyticsTile icon={<TrackChangesRounded sx={{ fontSize: 18 }} />} tint="#22C55E"
             value={conversionRate !== null ? `${conversionRate}%` : '—'} label="Offer Rate"
-            subtext={conversionRate !== null ? `${offerCount} of ${allApplications.length}` : null} valueClassName="text-app-success" />
+            subtext={conversionRate !== null ? `${offerCount} of ${totalApplications}` : null} valueClassName="text-app-success" />
           <AnalyticsTile icon={<PsychologyRounded sx={{ fontSize: 18 }} />} tint="#EC4899"
             value={interviewSuccessRate !== null ? `${interviewSuccessRate}%` : '—'} label="Interview Rate"
             subtext={totalInterviews > 0 ? `${interviewsCleared} of ${totalInterviews}` : null} valueClassName="text-app-accent-soft" />
@@ -1794,9 +1790,11 @@ export default function Applications() {
         )}
       </div>
 
-      {!loading && allApplications.length > 0 && (
+      {!loading && stats && stats.total > 0 && (
         <StatusSummaryBar
           items={allApplications}
+          counts={stats.byStatus}
+          total={stats.total}
           statusConfig={STATUS_CONFIG}
           activeFilter={filterStatus}
           onFilter={setFilterStatus}
@@ -1911,6 +1909,8 @@ export default function Applications() {
               <ApplicationTableRow key={a.id} app={a} company={companyById[a.companyId]} {...cardProps} />
             ))}
           </div>
+          <Pagination page={applications.page} totalPages={applications.totalPages}
+            totalElements={applications.totalElements} size={applications.size} onPageChange={setPage} />
         </div>
       ) : (
         <div>
@@ -1925,6 +1925,8 @@ export default function Applications() {
               <ApplicationDirectoryCard key={a.id} app={a} company={companyById[a.companyId]} {...cardProps} />
             ))}
           </div>
+          <Pagination page={applications.page} totalPages={applications.totalPages}
+            totalElements={applications.totalElements} size={applications.size} onPageChange={setPage} />
         </div>
       )}
       </div>

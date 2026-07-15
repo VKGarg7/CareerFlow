@@ -1,6 +1,7 @@
-import api from './apiClient'
+import api, { unwrapPage } from './apiClient'
 
-export const getApplications = (params) => api.get('/applications', { params })
+export const getApplications = (params) => api.get('/applications', { params }).then(unwrapPage)
+export const getApplicationStats = () => api.get('/applications/stats')
 export const addApplication = (data) => api.post('/applications', data)
 export const updateApplication = (id, data) => api.patch(`/applications/${id}`, data)
 export const deleteApplication = (id, documentId) =>

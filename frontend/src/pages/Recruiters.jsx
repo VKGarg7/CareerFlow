@@ -10,10 +10,11 @@ import {
   AttachFileRounded, InsertEmoticonOutlined, CalendarTodayOutlined,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
+import Pagination from '../components/Pagination'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
-import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecruiter } from '../api/recruiter'
+import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecruiter, getRecruiterStats } from '../api/recruiter'
 import EmptyState from '../components/EmptyState'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
@@ -21,6 +22,8 @@ import { initials, fmt, fmtDate } from '../utils/followup'
 import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
+import usePagedList from '../hooks/usePagedList'
+import useFetchOnce from '../hooks/useFetchOnce'
 import { DrawerShell, DrawerHeader, CloseIconButton } from '../components/DrawerShell'
 import { fieldInputCls, FieldErrorText, FieldLabel, FormFooterButtons } from '../components/formKit'
 import EntityListRow from '../components/EntityListRow'
@@ -735,10 +738,6 @@ function DeleteModal({ open, recruiter, onClose, onDeleted }) {
 }
 
 export default function Recruiters() {
-  const [recruiters, setRecruiters] = useState([])
-  const [allRecruiters, setAllRecruiters] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [success, setSuccess] = useTransientMessage()
 
   const [search, setSearch] = useState('')
@@ -756,30 +755,21 @@ export default function Recruiters() {
   const [viewTarget, setViewTarget] = useState(null)
   const [viewFocusNotes, setViewFocusNotes] = useState(false)
 
-  const fetchRecruiters = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await getRecruiters({
-        search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order,
-      })
-      setRecruiters(res.data)
-    } catch {
-      setError('Failed to load recruiter contacts.')
-    } finally {
-      setLoading(false)
-    }
-  }, [search, statusFilter, sortBy, order])
+  const {
+    items: recruiters, setItems: setRecruiters, loading, error, setError,
+    setPage, refetch: fetchRecruiters,
+  } = usePagedList(
+    useCallback(
+      (page) => getRecruiters({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page }),
+      [search, statusFilter, sortBy, order]
+    ),
+    'Failed to load recruiter contacts.'
+  )
 
-  const fetchAllRecruiters = useCallback(async () => {
-    try {
-      const res = await getRecruiters({ sortBy, order })
-      setAllRecruiters(res.data)
-    } catch {
-    }
-  }, [sortBy, order])
-
-  useEffect(() => { fetchRecruiters() }, [fetchRecruiters])
-  useEffect(() => { fetchAllRecruiters() }, [fetchAllRecruiters])
+  const { data: allRecruiters, setData: setAllRecruiters, refetch: fetchAllRecruiters } = useFetchOnce(
+    useCallback(() => getRecruiters({ sortBy, order, size: 1000 }), [sortBy, order]), []
+  )
+  const { data: stats, refetch: fetchStats } = useFetchOnce(getRecruiterStats)
 
   useSearchShortcut(searchInputRef)
 
@@ -805,6 +795,7 @@ export default function Recruiters() {
     setSuccess(editTarget ? 'Recruiter contact updated.' : 'Recruiter contact added.')
     fetchRecruiters()
     fetchAllRecruiters()
+    fetchStats()
   }
 
   const handleDeleted = () => {
@@ -812,6 +803,7 @@ export default function Recruiters() {
     setSuccess('Recruiter contact removed.')
     fetchRecruiters()
     fetchAllRecruiters()
+    fetchStats()
   }
 
   const handleNotesChanged = (recruiterId, newCount) => {
@@ -822,6 +814,7 @@ export default function Recruiters() {
   const handleStatusChanged = (updated) => {
     setRecruiters(prev => prev.map(r => r.id === updated.id ? updated : r))
     setAllRecruiters(prev => prev.map(r => r.id === updated.id ? updated : r))
+    fetchStats()
   }
 
   const activeFilterCount = [statusFilter, sourceFilter].filter(Boolean).length
@@ -857,10 +850,12 @@ export default function Recruiters() {
       <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
       <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
-      {!loading && allRecruiters.length > 0 && (
+      {!loading && stats && stats.total > 0 && (
         <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card px-5 py-4 mb-6 [&>div]:mb-0">
           <StatusSummaryBar
             items={allRecruiters}
+            counts={stats.byStatus}
+            total={stats.total}
             statusConfig={STATUS_CONFIG}
             activeFilter={statusFilter}
             onFilter={setStatusFilter}
@@ -980,6 +975,8 @@ export default function Recruiters() {
               <RecruiterListRow key={r.id} recruiter={r} {...cardProps} />
             ))}
           </div>
+          <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
+            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} />
         </div>
       ) : (
         <div>
@@ -991,6 +988,8 @@ export default function Recruiters() {
               <DirectoryCard key={r.id} recruiter={r} {...cardProps} />
             ))}
           </div>
+          <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
+            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} />
         </div>
       )}
       </div>

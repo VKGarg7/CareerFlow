@@ -1,6 +1,7 @@
-import api from './apiClient'
+import api, { unwrapPage } from './apiClient'
 
-export const getReferrals  = (params)       => api.get('/referrals', { params })
+export const getReferrals  = (params)       => api.get('/referrals', { params }).then(unwrapPage)
+export const getReferralStats = ()          => api.get('/referrals/stats')
 export const getReferral   = (id)           => api.get(`/referrals/${id}`)
 export const addReferral   = (data)         => api.post('/referrals', data)
 export const updateReferral = (id, data)    => api.patch(`/referrals/${id}`, data)

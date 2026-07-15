@@ -1,5 +1,6 @@
 package com.careerflow.followup;
 
+import com.careerflow.common.PageResponse;
 import com.careerflow.followup.dto.FollowUpRequest;
 import com.careerflow.followup.dto.FollowUpResponse;
 import com.careerflow.followup.dto.FollowUpUpdateRequest;
@@ -31,9 +32,11 @@ public class FollowUpController {
     }
 
     @GetMapping("/api/follow-ups")
-    public ResponseEntity<List<FollowUpResponse>> getAll(
-            @RequestParam(required = false) FollowUpStatus status) {
-        return ResponseEntity.ok(followUpService.getAllFollowUps(status));
+    public ResponseEntity<PageResponse<FollowUpResponse>> getAll(
+            @RequestParam(required = false) FollowUpStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(followUpService.getAllFollowUps(status, page, size));
     }
 
     @PatchMapping("/api/follow-ups/{id}")

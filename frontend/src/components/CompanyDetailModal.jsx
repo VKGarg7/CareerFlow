@@ -223,7 +223,7 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
     setInterviewsByApp({})
     setFollowUps([])
 
-    Promise.all([getCompany(companyId), getApplications({ companyId })])
+    Promise.all([getCompany(companyId), getApplications({ companyId, size: 1000 })])
       .then(async ([co, appsRes]) => {
         setCompany(co)
         const apps = appsRes.data || []
@@ -231,7 +231,7 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
 
         const [interviewResults, followUpRes] = await Promise.all([
           Promise.allSettled(apps.map((a) => getInterviewsForApplication(a.id))),
-          getAllFollowUps().catch(() => ({ data: [] })),
+          getAllFollowUps({ size: 1000 }).catch(() => ({ data: [] })),
         ])
         const byApp = {}
         apps.forEach((a, i) => {

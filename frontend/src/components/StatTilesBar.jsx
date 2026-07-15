@@ -26,10 +26,12 @@ export default function StatTilesBar({
   totalLabel = 'Total',
   totalIcon = null,
   trendByStatus = {},
+  counts: countsOverride,
+  total: totalOverride,
 }) {
-  const counts = countByStatus(items, statusKey, statusConfig)
+  const counts = countsOverride ?? countByStatus(items, statusKey, statusConfig)
 
-  const total = items.length
+  const total = totalOverride ?? items.length
   const allActive = activeFilter === ''
   const tiles = Object.entries(statusConfig)
     .map(([key, cfg]) => ({ key, cfg, count: counts[key] || 0 }))
