@@ -1,32 +1,38 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Alert, CircularProgress } from '@mui/material'
+import PageSpinner from '../components/PageSpinner'
+import PageAlert from '../components/PageAlert'
 import {
   Add, Search, KeyboardArrowDown, LinkedIn, Email,
-  Close, OpenInNew, Work,
+  Close, OpenInNew, Work, FilterListRounded,
+  VisibilityOutlined, EditOutlined, DeleteOutlineRounded,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
-import StatusSummaryBar from '../components/StatusSummaryBar'
-import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
+import StatTilesBar from '../components/StatTilesBar'
+import { ConfirmDeleteModal } from '../components/ModalShell'
 import { getReferrals, getReferral, addReferral, updateReferral, deleteReferral, manageNote } from '../api/referral'
-import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
-import SharedStatusBadge from '../components/StatusBadge'
+import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
 import InlineStatusChanger from '../components/InlineStatusChanger'
-import { EntityCard, EntityDirectoryCard } from '../components/EntityCard'
 import { initials, fmt, fmtDate } from '../utils/followup'
+import useSearchShortcut from '../hooks/useSearchShortcut'
+import useAddQueryParam from '../hooks/useAddQueryParam'
+import useTransientMessage from '../hooks/useTransientMessage'
+import { DrawerShell, DrawerHeader, CloseIconButton } from '../components/DrawerShell'
+import { fieldInputCls, FieldErrorText, FieldLabel, FormFooterButtons } from '../components/formKit'
+import EntityListRow from '../components/EntityListRow'
 
-// ─── Config ───────────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
-  DRAFT:          { label: 'Draft',          badge: 'bg-gray-100 text-gray-600',    border: 'border-l-gray-300',    dot: 'bg-gray-400'    },
-  REQUESTED:      { label: 'Requested',      badge: 'bg-blue-100 text-blue-700',    border: 'border-l-blue-400',    dot: 'bg-blue-500'    },
-  ACKNOWLEDGED:   { label: 'Acknowledged',   badge: 'bg-amber-100 text-amber-700',  border: 'border-l-amber-400',   dot: 'bg-amber-500'   },
-  REFERRED:       { label: 'Referred',       badge: 'bg-purple-100 text-purple-700', border: 'border-l-purple-400', dot: 'bg-purple-500'  },
-  INTERVIEWING:   { label: 'Interviewing',   badge: 'bg-indigo-100 text-indigo-700', border: 'border-l-indigo-400', dot: 'bg-indigo-500'  },
-  OFFER_RECEIVED: { label: 'Offer Received', badge: 'bg-green-100 text-green-700',  border: 'border-l-green-400',   dot: 'bg-green-500'   },
-  REJECTED:       { label: 'Rejected',       badge: 'bg-red-100 text-red-700',      border: 'border-l-red-400',     dot: 'bg-red-400'     },
-  WITHDRAWN:      { label: 'Withdrawn',      badge: 'bg-orange-100 text-orange-700', border: 'border-l-orange-400', dot: 'bg-orange-400'  },
-  DECLINED:       { label: 'Declined',       badge: 'bg-rose-100 text-rose-700',    border: 'border-l-rose-400',    dot: 'bg-rose-400'    },
+  DRAFT:          { label: 'Draft',          badge: 'bg-white/[0.06] text-white/60',           border: 'border-l-white/10',    dot: 'bg-white/40',     hex: '#8B8FA3' },
+  REQUESTED:      { label: 'Requested',      badge: 'bg-app-accent/10 text-app-accent-soft',   border: 'border-l-app-accent',  dot: 'bg-app-accent',   hex: '#5B5FEF' },
+  ACKNOWLEDGED:   { label: 'Acknowledged',   badge: 'bg-app-warning/10 text-app-warning',      border: 'border-l-app-warning', dot: 'bg-app-warning',  hex: '#F59E0B' },
+  REFERRED:       { label: 'Referred',       badge: 'bg-app-accent2/10 text-app-accent-soft',  border: 'border-l-app-accent2', dot: 'bg-app-accent2',  hex: '#8B5CF6' },
+  INTERVIEWING:   { label: 'Interviewing',   badge: 'bg-app-accent2/10 text-app-accent-soft',  border: 'border-l-app-accent2', dot: 'bg-app-accent2',  hex: '#8B5CF6' },
+  OFFER_RECEIVED: { label: 'Offer Received', badge: 'bg-app-success/10 text-app-success',      border: 'border-l-app-success', dot: 'bg-app-success',  hex: '#22C55E' },
+  REJECTED:       { label: 'Rejected',       badge: 'bg-app-danger/10 text-app-danger',        border: 'border-l-app-danger',  dot: 'bg-app-danger',   hex: '#F43F5E' },
+  WITHDRAWN:      { label: 'Withdrawn',      badge: 'bg-app-warning/10 text-app-warning',      border: 'border-l-app-warning', dot: 'bg-app-warning',  hex: '#F59E0B' },
+  DECLINED:       { label: 'Declined',       badge: 'bg-app-danger/10 text-app-danger',        border: 'border-l-app-danger',  dot: 'bg-app-danger',   hex: '#F43F5E' },
 }
 
 const SORT_OPTIONS = [
@@ -48,13 +54,10 @@ const EMPTY_FORM = {
   status: 'DRAFT', requestedDate: '', followUpDate: '', notes: '',
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.DRAFT
-  return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
-}
+const isOverdueReferral = (referral) => !!referral.followUpDate
+  && new Date(referral.followUpDate) < new Date()
+  && !['REFERRED', 'INTERVIEWING', 'OFFER_RECEIVED', 'REJECTED', 'WITHDRAWN', 'DECLINED'].includes(referral.status)
 
-// ─── Inline Status Changer ────────────────────────────────────────────────────
 function ReferralStatusChanger({ referral, onStatusChanged }) {
   return (
     <InlineStatusChanger
@@ -67,91 +70,58 @@ function ReferralStatusChanger({ referral, onStatusChanged }) {
   )
 }
 
-// ─── Referral Card (list row) ─────────────────────────────────────────────────
-function ReferralCard({ referral, onView, onEdit, onDelete, onStatusChanged }) {
+function ReferralListRow({ referral, drawerOpen, onView, onEdit, onDelete, onStatusChanged }) {
   const cfg = STATUS_CONFIG[referral.status] || STATUS_CONFIG.DRAFT
-  const isOverdue = referral.followUpDate
-    && new Date(referral.followUpDate) < new Date()
-    && !['REFERRED', 'INTERVIEWING', 'OFFER_RECEIVED', 'REJECTED', 'WITHDRAWN', 'DECLINED'].includes(referral.status)
+  const overdue = isOverdueReferral(referral)
 
   return (
-    <EntityCard
+    <EntityListRow
       onClick={() => onView(referral)}
-      accentColor={cfg.border}
+      accentBorder={cfg.border}
       avatarColor={cfg.dot}
-      avatarText={initials(referral.referrerName)}
-      titleSlot={
-        <>
-          <div className="flex items-center flex-wrap gap-2 mb-0.5">
-            <h3 className="text-base font-bold text-gray-800">{referral.referrerName}</h3>
-            <ReferralStatusChanger referral={referral} onStatusChanged={onStatusChanged} />
-            {isOverdue && (
-              <span className="text-[10px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
-                Follow-up overdue
-              </span>
-            )}
-          </div>
-          {(referral.referrerJobTitle || referral.referrerCompany) && (
-            <p className="text-sm text-gray-500 mb-2">
-              {referral.referrerJobTitle && <span className="font-medium text-gray-600">{referral.referrerJobTitle}</span>}
-              {referral.referrerJobTitle && referral.referrerCompany && <span className="text-gray-400"> @ </span>}
-              {referral.referrerCompany && <span>{referral.referrerCompany}</span>}
-            </p>
-          )}
-        </>
-      }
-      chips={
-        <>
-          <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">
-            <Work sx={{ fontSize: 12 }} />{referral.targetRole}
-          </span>
-          {referral.referrerEmail && (
-            <a href={`mailto:${referral.referrerEmail}`} onClick={e => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition">
-              <Email sx={{ fontSize: 12 }} />{referral.referrerEmail}
-            </a>
-          )}
-          {referral.referrerLinkedIn && (
-            <a href={referral.referrerLinkedIn} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition">
-              <LinkedIn sx={{ fontSize: 12 }} />LinkedIn
-            </a>
-          )}
-          {referral.jobPostingUrl && (
-            <a href={referral.jobPostingUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-gray-50 text-gray-600 rounded-full hover:bg-gray-100 transition">
-              <OpenInNew sx={{ fontSize: 12 }} />Job Posting
-            </a>
-          )}
-          {referral.requestedDate && (
-            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-              Requested: {fmtDate(referral.requestedDate)}
-            </span>
-          )}
-          {referral.followUpDate && (
-            <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full ${
-              isOverdue ? 'bg-red-50 text-red-500 font-semibold' : 'bg-purple-50 text-purple-600'
-            }`}>
-              Follow-up: {fmtDate(referral.followUpDate)}
-            </span>
-          )}
-        </>
-      }
-      note={referral.notes}
-      actions={[
-        { label: 'Edit', icon: 'edit', onClick: () => onEdit(referral) },
-        { label: 'Delete', icon: 'delete', onClick: () => onDelete(referral), tone: 'danger' },
+      name={referral.referrerName}
+      subtitle={referral.referrerCompany}
+      statusSlot={<ReferralStatusChanger referral={referral} onStatusChanged={onStatusChanged} />}
+      email={referral.referrerEmail}
+      linkedIn={referral.referrerLinkedIn}
+      menuItems={[
+        { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(referral) },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(referral) },
+        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(referral), tone: 'danger' },
       ]}
-    />
+    >
+      <div className={`w-40 min-w-0 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'md:block'}`}>
+        <p className="text-[11px] text-white/35">Target Role</p>
+        <p className="text-sm font-medium text-white/70 truncate mt-0.5">{referral.targetRole}</p>
+      </div>
+
+      <div className={`w-28 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'lg:block'}`}>
+        <p className="text-[11px] text-white/35">Requested</p>
+        <p className="text-sm font-medium text-white/70 mt-0.5">
+          {referral.requestedDate ? fmtDate(referral.requestedDate) : '—'}
+        </p>
+      </div>
+
+      <div className={`w-28 shrink-0 hidden ${drawerOpen ? '2xl:block' : 'xl:block'}`}>
+        <p className="text-[11px] text-white/35">Follow-Up</p>
+        <p className={`text-sm font-medium mt-0.5 ${overdue ? 'text-app-danger font-semibold' : 'text-white/70'}`}>
+          {referral.followUpDate ? fmtDate(referral.followUpDate) : '—'}
+        </p>
+      </div>
+
+      {overdue && (
+        <span className="hidden lg:inline-flex shrink-0 text-[10px] font-semibold text-app-danger bg-app-danger/10 px-2 py-0.5 rounded-full">
+          Overdue
+        </span>
+      )}
+
+    </EntityListRow>
   )
 }
 
-// ─── Directory Card (compact grid view) ──────────────────────────────────────
 function DirectoryCard({ referral, onView, onEdit, onDelete, onStatusChanged }) {
   const cfg = STATUS_CONFIG[referral.status] || STATUS_CONFIG.DRAFT
-  const isOverdue = referral.followUpDate
-    && new Date(referral.followUpDate) < new Date()
-    && !['REFERRED', 'INTERVIEWING', 'OFFER_RECEIVED', 'REJECTED', 'WITHDRAWN', 'DECLINED'].includes(referral.status)
+  const overdue = isOverdueReferral(referral)
 
   return (
     <EntityDirectoryCard
@@ -159,49 +129,60 @@ function DirectoryCard({ referral, onView, onEdit, onDelete, onStatusChanged }) 
       statusBarColor={cfg.dot}
       avatarColor={cfg.dot}
       avatarText={initials(referral.referrerName)}
-      revealActionsOnHover
       titleSlot={
         <>
-          <p className="text-sm font-bold text-gray-800 truncate leading-tight">{referral.referrerName}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold text-white/90 truncate leading-tight">{referral.referrerName}</p>
+            <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.badge}`}>
+              {cfg.label}
+            </span>
+          </div>
           {(referral.referrerJobTitle || referral.referrerCompany) && (
-            <p className="text-[11px] text-gray-400 truncate mt-0.5">
-              {[referral.referrerJobTitle, referral.referrerCompany].filter(Boolean).join(' · ')}
+            <p className="text-xs text-white/50 truncate mt-0.5">
+              {[referral.referrerJobTitle, referral.referrerCompany].filter(Boolean).join(' @ ')}
             </p>
           )}
-          <div className="flex w-fit max-w-full items-center gap-1.5 bg-indigo-50 rounded-lg px-2.5 py-1.5 mt-1.5">
-            <Work sx={{ fontSize: 11 }} className="text-indigo-400 shrink-0" />
-            <p className="text-xs font-semibold text-indigo-700 truncate max-w-[160px]">{referral.targetRole}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 mt-1.5" onClick={e => e.stopPropagation()}>
-            <ReferralStatusChanger referral={referral} onStatusChanged={onStatusChanged} />
-            {isOverdue && (
-              <span className="text-[10px] font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full shrink-0">Overdue</span>
+          <div className="flex flex-wrap items-center gap-2 mt-1.5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex w-fit max-w-full items-center gap-1.5 bg-app-accent/10 rounded-lg px-2.5 py-1.5">
+              <Work sx={{ fontSize: 11 }} className="text-app-accent-soft shrink-0" />
+              <p className="text-xs font-semibold text-app-accent-soft truncate max-w-[160px]">{referral.targetRole}</p>
+            </div>
+            {overdue && (
+              <span className="text-[10px] font-semibold text-app-danger bg-app-danger/10 px-1.5 py-0.5 rounded-full shrink-0">Overdue</span>
             )}
+          </div>
+          <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+            <ReferralStatusChanger referral={referral} onStatusChanged={onStatusChanged} />
           </div>
         </>
       }
+      actionsSlot={
+        <CardMenu items={[
+          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(referral) },
+        ]} />
+      }
       chips={
-        <div className="flex items-center gap-1.5 w-full">
+        <div className="flex items-center gap-2 w-full">
           {referral.referrerEmail && (
             <a href={`mailto:${referral.referrerEmail}`} title={referral.referrerEmail}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition">
-              <Email sx={{ fontSize: 13 }} />
+              className="p-1.5 rounded-lg text-white/35 hover:text-app-accent-soft hover:bg-app-accent/10 transition">
+              <Email sx={{ fontSize: 15 }} />
             </a>
           )}
           {referral.referrerLinkedIn && (
             <a href={referral.referrerLinkedIn} target="_blank" rel="noreferrer" title="LinkedIn"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-blue-700 hover:bg-blue-50 transition">
-              <LinkedIn sx={{ fontSize: 13 }} />
+              className="p-1.5 rounded-lg text-white/35 hover:text-app-accent-soft hover:bg-app-accent/10 transition">
+              <LinkedIn sx={{ fontSize: 15 }} />
             </a>
           )}
           {referral.jobPostingUrl && (
             <a href={referral.jobPostingUrl} target="_blank" rel="noreferrer" title="Job Posting"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition">
-              <OpenInNew sx={{ fontSize: 13 }} />
+              className="p-1.5 rounded-lg text-white/35 hover:text-app-accent-soft hover:bg-app-accent/10 transition">
+              <OpenInNew sx={{ fontSize: 15 }} />
             </a>
           )}
           {referral.followUpDate && (
-            <span className={`text-[11px] ml-auto font-medium ${isOverdue ? 'text-red-400' : 'text-gray-400'}`}>
+            <span className={`text-xs ml-auto font-medium ${overdue ? 'text-app-danger' : 'text-white/35'}`}>
               {new Date(referral.followUpDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
             </span>
           )}
@@ -209,52 +190,52 @@ function DirectoryCard({ referral, onView, onEdit, onDelete, onStatusChanged }) 
       }
       note={referral.notes}
       actions={[
-        { label: 'Edit', icon: <EditGlyph />, onClick: () => onEdit(referral) },
-        { label: 'Delete', icon: <DeleteGlyph />, onClick: () => onDelete(referral), tone: 'danger' },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 14 }} />, onClick: () => onEdit(referral) },
+        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 14 }} />, onClick: () => onDelete(referral), tone: 'danger' },
       ]}
     />
   )
 }
 
-function EditGlyph() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-      <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z"/>
-      <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V8.5a.75.75 0 0 1 1.5 0v2.75A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7.5a.75.75 0 0 1 0 1.5H4.75Z"/>
-    </svg>
-  )
-}
+function DetailDrawer({ open, referralId, onClose, onEdit, onDelete, onStatusChanged }) {
+  const [referral, setReferral]     = useState(null)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
 
-function DeleteGlyph() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-      <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd"/>
-    </svg>
-  )
-}
-
-// ─── Detail Modal ─────────────────────────────────────────────────────────────
-function DetailModal({ open, referral, onClose, onEdit, onDelete, onStatusChanged }) {
   const [history, setHistory]       = useState([])
-  const [histLoading, setHistLoading] = useState(false)
   const [noteText, setNoteText]     = useState('')
   const [noteSubmitting, setNoteSubmitting] = useState(false)
   const [noteError, setNoteError]   = useState('')
   const [editingNote, setEditingNote] = useState(null)   // { id, text }
   const [editSaving, setEditSaving] = useState(false)
 
-  const loadHistory = useCallback((id) => {
-    setHistLoading(true)
-    getReferral(id)
-      .then(r => setHistory(r.data.statusHistory ?? []))
-      .catch(() => setHistory([]))
-      .finally(() => setHistLoading(false))
-  }, [])
-
   useEffect(() => {
-    if (!open || !referral) return
-    loadHistory(referral.id)
-  }, [open, referral?.id, loadHistory])
+    if (!open || !referralId) return
+    setLoading(true)
+    setError('')
+    setReferral(null)
+    setHistory([])
+    setNoteText('')
+    setNoteError('')
+    setEditingNote(null)
+    getReferral(referralId)
+      .then((res) => { setReferral(res.data); setHistory(res.data.statusHistory ?? []) })
+      .catch(() => setError('Failed to load referral details.'))
+      .finally(() => setLoading(false))
+  }, [open, referralId])
+
+  if (!open) return null
+
+  const cfg = referral ? (STATUS_CONFIG[referral.status] || STATUS_CONFIG.DRAFT) : STATUS_CONFIG.DRAFT
+  const overdue = referral ? isOverdueReferral(referral) : false
+
+  const Row = ({ label, value }) =>
+    value ? (
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">{label}</p>
+        <p className="text-sm text-white/85 break-words">{value}</p>
+      </div>
+    ) : null
 
   const handleAddNote = async () => {
     if (!noteText.trim()) return
@@ -278,8 +259,6 @@ function DetailModal({ open, referral, onClose, onEdit, onDelete, onStatusChange
       const res = await manageNote(referral.id, { action: 'EDIT', noteId: editingNote.id, note: editingNote.text.trim() })
       setHistory(res.data)
       setEditingNote(null)
-    } catch (e) {
-      // keep editing open, show nothing — transient
     } finally {
       setEditSaving(false)
     }
@@ -289,120 +268,135 @@ function DetailModal({ open, referral, onClose, onEdit, onDelete, onStatusChange
     try {
       const res = await manageNote(referral.id, { action: 'DELETE', noteId: historyId })
       setHistory(res.data)
-    } catch (e) {
-      // silent — entry stays visible
+    } catch {
     }
   }
 
-  if (!open || !referral) return null
-
-  const cfg = STATUS_CONFIG[referral.status] || STATUS_CONFIG.DRAFT
-  const isOverdue = referral.followUpDate
-    && new Date(referral.followUpDate) < new Date()
-    && !['REFERRED', 'INTERVIEWING', 'OFFER_RECEIVED', 'REJECTED', 'WITHDRAWN', 'DECLINED'].includes(referral.status)
-
-  const Row = ({ label, value }) =>
-    value ? (
-      <div className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-32 shrink-0 pt-0.5">{label}</span>
-        <span className="text-sm text-gray-700 flex-1 break-words">{value}</span>
-      </div>
-    ) : null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
+    <DrawerShell>
 
-        {/* Header */}
-        <div className="rounded-t-2xl px-6 pt-6 pb-5 border-b border-gray-100">
-          <div className="flex items-start gap-4">
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold shrink-0 ${cfg.dot}`}>
+      <div className="px-5 pt-5 pb-4 border-b border-white/[0.06] shrink-0">
+        {loading ? (
+          <div className="flex justify-center py-4"><CircularProgress size={24} /></div>
+        ) : error ? (
+          <p className="text-sm text-app-danger">{error}</p>
+        ) : referral ? (
+          <div className="flex items-start gap-3">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight ${cfg.dot}`}>
               {initials(referral.referrerName)}
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="text-xl font-bold text-gray-800 leading-tight">{referral.referrerName}</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-bold text-white leading-tight truncate">{referral.referrerName}</h2>
+                <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.badge}`}>
+                  {cfg.label}
+                </span>
+              </div>
               {(referral.referrerJobTitle || referral.referrerCompany) && (
-                <p className="text-sm text-gray-500 mt-0.5">
+                <p className="text-sm text-white/50 mt-0.5 truncate">
                   {[referral.referrerJobTitle, referral.referrerCompany].filter(Boolean).join(' @ ')}
                 </p>
               )}
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <ReferralStatusChanger referral={referral} onStatusChanged={updated => {
-                  onStatusChanged(updated)
-                  setHistory(updated.statusHistory ?? [])
-                }} />
-                {isOverdue && (
-                  <span className="text-[10px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
-                    Follow-up overdue
+              {overdue && (
+                <span className="inline-flex mt-1.5 text-[10px] font-semibold text-app-danger bg-app-danger/10 px-2 py-0.5 rounded-full">
+                  Follow-up overdue
+                </span>
+              )}
+            </div>
+            <CloseIconButton onClose={onClose} className="shrink-0" />
+          </div>
+        ) : null}
+      </div>
+
+      {referral && !loading && (
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 no-scrollbar">
+
+          <ReferralStatusChanger referral={referral} onStatusChanged={(updated) => {
+            setReferral(updated)
+            setHistory(updated.statusHistory ?? [])
+            onStatusChanged(updated)
+          }} />
+
+          <div>
+            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Role</p>
+            <div className="space-y-2">
+              <Row label="Target Role" value={
+                <span className="inline-flex items-center gap-1.5 font-semibold text-app-accent-soft">
+                  <Work sx={{ fontSize: 14 }} />{referral.targetRole}
+                </span>
+              } />
+              <Row label="Job Posting" value={referral.jobPostingUrl && (
+                <a href={referral.jobPostingUrl} target="_blank" rel="noreferrer"
+                  className="text-app-accent-soft hover:underline flex items-center gap-1.5">
+                  <OpenInNew sx={{ fontSize: 14 }} className="shrink-0" />View Posting
+                </a>
+              )} />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Contact</p>
+            <div className="space-y-2">
+              <Row label="Email" value={referral.referrerEmail && (
+                <a href={`mailto:${referral.referrerEmail}`}
+                  className="text-app-accent-soft hover:underline flex items-center gap-1.5 truncate">
+                  <Email sx={{ fontSize: 14 }} className="shrink-0" /><span className="truncate">{referral.referrerEmail}</span>
+                </a>
+              )} />
+              <Row label="LinkedIn" value={referral.referrerLinkedIn && (
+                <a href={referral.referrerLinkedIn} target="_blank" rel="noreferrer"
+                  className="text-app-accent-soft hover:underline flex items-center gap-1.5">
+                  <LinkedIn sx={{ fontSize: 14 }} className="shrink-0" />View Profile
+                </a>
+              )} />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Tracking</p>
+            <div className="space-y-2">
+              <Row label="Requested" value={referral.requestedDate ? fmtDate(referral.requestedDate) : null} />
+              <Row label="Follow-Up" value={referral.followUpDate
+                ? <span className={overdue ? 'text-app-danger font-semibold' : ''}>
+                    {fmtDate(referral.followUpDate)}{overdue ? ' — overdue' : ''}
                   </span>
-                )}
+                : null} />
+              <Row label="Added on" value={referral.createdAt ? fmtDate(referral.createdAt) : null} />
+              <Row label="Last updated" value={referral.updatedAt ? fmt(referral.updatedAt) : null} />
+            </div>
+          </div>
+
+          {referral.relationshipContext && (
+            <div>
+              <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">How You Know Them</p>
+              <div className="bg-white/[0.03] rounded-xl px-3.5 py-2.5">
+                <p className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed">{referral.relationshipContext}</p>
               </div>
             </div>
-            <button onClick={onClose}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition shrink-0">
-              <Close sx={{ fontSize: 18 }} />
-            </button>
-          </div>
-        </div>
+          )}
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {referral.messageToReferrer && (
+            <div>
+              <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Message to Referrer</p>
+              <div className="bg-app-accent/[0.06] rounded-xl px-3.5 py-2.5">
+                <p className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed">{referral.messageToReferrer}</p>
+              </div>
+            </div>
+          )}
 
-          {/* Role */}
-          <div className="mb-4">
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Role</p>
-            <Row label="Target Role" value={
-              <span className="inline-flex items-center gap-1.5 font-semibold text-indigo-700">
-                <Work sx={{ fontSize: 14 }} />{referral.targetRole}
-              </span>
-            } />
-            <Row label="Job Posting" value={referral.jobPostingUrl && (
-              <a href={referral.jobPostingUrl} target="_blank" rel="noreferrer"
-                className="text-blue-600 hover:underline flex items-center gap-1">
-                <OpenInNew sx={{ fontSize: 14 }} />View Posting
-              </a>
-            )} />
-          </div>
+          {referral.notes && (
+            <div>
+              <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Notes</p>
+              <div className="bg-white/[0.03] rounded-xl px-3.5 py-2.5">
+                <p className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed">{referral.notes}</p>
+              </div>
+            </div>
+          )}
 
-          {/* Contact */}
-          <div className="mb-4">
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Contact</p>
-            <Row label="Email" value={referral.referrerEmail && (
-              <a href={`mailto:${referral.referrerEmail}`}
-                className="text-blue-600 hover:underline flex items-center gap-1">
-                <Email sx={{ fontSize: 14 }} />{referral.referrerEmail}
-              </a>
-            )} />
-            <Row label="LinkedIn" value={referral.referrerLinkedIn && (
-              <a href={referral.referrerLinkedIn} target="_blank" rel="noreferrer"
-                className="text-blue-600 hover:underline flex items-center gap-1">
-                <LinkedIn sx={{ fontSize: 14 }} />View Profile
-              </a>
-            )} />
-          </div>
-
-          {/* Tracking */}
-          <div className="mb-4">
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Tracking</p>
-            <Row label="Requested" value={referral.requestedDate ? fmtDate(referral.requestedDate) : null} />
-            <Row label="Follow-Up" value={referral.followUpDate
-              ? <span className={isOverdue ? 'text-red-500 font-semibold' : ''}>
-                  {fmtDate(referral.followUpDate)}{isOverdue ? ' — overdue' : ''}
-                </span>
-              : null} />
-            <Row label="Added On" value={referral.createdAt
-              ? new Date(referral.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-              : null} />
-            <Row label="Last Updated" value={referral.updatedAt ? fmt(referral.updatedAt) : null} />
-          </div>
-
-          {/* Timeline */}
-          <div className="mb-4">
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Timeline</p>
-            {histLoading ? (
-              <div className="flex justify-center py-4"><CircularProgress size={20} /></div>
-            ) : history.length === 0 ? (
-              <p className="text-xs text-gray-400 italic mb-3">No activity recorded yet.</p>
+          <div>
+            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-3">Timeline</p>
+            {history.length === 0 ? (
+              <p className="text-xs text-white/35 italic mb-3">No activity recorded yet.</p>
             ) : (
               <div className="space-y-0 mb-3">
                 {history.map((entry, i) => {
@@ -413,84 +407,72 @@ function DetailModal({ open, referral, onClose, onEdit, onDelete, onStatusChange
                     return (
                       <div key={entry.id} className="flex gap-3">
                         <div className="flex flex-col items-center shrink-0 pt-1">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-gray-300" />
-                          {!isLast && <div className="w-px flex-1 bg-gray-200 my-1" />}
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-white/30" />
+                          {!isLast && <div className="w-px flex-1 bg-white/[0.08] my-1" />}
                         </div>
                         <div className={`flex-1 min-w-0 ${isLast ? '' : 'pb-3'}`}>
                           {isEditingThis ? (
-                            <div className="flex gap-2 items-start">
+                            <div className="bg-app-accent/10 border border-app-accent/20 rounded-xl p-3 space-y-2">
                               <textarea
-                                className="flex-1 text-xs border border-indigo-300 rounded-lg px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-400"
                                 rows={2}
                                 value={editingNote.text}
-                                onChange={e => setEditingNote(n => ({ ...n, text: e.target.value }))}
+                                onChange={(e) => setEditingNote((n) => ({ ...n, text: e.target.value }))}
+                                className="w-full px-3 py-2 border border-app-accent/30 rounded-lg text-sm text-white/85 focus:outline-none focus:ring-2 focus:ring-app-accent/40 bg-white/[0.04] resize-none"
+                                autoFocus
                               />
-                              <div className="flex flex-col gap-1 shrink-0">
-                                <button
-                                  onClick={handleSaveEdit}
-                                  disabled={editSaving || !editingNote.text.trim()}
-                                  className="text-[10px] font-semibold px-2 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition">
+                              <div className="flex justify-end gap-2">
+                                <button onClick={handleSaveEdit} disabled={editSaving || !editingNote.text.trim()}
+                                  className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-app-accent text-white hover:brightness-110 disabled:opacity-50 transition">
                                   {editSaving ? '…' : 'Save'}
                                 </button>
-                                <button
-                                  onClick={() => setEditingNote(null)}
-                                  className="text-[10px] font-semibold px-2 py-1 rounded-md bg-gray-100 text-gray-500 hover:bg-gray-200 transition">
+                                <button onClick={() => setEditingNote(null)}
+                                  className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-white/[0.06] text-white/50 hover:bg-white/[0.10] transition">
                                   Cancel
                                 </button>
                               </div>
                             </div>
                           ) : (
                             <div className="flex items-start gap-1 group">
-                              <p className="text-xs text-gray-600 flex-1 italic">"{entry.note}"</p>
+                              <p className="text-xs text-white/60 flex-1 italic">"{entry.note}"</p>
                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
-                                <button
-                                  onClick={() => setEditingNote({ id: entry.id, text: entry.note })}
-                                  className="p-0.5 text-gray-400 hover:text-indigo-600 transition">
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                                    <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z"/>
-                                    <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V8.5a.75.75 0 0 1 1.5 0v2.75A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7.5a.75.75 0 0 1 0 1.5H4.75Z"/>
-                                  </svg>
+                                <button onClick={() => setEditingNote({ id: entry.id, text: entry.note })}
+                                  className="p-0.5 text-white/35 hover:text-app-accent-soft transition">
+                                  <EditOutlined sx={{ fontSize: 12 }} />
                                 </button>
-                                <button
-                                  onClick={() => handleDeleteNote(entry.id)}
-                                  className="p-0.5 text-gray-400 hover:text-red-500 transition">
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                                    <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd"/>
-                                  </svg>
+                                <button onClick={() => handleDeleteNote(entry.id)}
+                                  className="p-0.5 text-white/35 hover:text-app-danger transition">
+                                  <DeleteOutlineRounded sx={{ fontSize: 12 }} />
                                 </button>
                               </div>
                             </div>
                           )}
-                          <p className="text-[11px] text-gray-400 mt-0.5">{fmt(entry.changedAt)}</p>
+                          <p className="text-[11px] text-white/35 mt-0.5">{fmt(entry.changedAt)}</p>
                         </div>
                       </div>
                     )
                   }
 
-                  // Status change entry
                   const toCfg = STATUS_CONFIG[entry.toStatus] || STATUS_CONFIG.DRAFT
                   return (
                     <div key={entry.id} className="flex gap-3">
                       <div className="flex flex-col items-center shrink-0 pt-1">
                         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${toCfg.dot}`} />
-                        {!isLast && <div className="w-px flex-1 bg-gray-200 my-1" />}
+                        {!isLast && <div className="w-px flex-1 bg-white/[0.08] my-1" />}
                       </div>
                       <div className={`flex-1 min-w-0 ${isLast ? '' : 'pb-3'}`}>
                         <div className="flex items-center gap-2 flex-wrap">
                           {entry.fromStatus && (
-                            <span className="text-xs text-gray-400 line-through">
+                            <span className="text-xs text-white/35 line-through">
                               {STATUS_CONFIG[entry.fromStatus]?.label || entry.fromStatus}
                             </span>
                           )}
-                          {entry.fromStatus && <span className="text-gray-300 text-xs">→</span>}
+                          {entry.fromStatus && <span className="text-white/25 text-xs">→</span>}
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${toCfg.badge}`}>
                             {toCfg.label}
                           </span>
                         </div>
-                        <p className="text-[11px] text-gray-400 mt-0.5">{fmt(entry.changedAt)}</p>
-                        {entry.note && (
-                          <p className="text-xs text-gray-500 italic mt-0.5">"{entry.note}"</p>
-                        )}
+                        <p className="text-[11px] text-white/35 mt-0.5">{fmt(entry.changedAt)}</p>
+                        {entry.note && <p className="text-xs text-white/50 italic mt-0.5">"{entry.note}"</p>}
                       </div>
                     </div>
                   )
@@ -498,83 +480,47 @@ function DetailModal({ open, referral, onClose, onEdit, onDelete, onStatusChange
               </div>
             )}
 
-            {/* Add note input */}
-            <div className="flex gap-2 items-start">
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] focus-within:border-app-accent/40 focus-within:ring-2 focus-within:ring-app-accent/20 transition">
               <textarea
-                className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 placeholder:text-gray-300"
                 rows={2}
                 placeholder="Add a note to the timeline…"
                 value={noteText}
-                onChange={e => { setNoteText(e.target.value); setNoteError('') }}
+                onChange={(e) => { setNoteText(e.target.value); setNoteError('') }}
+                className="w-full px-3.5 pt-3 pb-1 bg-transparent text-sm text-white/85 focus:outline-none resize-none placeholder:text-white/25"
               />
-              <button
-                onClick={handleAddNote}
-                disabled={noteSubmitting || !noteText.trim()}
-                className="shrink-0 px-3 py-2 text-xs font-semibold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition">
-                {noteSubmitting ? <CircularProgress size={12} sx={{ color: 'white' }} /> : 'Add'}
-              </button>
+              <div className="flex items-center justify-end px-3 pb-2.5">
+                <button onClick={handleAddNote} disabled={noteSubmitting || !noteText.trim()}
+                  className="shrink-0 px-3 py-1.5 text-xs font-semibold bg-app-accent text-white rounded-lg hover:brightness-110 disabled:opacity-40 transition">
+                  {noteSubmitting ? <CircularProgress size={12} sx={{ color: 'white' }} /> : 'Add'}
+                </button>
+              </div>
             </div>
-            {noteError && <p className="text-[11px] text-red-500 mt-1">{noteError}</p>}
+            {noteError && <p className="text-[11px] text-app-danger mt-1">{noteError}</p>}
           </div>
-
-          {/* Relationship context */}
-          {referral.relationshipContext && (
-            <div className="mb-4">
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">How You Know Them</p>
-              <div className="bg-gray-50 rounded-xl px-4 py-3">
-                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{referral.relationshipContext}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Message to referrer */}
-          {referral.messageToReferrer && (
-            <div className="mb-4">
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Message to Referrer</p>
-              <div className="bg-blue-50 rounded-xl px-4 py-3">
-                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{referral.messageToReferrer}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Notes */}
-          {referral.notes && (
-            <div className="mb-4">
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Notes</p>
-              <div className="bg-gray-50 rounded-xl px-4 py-3">
-                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{referral.notes}</p>
-              </div>
-            </div>
-          )}
         </div>
+      )}
 
-        {/* Footer actions */}
-        <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+      {referral && !loading && (
+        <div className="flex gap-3 px-5 py-3.5 border-t border-white/[0.06] bg-white/[0.02] shrink-0">
           <button
             onClick={() => { onClose(); onEdit(referral) }}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-700 transition">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z"/>
-              <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z"/>
-            </svg>
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white/70 bg-white/[0.03] border border-white/[0.08] rounded-xl hover:bg-white/[0.10] hover:text-white transition">
+            <EditOutlined sx={{ fontSize: 16 }} />
             Edit
           </button>
           <button
             onClick={() => { onClose(); onDelete(referral) }}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-red-500 bg-white border border-red-200 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition ml-auto">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z" clipRule="evenodd"/>
-            </svg>
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-app-danger bg-white/[0.03] border border-app-danger/20 rounded-xl hover:bg-app-danger hover:text-white hover:border-app-danger transition ml-auto">
+            <DeleteOutlineRounded sx={{ fontSize: 16 }} />
             Delete
           </button>
         </div>
-      </div>
-    </div>
+      )}
+    </DrawerShell>
   )
 }
 
-// ─── Add / Edit Modal ─────────────────────────────────────────────────────────
-function AddEditModal({ open, referral, onClose, onSaved }) {
+function AddEditDrawer({ open, referral, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -601,6 +547,8 @@ function AddEditModal({ open, referral, onClose, onSaved }) {
       setFieldErrors({})
     }
   }, [open, referral])
+
+  if (!open) return null
 
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }))
 
@@ -636,157 +584,132 @@ function AddEditModal({ open, referral, onClose, onSaved }) {
     }
   }
 
-  const inputCls = (field) =>
-    `w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition ${
-      fieldErrors[field] ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-    }`
-  const FieldError = ({ field }) =>
-    fieldErrors[field] ? <p className="text-xs text-red-500 mt-1">{fieldErrors[field]}</p> : null
+  const inputCls = (field) => fieldInputCls(!!fieldErrors[field])
+  const FieldError = ({ field }) => <FieldErrorText error={fieldErrors[field]} />
 
   return (
-    <ModalShell
-      open={open} onClose={onClose}
-      title={referral ? 'Edit Referral Request' : 'New Referral Request'}
-      subtitle={referral ? 'Update referral details' : 'Track a referral you are requesting'}
-      maxWidth="max-w-2xl"
-    >
-      <div className="px-6 py-5">
-        {error && <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+    <DrawerShell>
+      <DrawerHeader onClose={onClose} title={referral ? 'Edit Referral Request' : 'New Referral Request'} subtitle={referral ? 'Update referral details' : 'Track a referral you are requesting'} />
+      <div className="px-6 py-5 overflow-y-auto flex-1 no-scrollbar">
+        {error && <div className="mb-4 p-3 rounded-xl bg-app-danger/10 border border-app-danger/20 text-app-danger text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
 
-          {/* ── Referrer ── */}
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Referrer Details</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Full Name <span className="text-red-500">*</span>
-              </label>
-              <input type="text" value={form.referrerName} onChange={set('referrerName')}
-                placeholder="Jane Doe" maxLength={100} className={inputCls('referrerName')} required />
-              <FieldError field="referrerName" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Company <span className="text-red-500">*</span>
-              </label>
-              <input type="text" value={form.referrerCompany} onChange={set('referrerCompany')}
-                placeholder="Google" maxLength={150} className={inputCls('referrerCompany')} required />
-              <FieldError field="referrerCompany" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Job Title</label>
-              <input type="text" value={form.referrerJobTitle} onChange={set('referrerJobTitle')}
-                placeholder="Senior Engineer" maxLength={100} className={inputCls('referrerJobTitle')} />
-              <FieldError field="referrerJobTitle" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Email</label>
-              <input type="email" value={form.referrerEmail} onChange={set('referrerEmail')}
-                placeholder="jane@google.com" maxLength={150} className={inputCls('referrerEmail')} />
-              <FieldError field="referrerEmail" />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">LinkedIn URL</label>
-              <input type="url" value={form.referrerLinkedIn} onChange={set('referrerLinkedIn')}
-                placeholder="https://linkedin.com/in/..." maxLength={300} className={inputCls('referrerLinkedIn')} />
-              <FieldError field="referrerLinkedIn" />
-            </div>
-          </div>
-
-          {/* ── Role ── */}
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Role Details</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Target Role <span className="text-red-500">*</span>
-              </label>
-              <input type="text" value={form.targetRole} onChange={set('targetRole')}
-                placeholder="Software Engineer – Backend" maxLength={150} className={inputCls('targetRole')} required />
-              <FieldError field="targetRole" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Job Posting URL</label>
-              <input type="url" value={form.jobPostingUrl} onChange={set('jobPostingUrl')}
-                placeholder="https://careers.google.com/..." maxLength={500} className={inputCls('jobPostingUrl')} />
-              <FieldError field="jobPostingUrl" />
-            </div>
-          </div>
-
-          {/* ── Context & Message ── */}
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Context & Message</p>
+          <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Referrer Details</p>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">How do you know them?</label>
+            <FieldLabel>
+              Full Name <span className="text-app-danger">*</span>
+            </FieldLabel>
+            <input type="text" value={form.referrerName} onChange={set('referrerName')}
+              placeholder="Jane Doe" maxLength={100} className={inputCls('referrerName')} required />
+            <FieldError field="referrerName" />
+          </div>
+          <div>
+            <FieldLabel>
+              Company <span className="text-app-danger">*</span>
+            </FieldLabel>
+            <input type="text" value={form.referrerCompany} onChange={set('referrerCompany')}
+              placeholder="Google" maxLength={150} className={inputCls('referrerCompany')} required />
+            <FieldError field="referrerCompany" />
+          </div>
+          <div>
+            <FieldLabel>Job Title</FieldLabel>
+            <input type="text" value={form.referrerJobTitle} onChange={set('referrerJobTitle')}
+              placeholder="Senior Engineer" maxLength={100} className={inputCls('referrerJobTitle')} />
+            <FieldError field="referrerJobTitle" />
+          </div>
+          <div>
+            <FieldLabel>Email</FieldLabel>
+            <input type="email" value={form.referrerEmail} onChange={set('referrerEmail')}
+              placeholder="jane@google.com" maxLength={150} className={inputCls('referrerEmail')} />
+            <FieldError field="referrerEmail" />
+          </div>
+          <div>
+            <FieldLabel>LinkedIn URL</FieldLabel>
+            <input type="url" value={form.referrerLinkedIn} onChange={set('referrerLinkedIn')}
+              placeholder="https://linkedin.com/in/..." maxLength={300} className={inputCls('referrerLinkedIn')} />
+            <FieldError field="referrerLinkedIn" />
+          </div>
+
+          <p className="text-xs font-bold text-white/40 uppercase tracking-wider pt-1">Role Details</p>
+          <div>
+            <FieldLabel>
+              Target Role <span className="text-app-danger">*</span>
+            </FieldLabel>
+            <input type="text" value={form.targetRole} onChange={set('targetRole')}
+              placeholder="Software Engineer – Backend" maxLength={150} className={inputCls('targetRole')} required />
+            <FieldError field="targetRole" />
+          </div>
+          <div>
+            <FieldLabel>Job Posting URL</FieldLabel>
+            <input type="url" value={form.jobPostingUrl} onChange={set('jobPostingUrl')}
+              placeholder="https://careers.google.com/..." maxLength={500} className={inputCls('jobPostingUrl')} />
+            <FieldError field="jobPostingUrl" />
+          </div>
+
+          <p className="text-xs font-bold text-white/40 uppercase tracking-wider pt-1">Context & Message</p>
+          <div>
+            <FieldLabel>How do you know them?</FieldLabel>
             <textarea value={form.relationshipContext} onChange={set('relationshipContext')} rows={2}
               maxLength={1000} placeholder="e.g. College classmate, previous coworker, LinkedIn connection..."
               className={`${inputCls('relationshipContext')} resize-none`} />
-            <p className="text-xs text-gray-400 mt-1 text-right">{form.relationshipContext.length}/1000</p>
+            <p className="text-xs text-white/35 mt-1 text-right">{form.relationshipContext.length}/1000</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Message to Referrer</label>
+            <FieldLabel>Message to Referrer</FieldLabel>
             <textarea value={form.messageToReferrer} onChange={set('messageToReferrer')} rows={4}
               maxLength={3000} placeholder="Hi Jane, I hope you're doing well! I noticed Google is hiring for..."
               className={`${inputCls('messageToReferrer')} resize-none`} />
-            <p className="text-xs text-gray-400 mt-1 text-right">{form.messageToReferrer.length}/3000</p>
+            <p className="text-xs text-white/35 mt-1 text-right">{form.messageToReferrer.length}/3000</p>
           </div>
 
-          {/* ── Tracking ── */}
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Tracking</p>
-          <div className="grid grid-cols-3 gap-3">
+          <p className="text-xs font-bold text-white/40 uppercase tracking-wider pt-1">Tracking</p>
+          <div>
+            <FieldLabel>Status</FieldLabel>
+            <select value={form.status} onChange={set('status')} className={inputCls('status')}>
+              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
+                <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</label>
-              <select value={form.status} onChange={set('status')} className={inputCls('status')}>
-                {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date Requested</label>
+              <FieldLabel>Date Requested</FieldLabel>
               <input type="date" value={form.requestedDate} onChange={set('requestedDate')}
                 className={inputCls('requestedDate')} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Follow-Up Date</label>
+              <FieldLabel>Follow-Up Date</FieldLabel>
               <input type="date" value={form.followUpDate} onChange={set('followUpDate')}
                 className={inputCls('followUpDate')} />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes</label>
+            <FieldLabel>Notes</FieldLabel>
             <textarea value={form.notes} onChange={set('notes')} rows={2}
               maxLength={2000} placeholder="Any extra context, reminders, or outcomes..."
               className={`${inputCls('notes')} resize-none`} />
-            <p className="text-xs text-gray-400 mt-1 text-right">{form.notes.length}/2000</p>
+            <p className="text-xs text-white/35 mt-1 text-right">{form.notes.length}/2000</p>
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm">
-              {saving && <CircularProgress size={14} color="inherit" />}
-              {referral ? 'Save Changes' : 'Add Referral Request'}
-            </button>
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
-              Cancel
-            </button>
-          </div>
+          <FormFooterButtons saving={saving} onCancel={onClose} saveLabel={referral ? 'Save Changes' : 'Add Referral Request'} saveFirst heightCls="py-2.5" />
         </form>
       </div>
-    </ModalShell>
+    </DrawerShell>
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Referrals() {
   const [referrals, setReferrals] = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState('')
-  const [success, setSuccess]     = useState('')
+  const [success, setSuccess]     = useTransientMessage()
 
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [sortBy, setSortBy]           = useState('createdAt')
   const [order, setOrder]             = useState('desc')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const searchInputRef = useRef(null)
 
   const [viewMode, setViewMode]       = useState('list')
 
@@ -813,19 +736,22 @@ export default function Referrals() {
 
   useEffect(() => { fetchReferrals() }, [fetchReferrals])
 
-  const openAdd  = () => { setEditTarget(null); setModalOpen(true) }
-  const openEdit = (r) => { setEditTarget(r); setModalOpen(true) }
+  useSearchShortcut(searchInputRef)
+
+  const openAdd  = () => { setViewTarget(null); setEditTarget(null); setModalOpen(true) }
+  const openEdit = (r) => { setViewTarget(null); setEditTarget(r); setModalOpen(true) }
+  const openView = (r) => { setModalOpen(false); setViewTarget(r.id) }
+
+  useAddQueryParam(openAdd)
 
   const handleSaved = () => {
     setModalOpen(false)
     setSuccess(editTarget ? 'Referral request updated.' : 'Referral request added.')
     fetchReferrals()
-    setTimeout(() => setSuccess(''), 3000)
   }
 
   const handleStatusChanged = (updated) => {
     setReferrals(prev => prev.map(r => r.id === updated.id ? updated : r))
-    if (viewTarget?.id === updated.id) setViewTarget(updated)
   }
 
   const handleDeleted = () => {
@@ -833,86 +759,123 @@ export default function Referrals() {
     setViewTarget(null)
     setSuccess('Referral request removed.')
     fetchReferrals()
-    setTimeout(() => setSuccess(''), 3000)
   }
 
   const isFiltered = search.trim() || statusFilter
+  const drawerOpen = modalOpen || viewTarget !== null
+
+  const cardProps = {
+    onView: openView,
+    onEdit: openEdit,
+    onDelete: setDeleteTarget,
+    onStatusChanged: handleStatusChanged,
+    drawerOpen,
+  }
 
   return (
-    <Layout>
-      <PageHeader
-        title="Referral Requests"
-        subtitle="Track who you've asked for referrals and their outcomes"
-        icon="🎗️"
-        gradient="from-pink-500 to-rose-500"
-        action={
-          <button onClick={openAdd}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl hover:shadow-lg hover:shadow-pink-200 hover:-translate-y-0.5 transition-all shadow-sm">
-            <Add fontSize="small" />New Request
-          </button>
-        }
-      />
+    <Layout
+      headerAction={
+        <button onClick={openAdd}
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 hover:-translate-y-0.5 transition-all shadow-glow shadow-app-accent/40">
+          <Add fontSize="small" />New Request
+        </button>
+      }
+    >
+      <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
+      <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
+      <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
-      {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
-      {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
-
-      {/* Status summary bar */}
       {!loading && referrals.length > 0 && (
-        <StatusSummaryBar
-          items={referrals}
-          statusConfig={STATUS_CONFIG}
-          activeFilter={statusFilter}
-          onFilter={setStatusFilter}
-        />
+        <div className="mb-8">
+          <StatTilesBar
+            items={referrals}
+            statusConfig={STATUS_CONFIG}
+            activeFilter={statusFilter}
+            onFilter={setStatusFilter}
+            totalLabel="Total Requests"
+            totalIcon={<Work sx={{ fontSize: 18 }} />}
+          />
+        </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 mb-6">
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none flex">
-            <Search fontSize="small" />
-          </span>
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, company, role or email..."
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition" />
-        </div>
-
+      <div className="flex flex-col gap-4 mb-8">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[9rem]">
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-              className="w-full appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-              <option value="">All Statuses</option>
-              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                <option key={val} value={val}>{label}</option>
-              ))}
-            </select>
-            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-              <KeyboardArrowDown fontSize="small" />
+          <div className="relative flex-1 min-w-[14rem]">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none flex">
+              <Search fontSize="small" />
+            </span>
+            <input ref={searchInputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, company, role or email..."
+              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-white/25" />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-white/30 pointer-events-none">
+              ⌘K
             </span>
           </div>
 
-          <div className="relative flex-1 min-w-[9rem]">
-            <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-              className="w-full appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-              {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-              <KeyboardArrowDown fontSize="small" />
-            </span>
-          </div>
-
-          <button onClick={() => setOrder(o => o === 'desc' ? 'asc' : 'desc')}
-            className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition bg-white whitespace-nowrap">
-            {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+          <button onClick={() => setFiltersOpen((o) => !o)}
+            className={`h-11 px-4 flex items-center gap-2 border rounded-xl text-sm font-medium transition whitespace-nowrap ${
+              filtersOpen || statusFilter
+                ? 'border-app-accent/40 bg-app-accent/10 text-app-accent-soft'
+                : 'border-white/[0.06] bg-white/[0.03] text-white/60 hover:bg-white/[0.05] hover:border-white/[0.12]'
+            }`}>
+            <FilterListRounded fontSize="small" />
+            Filters
+            {statusFilter && (
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-app-accent text-white text-[11px] font-bold leading-none">
+                1
+              </span>
+            )}
+            <KeyboardArrowDown fontSize="small" className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          <ViewToggle value={viewMode} onChange={setViewMode} />
+          {isFiltered && (
+            <button onClick={() => { setSearch(''); setStatusFilter('') }}
+              className="text-sm font-medium text-app-accent-soft hover:text-white transition whitespace-nowrap">
+              Clear All
+            </button>
+          )}
+
+          <div className="ml-auto">
+            <ViewToggle value={viewMode} onChange={setViewMode} />
+          </div>
         </div>
+
+        {filtersOpen && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[9rem]">
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
+                <option value="" className="bg-app-surface text-white">All Statuses</option>
+                {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
+                  <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
+                ))}
+              </select>
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
+                <KeyboardArrowDown fontSize="small" />
+              </span>
+            </div>
+
+            <div className="relative flex-1 min-w-[9rem]">
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
+                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-app-surface text-white">{o.label}</option>)}
+              </select>
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
+                <KeyboardArrowDown fontSize="small" />
+              </span>
+            </div>
+
+            <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+              className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-white/60 hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap">
+              {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content */}
       {loading ? (
-        <div className="flex justify-center py-16"><CircularProgress /></div>
+        <PageSpinner />
       ) : referrals.length === 0 ? (
         <EmptyState
           icon="🤝"
@@ -920,44 +883,37 @@ export default function Referrals() {
           description={isFiltered ? 'Try adjusting your search or filter.' : 'Start tracking who you are asking for referrals.'}
           action={!isFiltered && (
             <button onClick={openAdd}
-              className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+              className="px-6 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition shadow-glow shadow-app-accent/40">
               Add your first request
             </button>
           )}
         />
       ) : viewMode === 'list' ? (
-        <div className="space-y-3">
-          <p className="text-xs text-gray-400 font-medium">
-            {referrals.length} {referrals.length === 1 ? 'request' : 'requests'}
-          </p>
-          {referrals.map(r => (
-            <ReferralCard key={r.id} referral={r}
-              onView={setViewTarget}
-              onEdit={openEdit}
-              onDelete={setDeleteTarget}
-              onStatusChanged={handleStatusChanged}
-            />
-          ))}
+        <div>
+          <h2 className="text-[18px] font-semibold text-white mb-4">
+            {referrals.length} {referrals.length === 1 ? 'Request' : 'Requests'}
+          </h2>
+          <div className="space-y-3">
+            {referrals.map((r) => (
+              <ReferralListRow key={r.id} referral={r} {...cardProps} />
+            ))}
+          </div>
         </div>
       ) : (
         <div>
-          <p className="text-xs text-gray-400 font-medium mb-4">
-            {referrals.length} {referrals.length === 1 ? 'request' : 'requests'}
-          </p>
+          <h2 className="text-[18px] font-semibold text-white mb-4">
+            {referrals.length} {referrals.length === 1 ? 'Request' : 'Requests'}
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {referrals.map(r => (
-              <DirectoryCard key={r.id} referral={r}
-                onView={setViewTarget}
-                onEdit={openEdit}
-                onDelete={setDeleteTarget}
-                onStatusChanged={handleStatusChanged}
-              />
+            {referrals.map((r) => (
+              <DirectoryCard key={r.id} referral={r} {...cardProps} />
             ))}
           </div>
         </div>
       )}
+      </div>
 
-      <AddEditModal open={modalOpen} referral={editTarget}
+      <AddEditDrawer open={modalOpen} referral={editTarget}
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
 
       <ConfirmDeleteModal
@@ -966,16 +922,16 @@ export default function Referrals() {
         onConfirm={async () => { await deleteReferral(deleteTarget.id); handleDeleted() }}
         title="Delete Referral Request"
         message={deleteTarget && (
-          <>Remove referral request from <span className="font-semibold text-gray-700">{deleteTarget.referrerName}</span> for <span className="font-semibold text-gray-700">{deleteTarget.targetRole}</span>?</>
+          <>Remove referral request from <span className="font-semibold text-white/80">{deleteTarget.referrerName}</span> for <span className="font-semibold text-white/80">{deleteTarget.targetRole}</span>?</>
         )}
       />
 
-      <DetailModal
-        open={!!viewTarget}
-        referral={viewTarget}
+      <DetailDrawer
+        open={viewTarget !== null}
+        referralId={viewTarget}
         onClose={() => setViewTarget(null)}
-        onEdit={r => { setEditTarget(r); setModalOpen(true) }}
-        onDelete={r => setDeleteTarget(r)}
+        onEdit={(r) => { setEditTarget(r); setModalOpen(true) }}
+        onDelete={(r) => setDeleteTarget(r)}
         onStatusChanged={handleStatusChanged}
       />
     </Layout>

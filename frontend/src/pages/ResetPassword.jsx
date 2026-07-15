@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { resetPassword } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
-import { AuthCard, AuthField, authInputCls, AuthErrorBanner, AuthSubmitButton, AuthFormSide, AuthDecoTile, EyeIcon } from '../components/AuthFormKit'
+import { AuthCard, AuthField, authInputIconCls, AuthInputIcon, LockIcon, AuthErrorBanner, AuthSubmitButton, AuthFormSide, AuthDecoTile, EyeIcon } from '../components/AuthFormKit'
 
 const TIPS = [
-  { icon: '🔑', text: 'Use at least 8 characters' },
-  { icon: '🔀', text: 'Mix letters, numbers, and symbols' },
-  { icon: '🚫', text: "Avoid reusing passwords from other sites" },
+  { icon: '🔑', title: 'Length matters', text: 'Use at least 8 characters' },
+  { icon: '🔀', title: 'Mix it up', text: 'Mix letters, numbers, and symbols' },
+  { icon: '🚫', title: 'Stay unique', text: "Avoid reusing passwords from other sites" },
 ]
 
 export default function ResetPassword() {
@@ -40,12 +40,14 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-[#05060B]">
+    <div className="flex h-screen overflow-hidden bg-[#05060B]">
       <AuthPanel
         eyebrow="New password"
-        title={<>Choose a<br />strong password</>}
+        width="w-[380px]"
+        title={<>Choose a<br /><span className="text-[#A78BFA]">strong password</span></>}
         subtitle="A little extra strength goes a long way in keeping your job search data safe."
         items={TIPS}
+        illustration
       />
 
       <AuthFormSide>
@@ -55,7 +57,7 @@ export default function ResetPassword() {
           <AuthDecoTile label="Strength tip" value="Mix letters & symbols" sub="Avoid reused passwords" className="-right-12 -top-8 -rotate-2" />
 
           {!token ? (
-            <AuthCard>
+            <AuthCard compact>
               <div className="text-center">
                 <p className="mb-4 text-sm text-red-400">Invalid or missing reset token.</p>
                 <Link to="/forgot-password" className="text-sm font-semibold text-[#8184F5] hover:text-[#A78BFA]">
@@ -64,15 +66,16 @@ export default function ResetPassword() {
               </div>
             </AuthCard>
           ) : (
-            <AuthCard>
+            <AuthCard compact>
               <h1 className="mb-1 font-display text-xl font-bold text-white">Set new password</h1>
-              <p className="mb-6 text-sm text-white/45">Enter your new password below.</p>
+              <p className="mb-4 text-sm text-white/45">Enter your new password below.</p>
 
               <AuthErrorBanner>{errors.general}</AuthErrorBanner>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-3">
                 <AuthField label="New password" error={errors.newPassword}>
                   <div className="relative">
+                    <AuthInputIcon><LockIcon /></AuthInputIcon>
                     <input
                       type={showPassword ? 'text' : 'password'}
                       name="newPassword"
@@ -80,7 +83,7 @@ export default function ResetPassword() {
                       onChange={handleChange}
                       required
                       placeholder="Min. 8 characters"
-                      className={authInputCls(!!errors.newPassword) + ' pr-10'}
+                      className={authInputIconCls(!!errors.newPassword) + ' pr-10'}
                     />
                     <button type="button" tabIndex={-1} onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
@@ -91,6 +94,7 @@ export default function ResetPassword() {
 
                 <AuthField label="Confirm password" error={errors.confirmPassword}>
                   <div className="relative">
+                    <AuthInputIcon><LockIcon /></AuthInputIcon>
                     <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       name="confirmPassword"
@@ -98,7 +102,7 @@ export default function ResetPassword() {
                       onChange={handleChange}
                       required
                       placeholder="••••••••"
-                      className={authInputCls(!!errors.confirmPassword) + ' pr-10'}
+                      className={authInputIconCls(!!errors.confirmPassword) + ' pr-10'}
                     />
                     <button type="button" tabIndex={-1} onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
@@ -107,7 +111,7 @@ export default function ResetPassword() {
                   </div>
                 </AuthField>
 
-                <AuthSubmitButton loading={loading} loadingText="Resetting…">Reset password</AuthSubmitButton>
+                <AuthSubmitButton loading={loading} loadingText="Resetting…" arrow>Reset password</AuthSubmitButton>
               </form>
             </AuthCard>
           )}

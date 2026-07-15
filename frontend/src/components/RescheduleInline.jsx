@@ -13,16 +13,16 @@ export default function RescheduleInline({ currentDate, onSave, onCancel }) {
   }
 
   return (
-    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2">
+    <div className="mt-2 pt-2 border-t border-white/[0.06] flex items-center gap-2">
       <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-        className="flex-1 px-2 py-1.5 border border-amber-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white" />
+        className="flex-1 px-2 py-1.5 border border-app-warning/30 rounded-xl text-xs text-white/80 bg-app-raised focus:outline-none focus:ring-2 focus:ring-app-warning/40 [color-scheme:dark]" />
       <button onClick={handleSave} disabled={saving}
-        className="px-2.5 py-1.5 text-[11px] font-semibold rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-50 flex items-center gap-1">
+        className="px-2.5 py-1.5 text-[11px] font-semibold rounded-xl bg-app-warning text-white hover:brightness-110 transition disabled:opacity-50 flex items-center gap-1">
         {saving && <CircularProgress size={10} color="inherit" />}
         Save
       </button>
       <button onClick={onCancel}
-        className="px-2.5 py-1.5 text-[11px] font-semibold rounded-xl border border-gray-200 text-gray-500 bg-white hover:bg-gray-100 transition">
+        className="px-2.5 py-1.5 text-[11px] font-semibold rounded-xl border border-white/[0.08] text-white/50 bg-white/[0.02] hover:bg-white/[0.06] transition">
         Cancel
       </button>
     </div>
