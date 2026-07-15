@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { changePassword } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
+import { AuthCard, AuthField, authInputIconCls, AuthInputIcon, LockIcon, AuthErrorBanner, AuthFormSide, AuthDecoTile, EyeIcon } from '../components/AuthFormKit'
 
 const TIPS = [
-  { icon: '🛡️', text: 'Keep your account secure with a fresh password' },
-  { icon: '🔑', text: 'Use at least 8 characters' },
-  { icon: '🔀', text: 'Mix letters, numbers, and symbols' },
+  { icon: '🛡️', title: 'Stay fresh', text: 'Keep your account secure with a fresh password' },
+  { icon: '🔑', title: 'Length matters', text: 'Use at least 8 characters' },
+  { icon: '🔀', title: 'Mix it up', text: 'Mix letters, numbers, and symbols' },
 ]
 
 export default function ChangePassword() {
@@ -19,7 +20,9 @@ export default function ChangePassword() {
   const [errors, setErrors] = useState({})
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+  const [show, setShow] = useState({ current: false, next: false, confirm: false })
 
+  const toggle = (key) => setShow((s) => ({ ...s, [key]: !s[key] }))
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
 
   const handleSubmit = async (e) => {
@@ -40,98 +43,80 @@ export default function ChangePassword() {
     }
   }
 
+  const passwordField = (label, name, showKey, placeholder) => (
+    <AuthField label={label} error={errors[name]}>
+      <div className="relative">
+        <AuthInputIcon><LockIcon /></AuthInputIcon>
+        <input
+          type={show[showKey] ? 'text' : 'password'}
+          name={name}
+          value={form[name]}
+          onChange={handleChange}
+          required
+          placeholder={placeholder}
+          className={authInputIconCls(!!errors[name]) + ' pr-10'}
+        />
+        <button type="button" tabIndex={-1} onClick={() => toggle(showKey)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+          <EyeIcon open={show[showKey]} />
+        </button>
+      </div>
+    </AuthField>
+  )
+
   return (
-    <div className="min-h-screen flex">
+    <div className="flex h-screen overflow-hidden bg-[#05060B]">
       <AuthPanel
-        title={<>Keep your<br />account secure</>}
+        eyebrow="Account security"
+        width="w-[380px]"
+        title={<>Keep your<br /><span className="text-[#A78BFA]">account secure</span></>}
         subtitle="Update your password regularly to keep your job search data safe and sound."
         items={TIPS}
+        illustration
       />
 
-      <div className="flex-1 flex items-center justify-center bg-gray-50 px-6 py-12">
-        <div className="w-full max-w-sm">
-          <AuthBrand mobile />
+      <AuthFormSide>
+        <AuthBrand mobile />
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <h1 className="text-xl font-bold text-gray-900 mb-1">Change password</h1>
-            <p className="text-sm text-gray-500 mb-6">Update your account password.</p>
+        <div className="relative">
+          <AuthDecoTile label="Security tip" value="Rotate regularly" sub="A fresh password keeps you safe" className="-right-12 -top-8 -rotate-2" />
 
-            {errors.general && (
-              <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{errors.general}</div>
-            )}
+          <AuthCard compact>
+            <h1 className="mb-1 font-display text-xl font-bold text-white">Change password</h1>
+            <p className="mb-4 text-sm text-white/45">Update your account password.</p>
+
+            <AuthErrorBanner>{errors.general}</AuthErrorBanner>
             {success && (
-              <div className="mb-5 px-4 py-3 rounded-xl bg-green-50 border border-green-100 text-green-700 text-sm">{success}</div>
+              <div className="mb-4 rounded-xl border border-app-success/20 bg-app-success/10 px-4 py-3 text-sm text-app-success">
+                {success}
+              </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Current password</label>
-                <input
-                  type="password"
-                  name="currentPassword"
-                  value={form.currentPassword}
-                  onChange={handleChange}
-                  required
-                  placeholder="••••••••"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
-                />
-                {errors.currentPassword && (
-                  <p className="text-xs text-red-500 mt-1">{errors.currentPassword}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">New password</label>
-                <input
-                  type="password"
-                  name="newPassword"
-                  value={form.newPassword}
-                  onChange={handleChange}
-                  required
-                  placeholder="Min. 8 characters"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
-                />
-                {errors.newPassword && (
-                  <p className="text-xs text-red-500 mt-1">{errors.newPassword}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Confirm new password</label>
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  value={form.confirmPassword}
-                  onChange={handleChange}
-                  required
-                  placeholder="••••••••"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
-                />
-                {errors.confirmPassword && (
-                  <p className="text-xs text-red-500 mt-1">{errors.confirmPassword}</p>
-                )}
-              </div>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              {passwordField('Current password', 'currentPassword', 'current', '••••••••')}
+              {passwordField('New password', 'newPassword', 'next', 'Min. 8 characters')}
+              {passwordField('Confirm new password', 'confirmPassword', 'confirm', '••••••••')}
 
               <div className="flex gap-3 pt-1">
                 <button
                   type="button"
                   onClick={() => navigate(-1)}
-                  className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition"
+                  className="flex-1 rounded-xl border border-white/[0.08] py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/[0.06]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition shadow-sm hover:shadow-md"
+                  className="flex-1 rounded-xl bg-app-accent py-2.5 text-sm font-semibold text-white shadow-glow shadow-app-accent/40 transition hover:brightness-110 disabled:opacity-50"
                 >
-                  {loading ? 'Saving...' : 'Save changes'}
+                  {loading ? 'Saving…' : 'Save changes'}
                 </button>
               </div>
             </form>
-          </div>
+          </AuthCard>
         </div>
-      </div>
+      </AuthFormSide>
     </div>
   )
 }

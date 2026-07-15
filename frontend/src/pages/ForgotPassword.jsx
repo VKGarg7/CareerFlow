@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { forgotPassword } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
-import { AuthCard, AuthField, authInputCls, AuthErrorBanner, AuthSubmitButton, AuthFormSide, AuthDecoTile } from '../components/AuthFormKit'
+import { AuthCard, AuthField, authInputIconCls, AuthInputIcon, MailIcon, AuthErrorBanner, AuthSubmitButton, AuthFormSide, AuthDecoTile } from '../components/AuthFormKit'
 
 const REASSURANCE = [
-  { icon: '🔒', text: 'Your data stays private and secure' },
-  { icon: '📧', text: "We'll only email the account you specify" },
-  { icon: '⏱️', text: 'Reset links expire for your safety' },
+  { icon: '🔒', title: 'Stays private', text: 'Your data stays private and secure' },
+  { icon: '📧', title: 'Verified email only', text: "We'll only email the account you specify" },
+  { icon: '⏱️', title: 'Time-limited links', text: 'Reset links expire for your safety' },
 ]
 
 export default function ForgotPassword() {
@@ -31,12 +31,14 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-[#05060B]">
+    <div className="flex h-screen overflow-hidden bg-[#05060B]">
       <AuthPanel
         eyebrow="Account recovery"
-        title={<>Forgot your<br />password?</>}
+        width="w-[380px]"
+        title={<>Forgot your<br /><span className="text-[#A78BFA]">password?</span></>}
         subtitle="No worries — it happens. We'll help you get back into your account in no time."
         items={REASSURANCE}
+        illustration
       />
 
       <AuthFormSide>
@@ -46,7 +48,7 @@ export default function ForgotPassword() {
           <AuthDecoTile label="Reminder" value="Links expire in 30 min" sub="For your security" className="-right-12 -top-8 -rotate-2" />
 
           {submitted ? (
-            <AuthCard>
+            <AuthCard compact>
               <div className="text-center">
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-400/10 ring-1 ring-emerald-400/25">
                   <svg className="h-6 w-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,30 +66,33 @@ export default function ForgotPassword() {
               </div>
             </AuthCard>
           ) : (
-            <AuthCard>
+            <AuthCard compact>
               <h1 className="mb-1 font-display text-xl font-bold text-white">Forgot password?</h1>
-              <p className="mb-6 text-sm text-white/45">
+              <p className="mb-4 text-sm text-white/45">
                 Enter your email and we'll send you a reset link.
               </p>
 
               <AuthErrorBanner>{error}</AuthErrorBanner>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <AuthField label="Email">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="you@example.com"
-                    className={authInputCls(false)}
-                  />
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <AuthField label="Email address">
+                  <div className="relative">
+                    <AuthInputIcon><MailIcon /></AuthInputIcon>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      placeholder="you@example.com"
+                      className={authInputIconCls(false)}
+                    />
+                  </div>
                 </AuthField>
 
-                <AuthSubmitButton loading={loading} loadingText="Sending…">Send reset link</AuthSubmitButton>
+                <AuthSubmitButton loading={loading} loadingText="Sending…" arrow>Send reset link</AuthSubmitButton>
               </form>
 
-              <p className="mt-6 text-center text-sm text-white/45">
+              <p className="mt-4 text-center text-sm text-white/45">
                 Remembered it?{' '}
                 <Link to="/login" className="font-semibold text-[#8184F5] hover:text-[#A78BFA]">
                   Sign in

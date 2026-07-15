@@ -1,6 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback, useRef } from 'react'
 import { Alert, CircularProgress } from '@mui/material'
-import { Add, Close } from '@mui/icons-material'
+import PageSpinner from '../components/PageSpinner'
+import PageAlert from '../components/PageAlert'
+import {
+  Add, Close, WorkOutlineRounded, SendRounded, BoltRounded,
+  TrackChangesRounded, PsychologyRounded, TrendingUpRounded, TrendingDownRounded,
+  KeyboardArrowDown, FilterListRounded, VisibilityOutlined, EditOutlined,
+  DeleteOutlineRounded, NotificationsNoneOutlined, BookmarkBorderRounded, BookmarkRounded,
+  PlaceRounded, LanguageRounded,
+} from '@mui/icons-material'
 import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
@@ -10,26 +18,26 @@ import { getCompanies } from '../api/company'
 import { getProfile } from '../api/user'
 import { getFollowUpsForApplication, createFollowUp, updateFollowUp, deleteFollowUp } from '../api/followup'
 import { getInterviewsForApplication, createInterview, updateInterview, deleteInterview } from '../api/interview'
-import { todayStr, fmtDate, initials } from '../utils/followup'
+import { todayStr, fmtDate, fmt } from '../utils/followup'
+import { fmtFileSize, isAllowedDocExt, openDocInNewTab, downloadDoc } from '../utils/documents'
 import RescheduleInline from '../components/RescheduleInline'
-import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
 import CompanyDetailModal from '../components/CompanyDetailModal'
 import InlineStatusChanger from '../components/InlineStatusChanger'
-import { EntityCard, EntityDirectoryCard } from '../components/EntityCard'
-
-const STATUS_CONFIG = {
-  SAVED:               { label: 'Saved',               badge: 'bg-gray-100 text-gray-600',    border: 'border-l-gray-300',    dot: 'bg-gray-400'    },
-  APPLIED:             { label: 'Applied',             badge: 'bg-blue-100 text-blue-700',    border: 'border-l-blue-400',    dot: 'bg-blue-500'    },
-  OA_SCHEDULED:        { label: 'OA Scheduled',        badge: 'bg-amber-100 text-amber-700',  border: 'border-l-amber-400',   dot: 'bg-amber-500'   },
-  OA_CLEARED:          { label: 'OA Cleared',          badge: 'bg-cyan-100 text-cyan-700',    border: 'border-l-cyan-400',    dot: 'bg-cyan-500'    },
-  INTERVIEW_SCHEDULED: { label: 'Interview Scheduled', badge: 'bg-purple-100 text-purple-700', border: 'border-l-purple-400', dot: 'bg-purple-500'  },
-  INTERVIEW_CLEARED:   { label: 'Interview Cleared',   badge: 'bg-violet-100 text-violet-700', border: 'border-l-violet-400', dot: 'bg-violet-500'  },
-  OFFER_RECEIVED:      { label: 'Offer Received',      badge: 'bg-green-100 text-green-700',  border: 'border-l-green-400',   dot: 'bg-green-500'   },
-  REJECTED:            { label: 'Rejected',            badge: 'bg-red-100 text-red-700',      border: 'border-l-red-400',     dot: 'bg-red-400'     },
-  JOINED:              { label: 'Joined',              badge: 'bg-emerald-100 text-emerald-700', border: 'border-l-emerald-400', dot: 'bg-emerald-500' },
-}
+import { CardMenu } from '../components/EntityCard'
+import CompanyLogo from '../components/CompanyLogo'
+import MonthlyTrendChart from '../components/MonthlyTrendChart'
+import MostAppliedCard from '../components/MostAppliedCard'
+import FilterSelect from '../components/FilterSelect'
+import useSearchShortcut from '../hooks/useSearchShortcut'
+import useAddQueryParam from '../hooks/useAddQueryParam'
+import useTransientMessage from '../hooks/useTransientMessage'
+import ApplicationSourcesCard from '../components/ApplicationSourcesCard'
+import AnalyticsCard from '../components/AnalyticsCard'
+import { DrawerShell, CloseIconButton } from '../components/DrawerShell'
+import { FieldLabel, FormFooterButtons } from '../components/formKit'
+import { APP_STATUS_CONFIG as STATUS_CONFIG, appStatusHex as dotHex } from '../constants/applicationStatus'
 
 const SOURCE_LABELS = {
   CAREERS_PAGE: 'Careers Page', LINKEDIN: 'LinkedIn', REFERRAL: 'Referral',
@@ -45,18 +53,16 @@ const SORT_OPTIONS = [
 
 const EMPTY_FORM = {
   companyId: '', role: '',
-  applicationDate: new Date().toISOString().slice(0, 10),
+  applicationDate: todayStr(),
   deadline: '',
   source: '', status: 'SAVED', expectedSalary: '', notes: '',
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.APPLIED
   return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
-// ─── Inline Status Changer ────────────────────────────────────────────────────
 function AppStatusChanger({ app, onStatusChanged }) {
   return (
     <InlineStatusChanger
@@ -69,234 +75,240 @@ function AppStatusChanger({ app, onStatusChanged }) {
   )
 }
 
-// ─── Application List Card ────────────────────────────────────────────────────
-function ApplicationCard({ app, onView, onEdit, onDelete, onFollowUp, onCompany, onStatusChanged }) {
-  const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
+function useLocalBookmark(appId) {
+  const key = `cf_app_bookmark_${appId}`
+  const [bookmarked, setBookmarked] = useState(() => localStorage.getItem(key) === '1')
+
+  useEffect(() => {
+    setBookmarked(localStorage.getItem(key) === '1')
+  }, [key])
+
+  const toggle = () => {
+    const next = !bookmarked
+    localStorage.setItem(key, next ? '1' : '0')
+    setBookmarked(next)
+  }
+
+  return [bookmarked, toggle]
+}
+
+function ApplicationDirectoryCard({ app, company, onView, onEdit, onDelete, onFollowUp, onStatusChanged }) {
+  const [bookmarked, toggleBookmark] = useLocalBookmark(app.id)
+  const step = nextStepInfo(app)
+
   return (
-    <EntityCard
-      onClick={() => onView(app)}
-      accentColor={cfg.border}
-      avatarColor={cfg.dot}
-      avatarText={initials(app.companyName)}
-      titleSlot={
-        <>
-          <span className="block w-full text-base font-bold text-gray-800 truncate mb-1.5">
-            {app.companyName}
-          </span>
-          <div><AppStatusChanger app={app} onStatusChanged={onStatusChanged} /></div>
-          <p className="text-sm font-medium text-gray-600 mt-2">💼 {app.role}</p>
-        </>
-      }
-      chips={
-        <>
-          {app.applicationDate && (
-            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-              📅 {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+    <div onClick={() => onView(app)}
+      style={{ borderTopColor: dotHex(app.status) }}
+      className="group relative flex cursor-pointer flex-col gap-3.5 overflow-hidden rounded-card border border-white/[0.06] border-t-4 bg-app-surface p-5 shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.1] hover:shadow-card-hover">
+
+      <div className="flex items-start gap-3">
+        <CompanyLogo name={app.companyName} website={company?.website} dotColor={dotHex(app.status)} className="h-11 w-11 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-bold leading-tight text-white/90">{app.companyName}</p>
+          <p className="truncate text-xs text-white/50 mt-0.5">{app.role}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+          <button onClick={toggleBookmark} title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-white/40 transition hover:bg-white/[0.08] hover:text-white">
+            {bookmarked ? <BookmarkRounded sx={{ fontSize: 17 }} className="text-app-accent-soft" /> : <BookmarkBorderRounded sx={{ fontSize: 17 }} />}
+          </button>
+          <CardMenu items={[
+            { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(app) },
+            { key: 'followup', label: 'Follow-Up', icon: <NotificationsNoneOutlined sx={{ fontSize: 16 }} />, onClick: () => onFollowUp(app) },
+            { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(app) },
+            { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(app), tone: 'danger' },
+          ]} />
+        </div>
+      </div>
+
+      <div onClick={(e) => e.stopPropagation()}>
+        <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
+      </div>
+
+      {(company?.location || app.source) && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/45">
+          {company?.location && (
+            <span className="flex items-center gap-1 min-w-0">
+              <PlaceRounded sx={{ fontSize: 13 }} className="shrink-0 text-white/25" />
+              <span className="truncate">{company.location}</span>
             </span>
           )}
           {app.source && (
-            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-              via {SOURCE_LABELS[app.source] || app.source}
+            <span className="flex items-center gap-1 min-w-0">
+              <LanguageRounded sx={{ fontSize: 13 }} className="shrink-0 text-white/25" />
+              <span className="truncate">{SOURCE_LABELS[app.source] || app.source}</span>
             </span>
           )}
-          {app.expectedSalary && (
-            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-green-50 text-green-600 rounded-full">
-              💰 {app.expectedSalary}
-            </span>
-          )}
-          {app.deadline && (() => {
-            const today = new Date().toISOString().slice(0, 10)
-            const daysLeft = Math.round((new Date(app.deadline) - new Date(today)) / 86400000)
-            const isUrgent = daysLeft <= 3
-            const isPast   = daysLeft < 0
-            return (
-              <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${
-                isPast ? 'bg-red-100 text-red-600' : isUrgent ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-500'
-              }`}>
-                ⏰ {isPast ? 'Deadline passed' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`}
-              </span>
-            )
-          })()}
-          {app.nextFollowUpDate && (() => {
-            const today = new Date().toISOString().slice(0, 10)
-            const isOverdue = app.nextFollowUpDate < today
-            const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-            const showUpcoming = isOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
-            return (
-              <>
-                <button type="button" onClick={(e) => { e.stopPropagation(); onFollowUp(app) }} className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium hover:opacity-80 transition ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                  🔔 {fmt(app.nextFollowUpDate)}
-                  {isOverdue && <span className="ml-1 text-[10px] font-bold">Overdue</span>}
-                </button>
-                {showUpcoming && (
-                  <button type="button" onClick={(e) => { e.stopPropagation(); onFollowUp(app) }} className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full font-medium hover:opacity-80 transition">
-                    🔔 {fmt(app.nextUpcomingFollowUpDate)}
-                  </button>
-                )}
-              </>
-            )
-          })()}
-          {app.resume && (
-            <button type="button"
-              onClick={(e) => { e.stopPropagation(); triggerDocView(app.resume) }}
-              className="inline-flex items-center text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition"
-              title={`View ${app.resume.originalName}`}>
-              📄 {app.resume.originalName.replace(/\.[^/.]+$/, '')}
-            </button>
-          )}
-          {app.coverLetter && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); triggerDocView(app.coverLetter) }}
-              className="inline-flex items-center text-xs px-2.5 py-1 bg-violet-50 text-violet-600 rounded-full hover:bg-violet-100 transition"
-              title={`View ${app.coverLetter.originalName}`}>
-              ✉ Cover Letter
-            </button>
-          )}
-        </>
-      }
-      note={app.notes}
-      actions={[
-        {
-          label: 'Follow-Up', tone: 'accent', onClick: () => onFollowUp(app),
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-              <path d="M4.214 3.227a.75.75 0 00-1.156-.956 8.97 8.97 0 00-1.856 3.826.75.75 0 001.466.316 7.47 7.47 0 011.546-3.186zM16.942 2.271a.75.75 0 00-1.156.956 7.47 7.47 0 011.547 3.186.75.75 0 001.466-.316 8.971 8.971 0 00-1.857-3.826zM10 6a4 4 0 00-4 4v.667l-1.166 2.333a.75.75 0 000 .666.75.75 0 00.666.334h9a.75.75 0 00.666-.334.75.75 0 000-.666L14 10.667V10a4 4 0 00-4-4zm0 13a2.5 2.5 0 01-2.45-2h4.9A2.5 2.5 0 0110 19z"/>
-            </svg>
-          ),
-        },
-        { label: 'Edit', icon: 'edit', onClick: () => onEdit(app) },
-        { label: 'Delete', icon: 'delete', onClick: () => onDelete(app), tone: 'danger' },
-      ]}
-    />
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-2 rounded-xl bg-white/[0.02] px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Applied On</p>
+          <p className="mt-0.5 truncate text-[13px] font-semibold text-white/80">{app.applicationDate ? fmtDate(app.applicationDate) : '—'}</p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">CTC</p>
+          <p className="mt-0.5 truncate text-[13px] font-semibold text-white/80">{app.expectedSalary || '—'}</p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Next Step</p>
+          <p className={`mt-0.5 truncate text-[13px] font-semibold ${NEXT_STEP_TONE[step.tone]}`}>{step.label}</p>
+        </div>
+      </div>
+
+      {(app.nextFollowUpDate && app.nextFollowUpDate < todayStr()) && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); onFollowUp(app) }}
+          className="inline-flex w-fit items-center gap-1.5 rounded-full bg-app-danger/10 px-2.5 py-1 text-[11px] font-semibold text-app-danger transition hover:bg-app-danger/20">
+          <NotificationsNoneOutlined sx={{ fontSize: 13 }} />
+          {fmtDate(app.nextFollowUpDate)} · Overdue
+        </button>
+      )}
+    </div>
   )
 }
 
-// ─── Application Grid Card ─────────────────────────────────────────────────────
-function ApplicationDirectoryCard({ app, onView, onEdit, onDelete, onFollowUp, onCompany, onStatusChanged }) {
-  const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
-  const today = new Date().toISOString().slice(0, 10)
-  const hasOverdue = app.nextFollowUpDate && app.nextFollowUpDate < today
-  const hasUpcoming = app.nextFollowUpDate && app.nextFollowUpDate >= today
-  const showUpcoming = hasOverdue && app.nextUpcomingFollowUpDate && app.nextUpcomingFollowUpDate !== app.nextFollowUpDate
-  const fmtDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-
+function AnalyticsTile({ icon, tint, value, label, trend, subtext, valueClassName = 'text-white' }) {
+  const hasTrend = typeof trend === 'number'
+  const positive = trend >= 0
   return (
-    <EntityDirectoryCard
-      onClick={() => onView(app)}
-      borderTopColor={dotHex(app.status)}
-      avatarColor={cfg.dot}
-      avatarText={initials(app.companyName)}
-      titleSlot={
-        <>
-          <span className="block text-sm font-bold text-gray-800 truncate leading-tight">
-            {app.companyName}
-          </span>
-          <p className="text-xs text-gray-500 truncate mt-0.5">{app.role}</p>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
-            <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
-            {app.applicationDate && (
-              <span className="text-[11px] text-gray-400 shrink-0">
-                {new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-            )}
-          </div>
-        </>
-      }
-      chips={
-        <>
-          {app.deadline && (() => {
-            const todayStr = new Date().toISOString().slice(0, 10)
-            const daysLeft = Math.round((new Date(app.deadline) - new Date(todayStr)) / 86400000)
-            const isPast   = daysLeft < 0
-            const isUrgent = daysLeft >= 0 && daysLeft <= 3
-            return (
-              <span className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                isPast ? 'bg-red-100 text-red-600' : isUrgent ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-500'
-              }`}>
-                ⏰ {isPast ? 'Deadline passed' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`}
-              </span>
-            )
-          })()}
-          {hasOverdue && (
-            <button type="button" onClick={() => onFollowUp(app)}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-red-50 text-red-600 hover:bg-red-100 transition">
-              🔔 {fmtDate(app.nextFollowUpDate)} · Overdue
-            </button>
-          )}
-          {(hasUpcoming && !hasOverdue) && (
-            <button type="button" onClick={() => onFollowUp(app)}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
-              🔔 {fmtDate(app.nextFollowUpDate)}
-            </button>
-          )}
-          {showUpcoming && (
-            <button type="button" onClick={() => onFollowUp(app)}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
-              🔔 {fmtDate(app.nextUpcomingFollowUpDate)}
-            </button>
-          )}
-          {app.resume && (
-            <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-medium">
-              📄 Resume
-            </span>
-          )}
-          {app.coverLetter && (
-            <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-violet-50 text-violet-600 rounded-full font-medium">
-              ✉ Cover Letter
-            </span>
-          )}
-          {app.expectedSalary && (
-            <span className="inline-flex items-center text-[11px] px-2 py-0.5 bg-green-50 text-green-600 rounded-full font-medium">
-              {app.expectedSalary}
-            </span>
-          )}
-        </>
-      }
-      note={app.notes}
-      actions={[
-        { label: 'Follow-Up', icon: '🔔', onClick: () => onFollowUp(app), tone: 'accent' },
-        { label: 'Edit', icon: '✏️', onClick: () => onEdit(app) },
-        { label: 'Delete', icon: '🗑️', onClick: () => onDelete(app), tone: 'danger' },
-      ]}
-    />
+    <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card px-4 py-3.5 flex items-start gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg shadow-inner-highlight"
+        style={{ background: `linear-gradient(160deg, ${tint}26, ${tint}0D)`, color: tint }}>
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className={`text-2xl font-display font-black leading-none ${valueClassName}`}>{value}</p>
+        <p className="text-[11px] text-white/40 font-medium mt-1 truncate">{label}</p>
+        {hasTrend && (
+          <p className={`flex items-center gap-0.5 text-[11px] font-semibold mt-1 ${positive ? 'text-app-success' : 'text-app-danger'}`}>
+            {positive ? <TrendingUpRounded sx={{ fontSize: 13 }} /> : <TrendingDownRounded sx={{ fontSize: 13 }} />}
+            {Math.abs(trend)}% vs last month
+          </p>
+        )}
+        {subtext && <p className="text-[10px] text-white/30 leading-tight mt-1">{subtext}</p>}
+      </div>
+    </div>
   )
 }
 
-function dotHex(status) {
-  const map = {
-    SAVED: '#9ca3af', APPLIED: '#3b82f6', OA_SCHEDULED: '#f59e0b',
-    OA_CLEARED: '#06b6d4', INTERVIEW_SCHEDULED: '#a855f7', INTERVIEW_CLEARED: '#7c3aed',
-    OFFER_RECEIVED: '#22c55e', REJECTED: '#f87171', JOINED: '#10b981',
+function DetailField({ label, value }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-sm text-white/85 truncate">{value || <span className="text-white/25">—</span>}</p>
+    </div>
+  )
+}
+
+function nextStepInfo(app) {
+  const today = todayStr()
+  if (app.nextFollowUpDate) {
+    const days = Math.round((new Date(app.nextFollowUpDate) - new Date(today)) / 86400000)
+    const overdue = app.nextFollowUpDate < today
+    return {
+      label: overdue ? `Follow-up ${Math.abs(days)}d overdue` : days === 0 ? 'Follow-up today' : `Follow-up in ${days}d`,
+      tone: overdue ? 'danger' : 'accent',
+    }
   }
-  return map[status] || map.APPLIED
+  if (app.deadline) {
+    const days = Math.round((new Date(app.deadline) - new Date(today)) / 86400000)
+    const past = app.deadline < today
+    return {
+      label: past ? 'Deadline passed' : days === 0 ? 'Deadline today' : `Deadline in ${days}d`,
+      tone: past ? 'danger' : days <= 3 ? 'warning' : 'neutral',
+    }
+  }
+  if (app.expectedSalary) {
+    return { label: app.expectedSalary, tone: 'success' }
+  }
+  return { label: 'None', tone: 'muted' }
 }
 
-function formatSize(b) {
-  if (!b) return ''
-  if (b < 1024) return `${b} B`
-  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`
-  return `${(b / 1048576).toFixed(1)} MB`
+const NEXT_STEP_TONE = {
+  danger:  'text-app-danger',
+  accent:  'text-app-accent-soft',
+  warning: 'text-app-warning',
+  success: 'text-app-success',
+  neutral: 'text-white/60',
+  muted:   'text-white/25',
 }
 
-async function triggerDocDownload(doc) {
-  try {
-    const res = await downloadApplicationDocument(doc.id)
-    const url = URL.createObjectURL(new Blob([res.data], { type: doc.contentType }))
-    const a = document.createElement('a')
-    a.href = url; a.download = doc.originalName; a.click()
-    URL.revokeObjectURL(url)
-  } catch {}
+function ApplicationTableRow({ app, company, onView, onEdit, onDelete, onFollowUp, onStatusChanged }) {
+  const step = nextStepInfo(app)
+  return (
+    <div onClick={() => onView(app)}
+      className="group flex items-center gap-4 border-b border-white/[0.05] px-4 py-3.5 cursor-pointer transition-colors hover:bg-white/[0.025] last:border-0">
+      <div className="w-56 min-w-0 shrink-0 flex items-center gap-3">
+        <CompanyLogo name={app.companyName} website={company?.website} dotColor={dotHex(app.status)} className="h-9 w-9 shrink-0" />
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-white/90 truncate">{app.companyName}</p>
+          {company?.location && <p className="text-xs text-white/35 truncate mt-0.5">{company.location}</p>}
+        </div>
+      </div>
+
+      <div className="w-36 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
+      </div>
+
+      <div className="w-44 min-w-0 shrink-0 hidden md:block">
+        <p className="text-sm text-white/75 truncate">{app.role}</p>
+      </div>
+
+      <div className="w-32 min-w-0 shrink-0 hidden lg:block">
+        <p className="text-sm text-white/70 truncate">{app.companyName}</p>
+      </div>
+
+      <div className="w-28 shrink-0 hidden lg:block">
+        <p className="text-sm text-white/60 truncate">{SOURCE_LABELS[app.source] || app.source || '—'}</p>
+      </div>
+
+      <div className="w-28 shrink-0 hidden xl:block">
+        <p className="text-sm text-white/60">{app.applicationDate ? fmtDate(app.applicationDate) : '—'}</p>
+      </div>
+
+      <div className="w-36 min-w-0 shrink-0 hidden xl:block" onClick={(e) => e.stopPropagation()}>
+        {step.label !== 'None' && (app.nextFollowUpDate || app.deadline) ? (
+          <button type="button" onClick={() => onFollowUp(app)} className={`text-sm font-medium truncate hover:underline ${NEXT_STEP_TONE[step.tone]}`}>
+            {step.label}
+          </button>
+        ) : (
+          <p className={`text-sm truncate ${NEXT_STEP_TONE[step.tone]}`}>{step.label}</p>
+        )}
+      </div>
+
+      <div className="ml-auto shrink-0" onClick={(e) => e.stopPropagation()}>
+        <CardMenu items={[
+          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(app) },
+          { key: 'followup', label: 'Follow-Up', icon: <NotificationsNoneOutlined sx={{ fontSize: 16 }} />, onClick: () => onFollowUp(app) },
+          { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(app) },
+          { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(app), tone: 'danger' },
+        ]} />
+      </div>
+    </div>
+  )
 }
 
-async function triggerDocView(doc) {
-  try {
-    const res = await viewApplicationDocument(doc.id)
-    const url = URL.createObjectURL(new Blob([res.data], { type: doc.contentType }))
-    window.open(url, '_blank')
-  } catch {}
+function ApplicationTableHeader() {
+  return (
+    <div className="hidden md:flex items-center gap-4 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-white/35 border-b border-white/[0.06]">
+      <div className="w-56 shrink-0">Application</div>
+      <div className="w-36 shrink-0">Status</div>
+      <div className="w-44 shrink-0">Role</div>
+      <div className="w-32 shrink-0 hidden lg:block">Company</div>
+      <div className="w-28 shrink-0 hidden lg:block">Source</div>
+      <div className="w-28 shrink-0 hidden xl:block">Applied On</div>
+      <div className="w-36 shrink-0 hidden xl:block">Next Step</div>
+      <div className="ml-auto w-8 shrink-0" />
+    </div>
+  )
 }
+
+const triggerDocDownload = (doc) => downloadDoc((d) => downloadApplicationDocument(d.id), doc)
+const triggerDocView     = (doc) => openDocInNewTab((d) => viewApplicationDocument(d.id), doc)
 
 // ─── Detail (View) Modal ──────────────────────────────────────────────────────
-function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatusChanged, onCompany }) {
+function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete, onStatusChanged, onCompany }) {
   const [app, setApp] = useState(initialApp)
   const [interviews, setInterviews] = useState([])
   const [interviewsLoading, setInterviewsLoading] = useState(false)
@@ -308,7 +320,7 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
   const [editForm, setEditForm] = useState(EMPTY_INTERVIEW_FORM)
   const [editSaving, setEditSaving] = useState(false)
   const [processingId, setProcessingId] = useState(null)
-  const [ivFlash, setIvFlash] = useState('')
+  const [ivFlash, setIvFlash] = useTransientMessage(2500)
 
   useEffect(() => { setApp(initialApp) }, [initialApp])
 
@@ -335,14 +347,12 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
 
   if (!open) return null
 
-  const cfg = app ? (STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED) : STATUS_CONFIG.APPLIED
-
   const handleStatusChanged = (updated) => {
     setApp(updated)
     onStatusChanged?.(updated)
   }
 
-  const flash = (msg) => { setIvFlash(msg); setTimeout(() => setIvFlash(''), 2500) }
+  const flash = setIvFlash
 
   const setAddField  = (key) => (e) => setAddForm(f  => ({ ...f,  [key]: e.target.value }))
   const setEditField = (key) => (e) => setEditForm(f => ({ ...f,  [key]: e.target.value }))
@@ -417,88 +427,90 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
     finally { setProcessingId(null) }
   }
 
-  const fmtDateTime = (dt) => dt
-    ? new Date(dt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-    : '—'
+  const fmtDateTime = (dt) => fmt(dt) || '—'
 
-  const inputCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white hover:border-gray-300 transition'
+  const inputCls = 'w-full px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition placeholder:text-white/25'
 
-  const Row = ({ label, value }) => value ? (
-    <div className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
-      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-32 shrink-0 pt-0.5">{label}</span>
-      <span className="text-sm text-gray-700 flex-1 break-words">{value}</span>
-    </div>
-  ) : null
+  const timelineEvents = app ? [
+    app.updatedAt && app.updatedAt !== app.createdAt && {
+      label: 'Application Updated',
+      at: app.updatedAt,
+    },
+    app.createdAt && {
+      label: 'Application Created',
+      at: app.createdAt,
+    },
+  ].filter(Boolean) : []
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
+    <DrawerShell>
 
-        {/* Header */}
-        <div className="rounded-t-2xl px-6 pt-6 pb-5 border-b border-gray-100 shrink-0">
-          {app && (
-            <div className="flex items-start gap-4">
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold shrink-0 ${cfg.dot}`}>
-                {(app.companyName || '?')[0].toUpperCase()}
+      <div className="px-6 pt-6 pb-5 border-b border-white/[0.06] shrink-0">
+        {app && (
+          <div className="flex items-start gap-3">
+            <CompanyLogo name={app.companyName} website={company?.website} dotColor={dotHex(app.status)} className="h-12 w-12 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-bold text-white leading-tight truncate">{app.companyName || '—'}</h2>
+                {app.companyId && (
+                  <button onClick={() => { onClose(); onCompany(app.companyId) }}
+                    className="text-[11px] font-semibold text-app-accent-soft hover:text-white hover:underline transition shrink-0">
+                    View Company →
+                  </button>
+                )}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl font-bold text-gray-800 leading-tight">{app.companyName || '—'}</h2>
-                  {app.companyId && (
-                    <button onClick={() => { onClose(); onCompany(app.companyId) }}
-                      className="text-[11px] font-semibold text-blue-500 hover:text-blue-700 hover:underline transition shrink-0">
-                      View Company →
-                    </button>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 mt-0.5">💼 {app.role}</p>
-                <div className="mt-2">
-                  <AppStatusChanger app={app} onStatusChanged={handleStatusChanged} />
-                </div>
+              {company?.location && <p className="text-xs text-white/40 truncate mt-0.5">{company.location}</p>}
+              <div className="mt-2">
+                <AppStatusChanger app={app} onStatusChanged={handleStatusChanged} />
               </div>
-              <button onClick={onClose}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition shrink-0">
-                <Close sx={{ fontSize: 18 }} />
+            </div>
+            <CloseIconButton onClose={onClose} className="shrink-0" />
+          </div>
+        )}
+      </div>
+
+      {app && (
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 no-scrollbar">
+
+          <div>
+            <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest mb-3">Role & Application</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <DetailField label="Role" value={app.role} />
+              <DetailField label="Applied On" value={app.applicationDate ? fmtDate(app.applicationDate) : null} />
+              <DetailField label="Source" value={SOURCE_LABELS[app.source] || app.source} />
+              <DetailField label="Expected CTC" value={app.expectedSalary} />
+              <DetailField label="Deadline" value={app.deadline ? fmtDate(app.deadline) : null} />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest">Notes</p>
+              <button onClick={() => { onClose(); onEdit(app) }}
+                className="flex items-center gap-1 text-[11px] font-semibold text-app-accent-soft hover:text-white transition">
+                <EditOutlined sx={{ fontSize: 12 }} /> Edit
               </button>
             </div>
-          )}
-        </div>
-
-        {/* Body */}
-        {app && (
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-
-            {/* Application details */}
-            <div>
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Application Details</p>
-              <Row label="Applied On"   value={app.applicationDate ? new Date(app.applicationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : null} />
-              <Row label="Deadline"     value={app.deadline ? new Date(app.deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : null} />
-              <Row label="Source"       value={SOURCE_LABELS[app.source] || app.source || null} />
-              <Row label="Expected CTC" value={app.expectedSalary || null} />
+            <div className="bg-white/[0.03] rounded-xl px-4 py-3">
+              <p className="text-sm text-white/75 whitespace-pre-wrap leading-relaxed">
+                {app.notes || <span className="text-white/25 italic">No notes yet.</span>}
+              </p>
             </div>
-
-            {app.notes && (
-              <div>
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Notes</p>
-                <div className="bg-gray-50 rounded-xl px-4 py-3">
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{app.notes}</p>
-                </div>
-              </div>
-            )}
+          </div>
 
             {(app.resume || app.coverLetter) && (
               <div>
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Documents</p>
+                <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest mb-2">Documents</p>
                 <div className="flex gap-2 flex-wrap">
                   {app.resume && (
                     <button onClick={() => triggerDocView(app.resume)}
-                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition font-medium">
+                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-app-accent/10 text-app-accent-soft rounded-lg hover:bg-app-accent/20 transition font-medium">
                       📄 {app.resume.originalName || 'Resume'}
                     </button>
                   )}
                   {app.coverLetter && (
                     <button onClick={() => triggerDocView(app.coverLetter)}
-                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-violet-50 text-violet-600 rounded-lg hover:bg-violet-100 transition font-medium">
+                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-app-accent2/10 text-app-accent-soft rounded-lg hover:bg-app-accent2/20 transition font-medium">
                       📋 {app.coverLetter.originalName || 'Cover Letter'}
                     </button>
                   )}
@@ -506,51 +518,48 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
               </div>
             )}
 
-            {/* ── Interview Rounds ── */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest">
                   Interview Rounds {interviews.length > 0 && `(${interviews.length})`}
                 </p>
                 <button
                   onClick={() => { setShowAddForm(v => !v); setAddError('') }}
                   className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border transition ${
                     showAddForm
-                      ? 'bg-purple-600 text-white border-purple-600'
-                      : 'border-purple-200 text-purple-600 bg-white hover:bg-purple-600 hover:text-white hover:border-purple-600'
+                      ? 'bg-app-accent2 text-white border-app-accent2'
+                      : 'border-app-accent2/30 text-app-accent-soft bg-white/[0.03] hover:bg-app-accent2 hover:text-white hover:border-app-accent2'
                   }`}>
                   {showAddForm ? '✕ Cancel' : '+ Add Round'}
                 </button>
               </div>
 
               {ivFlash && (
-                <div className="mb-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 text-green-700 text-xs font-medium">
+                <div className="mb-3 px-3 py-2 rounded-xl bg-app-success/10 border border-app-success/20 text-app-success text-xs font-medium">
                   {ivFlash}
                 </div>
               )}
 
-              {/* Add round form */}
               {showAddForm && (
-                <form onSubmit={handleAddSubmit} className="mb-4 bg-purple-50 rounded-xl p-3 space-y-2.5">
-                  {addError && <p className="text-xs text-red-500">{addError}</p>}
+                <form onSubmit={handleAddSubmit} className="mb-4 bg-app-accent2/10 rounded-xl p-3 space-y-2.5">
+                  {addError && <p className="text-xs text-app-danger">{addError}</p>}
                   <InterviewFormFields form={addForm} setField={setAddField} inputCls={inputCls} />
                   <button type="submit" disabled={addSaving}
-                    className="w-full py-2 text-xs font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition disabled:opacity-60 flex items-center justify-center gap-2">
+                    className="w-full py-2 text-xs font-semibold text-white bg-app-accent2 rounded-xl hover:brightness-110 transition disabled:opacity-60 flex items-center justify-center gap-2">
                     {addSaving && <CircularProgress size={11} color="inherit" />}
                     Add Round
                   </button>
                 </form>
               )}
 
-              {/* Timeline */}
               {interviewsLoading ? (
                 <div className="flex justify-center py-4"><CircularProgress size={20} /></div>
               ) : interviews.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-3">No rounds yet — add one above.</p>
+                <p className="text-xs text-white/35 text-center py-3">No rounds yet — add one above.</p>
               ) : (
                 <div className="relative">
                   {interviews.length > 1 && (
-                    <div className="absolute left-[15px] top-[30px] bottom-[30px] w-0.5 bg-gray-100 z-0" />
+                    <div className="absolute left-[15px] top-[30px] bottom-[30px] w-0.5 bg-white/[0.06] z-0" />
                   )}
                   <div className="space-y-3">
                     {interviews.map((iv, idx) => {
@@ -558,31 +567,29 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
                       const isProc = processingId === iv.id
                       const isEditingThis = editingId === iv.id
                       const dotBg =
-                        iv.outcome === 'PASSED'      ? 'bg-green-500 ring-green-100'  :
-                        iv.outcome === 'FAILED'      ? 'bg-red-400 ring-red-100'      :
-                        iv.outcome === 'NO_SHOW'     ? 'bg-gray-400 ring-gray-100'    :
-                        iv.outcome === 'RESCHEDULED' ? 'bg-blue-400 ring-blue-100'    :
-                                                       'bg-amber-400 ring-amber-100'
+                        iv.outcome === 'PASSED'      ? 'bg-app-success ring-app-success/15'  :
+                        iv.outcome === 'FAILED'      ? 'bg-app-danger ring-app-danger/15'      :
+                        iv.outcome === 'NO_SHOW'     ? 'bg-white/40 ring-white/10'    :
+                        iv.outcome === 'RESCHEDULED' ? 'bg-app-accent ring-app-accent/15'    :
+                                                       'bg-app-warning ring-app-warning/15'
                       return (
                         <div key={iv.id} className="relative flex gap-3 z-10">
-                          {/* Dot */}
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0 ring-4 ${dotBg}`}>
                             {idx + 1}
                           </div>
-                          {/* Card */}
-                          <div className="flex-1 min-w-0 bg-gray-50 border border-gray-100 rounded-xl p-3">
+                          <div className="flex-1 min-w-0 bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
                             {isEditingThis ? (
                               <form onSubmit={handleEditSubmit} className="space-y-2">
-                                <p className="text-[10px] font-semibold text-purple-600 uppercase tracking-wide">Editing Round {idx + 1}</p>
+                                <p className="text-[10px] font-semibold text-app-accent-soft uppercase tracking-wide">Editing Round {idx + 1}</p>
                                 <InterviewFormFields form={editForm} setField={setEditField} inputCls={inputCls} />
                                 <div className="flex gap-2 pt-1">
                                   <button type="submit" disabled={editSaving}
-                                    className="flex-1 py-1.5 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition disabled:opacity-60 flex items-center justify-center gap-1.5">
+                                    className="flex-1 py-1.5 text-xs font-semibold text-white bg-app-accent2 rounded-lg hover:brightness-110 transition disabled:opacity-60 flex items-center justify-center gap-1.5">
                                     {editSaving && <CircularProgress size={10} color="inherit" />}
                                     Save
                                   </button>
                                   <button type="button" onClick={() => setEditingId(null)}
-                                    className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition">
+                                    className="px-3 py-1.5 text-xs font-semibold text-white/60 bg-white/[0.04] border border-white/[0.08] rounded-lg hover:bg-white/[0.08] transition">
                                     Cancel
                                   </button>
                                 </div>
@@ -591,25 +598,25 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
                               <div className="flex items-start gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                                    <span className="text-xs font-bold text-gray-800">{iv.round || `Round ${idx + 1}`}</span>
+                                    <span className="text-xs font-bold text-white/85">{iv.round || `Round ${idx + 1}`}</span>
                                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${outcomeCfg.cls}`}>{outcomeCfg.label}</span>
                                   </div>
-                                  <p className="text-[11px] text-gray-400 mb-1">🗓 {fmtDateTime(iv.scheduledAt)}</p>
+                                  <p className="text-[11px] text-white/35 mb-1">🗓 {fmtDateTime(iv.scheduledAt)}</p>
                                   <div className="flex flex-wrap gap-1.5">
-                                    {iv.interviewType && <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-md font-medium">{INTERVIEW_TYPE_LABELS[iv.interviewType]}</span>}
-                                    {iv.location && <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-md font-medium truncate max-w-[140px]" title={iv.location}>📍 {iv.location}</span>}
-                                    {iv.interviewerName && <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-md font-medium">👤 {iv.interviewerName}</span>}
+                                    {iv.interviewType && <span className="text-[10px] px-1.5 py-0.5 bg-app-accent2/10 text-app-accent-soft rounded-md font-medium">{INTERVIEW_TYPE_LABELS[iv.interviewType]}</span>}
+                                    {iv.location && <span className="text-[10px] px-1.5 py-0.5 bg-app-accent/10 text-app-accent-soft rounded-md font-medium truncate max-w-[140px]" title={iv.location}>📍 {iv.location}</span>}
+                                    {iv.interviewerName && <span className="text-[10px] px-1.5 py-0.5 bg-white/[0.06] text-white/60 rounded-md font-medium">👤 {iv.interviewerName}</span>}
                                   </div>
-                                  {iv.questionsAsked && <p className="mt-1 text-[11px] text-gray-400"><span className="font-semibold not-italic">Q:</span> <span className="italic line-clamp-2">{iv.questionsAsked}</span></p>}
-                                  {iv.feedbackReceived && <p className="mt-0.5 text-[11px] text-gray-400"><span className="font-semibold not-italic">FB:</span> <span className="italic line-clamp-2">{iv.feedbackReceived}</span></p>}
+                                  {iv.questionsAsked && <p className="mt-1 text-[11px] text-white/35"><span className="font-semibold not-italic">Q:</span> <span className="italic line-clamp-2">{iv.questionsAsked}</span></p>}
+                                  {iv.feedbackReceived && <p className="mt-0.5 text-[11px] text-white/35"><span className="font-semibold not-italic">FB:</span> <span className="italic line-clamp-2">{iv.feedbackReceived}</span></p>}
                                 </div>
                                 <div className="flex gap-1 shrink-0">
                                   <button onClick={() => startEdit(iv)} disabled={isProc}
-                                    className="px-2 py-1 text-[10px] font-semibold rounded-lg border border-gray-200 text-gray-500 bg-white hover:bg-gray-700 hover:text-white hover:border-gray-700 transition disabled:opacity-50">
+                                    className="px-2 py-1 text-[10px] font-semibold rounded-lg border border-white/[0.08] text-white/60 bg-white/[0.03] hover:bg-white/[0.12] hover:text-white hover:border-white/[0.16] transition disabled:opacity-50">
                                     Edit
                                   </button>
                                   <button onClick={() => handleDeleteRound(iv.id)} disabled={isProc}
-                                    className="px-2 py-1 text-[10px] font-semibold rounded-lg border border-red-200 text-red-400 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition disabled:opacity-50 flex items-center">
+                                    className="px-2 py-1 text-[10px] font-semibold rounded-lg border border-app-danger/20 text-app-danger bg-white/[0.03] hover:bg-app-danger hover:text-white hover:border-app-danger transition disabled:opacity-50 flex items-center">
                                     {isProc ? <CircularProgress size={9} color="inherit" /> : '×'}
                                   </button>
                                 </div>
@@ -624,14 +631,35 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
               )}
             </div>
 
+            {timelineEvents.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest mb-3">Activity Timeline</p>
+                <div className="relative">
+                  {timelineEvents.length > 1 && (
+                    <div className="absolute left-[3px] top-[6px] bottom-[6px] w-px bg-white/[0.08]" />
+                  )}
+                  <div className="space-y-3">
+                    {timelineEvents.map((ev, i) => (
+                      <div key={i} className="relative flex gap-3 pl-0.5">
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-app-accent-soft shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm text-white/75">{ev.label}</p>
+                          <p className="text-xs text-white/35 mt-0.5">{fmtDateTime(ev.at)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 
-        {/* Footer */}
         {app && (
-          <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl shrink-0">
+          <div className="flex gap-3 px-6 py-4 border-t border-white/[0.06] bg-white/[0.02] shrink-0">
             <button onClick={() => { onClose(); onEdit(app) }}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-700 transition">
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white/70 bg-white/[0.03] border border-white/[0.08] rounded-xl hover:bg-white/[0.10] hover:text-white transition">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                 <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z"/>
                 <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z"/>
@@ -639,7 +667,7 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
               Edit
             </button>
             <button onClick={() => { onClose(); onDelete(app) }}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-red-500 bg-white border border-red-200 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition ml-auto">
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-app-danger bg-white/[0.03] border border-app-danger/20 rounded-xl hover:bg-app-danger hover:text-white hover:border-app-danger transition ml-auto">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                 <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z" clipRule="evenodd"/>
               </svg>
@@ -647,17 +675,14 @@ function DetailModal({ open, app: initialApp, onClose, onEdit, onDelete, onStatu
             </button>
           </div>
         )}
-      </div>
-    </div>
+    </DrawerShell>
   )
 }
 
-// ─── Add / Edit Modal ─────────────────────────────────────────────────────────
 function AddEditModal({ open, app, companies, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  // liveApp mirrors app but reflects immediate deletions without closing the modal
   const [liveApp, setLiveApp] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [resumeFile, setResumeFile] = useState(null)
@@ -672,7 +697,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
       setLiveApp(app ?? null)
       setForm(app ? {
         companyId: app.companyId || '', role: app.role || '',
-        applicationDate: app.applicationDate || new Date().toISOString().slice(0, 10),
+        applicationDate: app.applicationDate || todayStr(),
         deadline: app.deadline || '',
         source: app.source || '', status: app.status || 'APPLIED',
         expectedSalary: app.expectedSalary || '', notes: app.notes || '',
@@ -693,8 +718,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
     const file = e.target.files[0]
     e.target.value = ''
     if (!file) return
-    const ext = file.name.split('.').pop().toLowerCase()
-    if (!['pdf', 'doc', 'docx'].includes(ext)) {
+    if (!isAllowedDocExt(file)) {
       setResumeError('Only PDF, DOC, and DOCX files are supported.')
       return
     }
@@ -706,8 +730,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
   const handleCoverLetterChange = (e) => {
     const file = e.target.files[0]
     if (!file) return
-    const ext = file.name.split('.').pop().toLowerCase()
-    if (!['pdf', 'doc', 'docx'].includes(ext)) {
+    if (!isAllowedDocExt(file)) {
       setCoverLetterError('Only PDF, DOC, and DOCX files are supported.')
       e.target.value = ''
       return
@@ -781,189 +804,184 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
     }
   }
 
-  const inputCls = 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition'
+  const inputCls = 'w-full px-4 py-2.5 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition placeholder:text-white/25'
+
+  if (!open) return null
 
   return (
-    <ModalShell
-      open={open} onClose={onClose}
-      title={app ? 'Edit Application' : 'Add Application'}
-      subtitle={app ? 'Update application details' : 'Record a new job application'}
-    >
-      <div className="px-6 py-5">
-        {error && <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+    <DrawerShell>
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.06] shrink-0">
+        <h2 className="text-base font-bold text-white">{app ? 'Edit Application' : 'Add Application'}</h2>
+        <CloseIconButton onClose={onClose} />
+      </div>
+      <div className="px-5 py-4 overflow-y-auto flex-1 no-scrollbar">
+        {error && <div className="mb-4 p-3 rounded-xl bg-app-danger/10 border border-app-danger/20 text-app-danger text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-              Company <span className="text-red-500">*</span>
-            </label>
+            <FieldLabel>
+              Company <span className="text-app-danger">*</span>
+            </FieldLabel>
             <select value={form.companyId} onChange={set('companyId')} className={inputCls}>
-              <option value="">Select a company</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="" className="bg-app-surface text-white">Select a company</option>
+              {companies.map((c) => <option key={c.id} value={c.id} className="bg-app-surface text-white">{c.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-              Role <span className="text-red-500">*</span>
-            </label>
+            <FieldLabel>
+              Role <span className="text-app-danger">*</span>
+            </FieldLabel>
             <input type="text" value={form.role} onChange={set('role')} placeholder="e.g. SDE Intern" className={inputCls} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Application Date</label>
+              <FieldLabel>Application Date</FieldLabel>
               <input type="date" value={form.applicationDate} onChange={set('applicationDate')} className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Deadline <span className="text-gray-400 normal-case font-normal">(optional)</span>
-              </label>
+              <FieldLabel>
+                Deadline <span className="text-white/30 normal-case font-normal">(optional)</span>
+              </FieldLabel>
               <input type="date" value={form.deadline} onChange={set('deadline')} className={inputCls} />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</label>
+            <FieldLabel>Status</FieldLabel>
             <select value={form.status} onChange={set('status')} className={inputCls}>
               {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                <option key={val} value={val}>{label}</option>
+                <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
               ))}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Source</label>
+              <FieldLabel>Source</FieldLabel>
               <select value={form.source} onChange={set('source')} className={inputCls}>
-                <option value="">Select source</option>
+                <option value="" className="bg-app-surface text-white">Select source</option>
                 {Object.entries(SOURCE_LABELS).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
+                  <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Expected Salary</label>
+              <FieldLabel>Expected Salary</FieldLabel>
               <input type="text" value={form.expectedSalary} onChange={set('expectedSalary')} placeholder="e.g. 6 LPA" className={inputCls} />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes</label>
+            <FieldLabel>Notes</FieldLabel>
             <textarea value={form.notes} onChange={set('notes')} rows={3}
               placeholder="Referral contact, interview prep notes..." className={`${inputCls} resize-none`} />
           </div>
 
-          {/* Resume — single */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-              Resume <span className="text-gray-400 normal-case font-normal">(PDF, DOC, DOCX)</span>
-            </label>
+            <FieldLabel>
+              Resume <span className="text-white/30 normal-case font-normal">(PDF, DOC, DOCX)</span>
+            </FieldLabel>
 
             {liveApp?.resume && (
-              <div className="flex items-center gap-3 p-3 mb-2 rounded-xl border border-gray-200 bg-gray-50">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-indigo-500 shrink-0">
+              <div className="flex items-center gap-3 p-3 mb-2 rounded-xl border border-white/[0.08] bg-white/[0.03]">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-app-accent-soft shrink-0">
                   <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
                 </svg>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700 truncate">{liveApp.resume.originalName}</p>
-                  <p className="text-xs text-gray-400">{formatSize(liveApp.resume.fileSize)}</p>
+                  <p className="text-sm font-medium text-white/80 truncate">{liveApp.resume.originalName}</p>
+                  <p className="text-xs text-white/35">{fmtFileSize(liveApp.resume.fileSize)}</p>
                 </div>
                 <button type="button"
                   onClick={() => triggerDocView(liveApp.resume)}
-                  className="text-xs font-semibold text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition">
+                  className="text-xs font-semibold text-white/60 hover:text-white px-2 py-1 rounded-lg hover:bg-white/[0.08] transition">
                   View
                 </button>
                 <button type="button"
                   onClick={() => triggerDocDownload(liveApp.resume)}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded-lg hover:bg-indigo-50 transition">
+                  className="text-xs font-semibold text-app-accent-soft hover:text-white px-2 py-1 rounded-lg hover:bg-app-accent/10 transition">
                   Download
                 </button>
                 <button type="button"
                   onClick={handleRemoveResume}
                   disabled={deletingId === 'resume'}
-                  className="text-xs font-semibold text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-1">
+                  className="text-xs font-semibold text-app-danger/80 hover:text-app-danger px-2 py-1 rounded-lg hover:bg-app-danger/10 transition disabled:opacity-50 flex items-center gap-1">
                   {deletingId === 'resume' && <CircularProgress size={10} color="inherit" />}
                   Delete
                 </button>
               </div>
             )}
 
-            {/* All upload options — only shown when no resume is attached yet */}
             {!liveApp?.resume && (
               <>
-                {/* Profile resume dropdown */}
                 {profileResumes.length > 0 && (
                   <div className="mb-2">
-                    <label className="block text-xs text-gray-500 mb-1">Select from profile</label>
+                    <label className="block text-xs text-white/40 mb-1">Select from profile</label>
                     <select
                       value={selectedProfileResumeDocId}
                       onChange={(e) => { setSelectedProfileResumeDocId(e.target.value); setResumeFile(null) }}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white hover:border-gray-300 transition">
-                      <option value="">— choose a resume —</option>
+                      className="w-full px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition">
+                      <option value="" className="bg-app-surface text-white">— choose a resume —</option>
                       {profileResumes.map((r) => (
-                        <option key={r.id} value={r.documentId}>{r.originalName}</option>
+                        <option key={r.id} value={r.documentId} className="bg-app-surface text-white">{r.originalName}</option>
                       ))}
                     </select>
                   </div>
                 )}
 
-                {/* OR divider when profile resumes exist */}
                 {profileResumes.length > 0 && (
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="flex-1 h-px bg-gray-200" />
-                    <span className="text-xs text-gray-400">or upload new</span>
-                    <div className="flex-1 h-px bg-gray-200" />
+                    <div className="flex-1 h-px bg-white/[0.08]" />
+                    <span className="text-xs text-white/35">or upload new</span>
+                    <div className="flex-1 h-px bg-white/[0.08]" />
                   </div>
                 )}
 
-                {/* Pending new file */}
                 {resumeFile && (
-                  <div className="flex items-center gap-3 p-3 mb-2 rounded-xl border border-indigo-200 bg-indigo-50">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-indigo-400 shrink-0">
+                  <div className="flex items-center gap-3 p-3 mb-2 rounded-xl border border-app-accent/25 bg-app-accent/10">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-app-accent-soft shrink-0">
                       <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-sm text-indigo-700 truncate flex-1">{resumeFile.name}</span>
-                    <span className="text-xs text-indigo-400">pending upload</span>
+                    <span className="text-sm text-app-accent-soft truncate flex-1">{resumeFile.name}</span>
+                    <span className="text-xs text-app-accent-soft/70">pending upload</span>
                     <button type="button" onClick={() => setResumeFile(null)}
-                      className="text-indigo-400 hover:text-red-500 font-bold text-base leading-none px-1 transition">×</button>
+                      className="text-app-accent-soft hover:text-app-danger font-bold text-base leading-none px-1 transition">×</button>
                   </div>
                 )}
 
-                {/* Upload zone */}
                 {!resumeFile && (
-                  <label className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed border-gray-200 hover:border-indigo-300 cursor-pointer transition w-full">
+                  <label className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed border-white/[0.10] hover:border-app-accent/40 cursor-pointer transition w-full">
                     <input type="file" accept=".pdf,.doc,.docx" onChange={handleResumePick} className="sr-only" />
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-white/35">
                       <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
                     </svg>
-                    <span className="text-sm text-gray-400">Upload resume</span>
+                    <span className="text-sm text-white/35">Upload resume</span>
                   </label>
                 )}
               </>
             )}
-            {resumeError && <p className="mt-1 text-xs text-red-500">{resumeError}</p>}
+            {resumeError && <p className="mt-1 text-xs text-app-danger">{resumeError}</p>}
           </div>
 
-          {/* Cover Letter section */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-              Cover Letter <span className="text-gray-400 normal-case font-normal">(PDF, DOC, DOCX)</span>
-            </label>
+            <FieldLabel>
+              Cover Letter <span className="text-white/30 normal-case font-normal">(PDF, DOC, DOCX)</span>
+            </FieldLabel>
             {liveApp?.coverLetter && (
-              <div className="flex items-center gap-3 p-3 mb-2 rounded-xl border border-gray-200 bg-gray-50">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-violet-500 shrink-0">
+              <div className="flex items-center gap-3 p-3 mb-2 rounded-xl border border-white/[0.08] bg-white/[0.03]">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-app-accent-soft shrink-0">
                   <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                 </svg>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700 truncate">{liveApp.coverLetter.originalName}</p>
-                  <p className="text-xs text-gray-400">{formatSize(liveApp.coverLetter.fileSize)}</p>
+                  <p className="text-sm font-medium text-white/80 truncate">{liveApp.coverLetter.originalName}</p>
+                  <p className="text-xs text-white/35">{fmtFileSize(liveApp.coverLetter.fileSize)}</p>
                 </div>
                 <button type="button" onClick={() => triggerDocView(liveApp.coverLetter)}
-                  className="text-xs font-semibold text-gray-500 hover:text-gray-700 transition px-2 py-1 rounded-lg hover:bg-gray-100">
+                  className="text-xs font-semibold text-white/60 hover:text-white transition px-2 py-1 rounded-lg hover:bg-white/[0.08]">
                   View
                 </button>
                 <button type="button" onClick={() => triggerDocDownload(liveApp.coverLetter)}
-                  className="text-xs font-semibold text-violet-600 hover:text-violet-800 transition px-2 py-1 rounded-lg hover:bg-violet-50">
+                  className="text-xs font-semibold text-app-accent-soft hover:text-white transition px-2 py-1 rounded-lg hover:bg-app-accent2/10">
                   Download
                 </button>
                 <button type="button" onClick={handleDeleteCoverLetter}
                   disabled={deletingId === 'coverLetter'}
-                  className="text-xs font-semibold text-red-400 hover:text-red-600 transition px-2 py-1 rounded-lg hover:bg-red-50 disabled:opacity-50 flex items-center gap-1">
+                  className="text-xs font-semibold text-app-danger/80 hover:text-app-danger transition px-2 py-1 rounded-lg hover:bg-app-danger/10 disabled:opacity-50 flex items-center gap-1">
                   {deletingId === 'coverLetter' && <CircularProgress size={10} color="inherit" />}
                   Delete
                 </button>
@@ -971,49 +989,38 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
             )}
             {!liveApp?.coverLetter && (
               <div className="space-y-2">
-                <label className="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-gray-200 hover:border-violet-300 cursor-pointer transition">
+                <label className="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-white/[0.10] hover:border-app-accent2/40 cursor-pointer transition">
                   <input type="file" accept=".pdf,.doc,.docx" onChange={handleCoverLetterChange} className="sr-only" />
                   {coverLetterFile ? (
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-violet-500 shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-app-accent-soft shrink-0">
                         <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-sm text-gray-700 truncate flex-1">{coverLetterFile.name}</span>
+                      <span className="text-sm text-white/80 truncate flex-1">{coverLetterFile.name}</span>
                       <button type="button" onClick={(e) => { e.preventDefault(); setCoverLetterFile(null) }}
-                        className="text-gray-400 hover:text-red-500 transition font-bold text-base leading-none px-1">×</button>
+                        className="text-white/35 hover:text-app-danger transition font-bold text-base leading-none px-1">×</button>
                     </div>
                   ) : (
-                    <span className="text-sm text-gray-400">Click to upload cover letter</span>
+                    <span className="text-sm text-white/35">Click to upload cover letter</span>
                   )}
                 </label>
-                {coverLetterError && <p className="text-xs text-red-500">{coverLetterError}</p>}
+                {coverLetterError && <p className="text-xs text-app-danger">{coverLetterError}</p>}
               </div>
             )}
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm">
-              {saving && <CircularProgress size={14} color="inherit" />}
-              {liveApp ? 'Save Changes' : 'Add Application'}
-            </button>
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
-              Cancel
-            </button>
-          </div>
+          <FormFooterButtons saving={saving} onCancel={onClose} saveLabel={liveApp ? 'Save Changes' : 'Add Application'} />
         </form>
       </div>
-    </ModalShell>
+    </DrawerShell>
   )
 }
 
-// ─── Follow-Up Modal ──────────────────────────────────────────────────────────
 function FollowUpModal({ open, app, onClose, onChanged }) {
   const [followUps, setFollowUps] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [successMsg, setSuccessMsg] = useState('')
+  const [successMsg, setSuccessMsg] = useTransientMessage(2500)
   const [form, setForm] = useState({ followUpDate: todayStr(), note: '', daysFromNow: '' })
   const [saving, setSaving] = useState(false)
   const [processingId, setProcessingId] = useState(null)
@@ -1069,10 +1076,7 @@ function FollowUpModal({ open, app, onClose, onChanged }) {
     }
   }
 
-  const flash = (msg) => {
-    setSuccessMsg(msg)
-    setTimeout(() => setSuccessMsg(''), 2500)
-  }
+  const flash = setSuccessMsg
 
   const markDone = async (fu) => {
     setProcessingId(fu.id)
@@ -1128,7 +1132,7 @@ function FollowUpModal({ open, app, onClose, onChanged }) {
     }
   }
 
-  const inputCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition'
+  const inputCls = 'w-full px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition placeholder:text-white/25'
 
   const pending = followUps.filter((f) => f.status === 'PENDING')
   const done = followUps.filter((f) => f.status === 'DONE')
@@ -1142,48 +1146,46 @@ function FollowUpModal({ open, app, onClose, onChanged }) {
     >
       <div className="px-6 py-5 space-y-5">
         {successMsg && (
-          <div className="p-3 rounded-xl bg-green-50 border border-green-100 text-green-700 text-sm flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-app-success/10 border border-app-success/20 text-app-success text-sm flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
               <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
             </svg>
             {successMsg}
           </div>
         )}
-        {error && <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+        {error && <div className="p-3 rounded-xl bg-app-danger/10 border border-app-danger/20 text-app-danger text-sm">{error}</div>}
 
-        {/* Add new follow-up */}
-        <form onSubmit={handleAdd} className="bg-blue-50 rounded-xl p-4 space-y-3">
-          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Schedule a Follow-Up</p>
+        <form onSubmit={handleAdd} className="bg-app-accent/10 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-app-accent-soft uppercase tracking-wide">Schedule a Follow-Up</p>
 
-          {/* Toggle between days and date */}
           <div className="flex gap-2">
             <button type="button"
               onClick={() => setUseDays(true)}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition ${useDays ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition ${useDays ? 'bg-app-accent text-white border-app-accent' : 'bg-white/[0.03] text-white/60 border-white/[0.08] hover:border-white/[0.16]'}`}>
               Days from now
             </button>
             <button type="button"
               onClick={() => setUseDays(false)}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition ${!useDays ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition ${!useDays ? 'bg-app-accent text-white border-app-accent' : 'bg-white/[0.03] text-white/60 border-white/[0.08] hover:border-white/[0.16]'}`}>
               Pick a date
             </button>
           </div>
 
           {useDays ? (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 whitespace-nowrap">Follow up in</span>
+              <span className="text-sm text-white/60 whitespace-nowrap">Follow up in</span>
               <input
                 type="number" min="1" max="365"
                 value={form.daysFromNow}
                 onChange={(e) => setForm((f) => ({ ...f, daysFromNow: e.target.value }))}
                 placeholder="5"
-                className="w-20 px-3 py-2 border border-gray-200 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-20 px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-center text-white/85 focus:outline-none focus:ring-2 focus:ring-app-accent/40 bg-white/[0.03] placeholder:text-white/25"
               />
-              <span className="text-sm text-gray-600">days</span>
+              <span className="text-sm text-white/60">days</span>
             </div>
           ) : (
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Date</label>
+              <label className="block text-xs font-semibold text-white/40 uppercase tracking-wide mb-1">Date</label>
               <input type="date" value={form.followUpDate}
                 onChange={(e) => setForm((f) => ({ ...f, followUpDate: e.target.value }))}
                 className={inputCls} />
@@ -1191,7 +1193,7 @@ function FollowUpModal({ open, app, onClose, onChanged }) {
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Note (optional)</label>
+            <label className="block text-xs font-semibold text-white/40 uppercase tracking-wide mb-1">Note (optional)</label>
             <input type="text" value={form.note}
               onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
               placeholder="e.g. Email HR about status update"
@@ -1199,22 +1201,21 @@ function FollowUpModal({ open, app, onClose, onChanged }) {
           </div>
 
           <button type="submit" disabled={saving}
-            className="w-full py-2 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2">
+            className="w-full py-2 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition disabled:opacity-60 flex items-center justify-center gap-2">
             {saving && <CircularProgress size={13} color="inherit" />}
             Add Follow-Up
           </button>
         </form>
 
-        {/* Follow-up list */}
         {loading ? (
           <div className="flex justify-center py-6"><CircularProgress size={24} /></div>
         ) : followUps.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">No follow-ups scheduled yet.</p>
+          <p className="text-sm text-white/35 text-center py-4">No follow-ups scheduled yet.</p>
         ) : (
           <div className="space-y-4">
             {pending.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Pending</p>
+                <p className="text-xs font-semibold text-white/40 uppercase tracking-wide mb-2">Pending</p>
                 <div className="space-y-2">
                   {pending.map((fu) => (
                     <FollowUpRow key={fu.id} fu={fu} onDone={() => markDone(fu)} onDelete={() => remove(fu.id)} onReschedule={(d) => reschedule(fu, d)} loading={processingId === fu.id} />
@@ -1224,7 +1225,7 @@ function FollowUpModal({ open, app, onClose, onChanged }) {
             )}
             {done.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Completed</p>
+                <p className="text-xs font-semibold text-white/40 uppercase tracking-wide mb-2">Completed</p>
                 <div className="space-y-2">
                   {done.map((fu) => (
                     <FollowUpRow key={fu.id} fu={fu} onUndo={() => markPending(fu)} onDelete={() => remove(fu.id)} loading={processingId === fu.id} />
@@ -1245,28 +1246,28 @@ function FollowUpRow({ fu, onDone, onUndo, onDelete, onReschedule, loading }) {
   const [editing, setEditing] = useState(false)
 
   return (
-    <div className={`p-3 rounded-xl border ${isDone ? 'bg-gray-50 border-gray-100 opacity-70' : isOverdue ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'}`}>
+    <div className={`p-3 rounded-xl border ${isDone ? 'bg-white/[0.02] border-white/[0.05] opacity-70' : isOverdue ? 'bg-app-danger/10 border-app-danger/20' : 'bg-white/[0.03] border-white/[0.06]'}`}>
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xs font-semibold ${isDone ? 'text-gray-400 line-through' : isOverdue ? 'text-red-600' : 'text-gray-700'}`}>
+            <span className={`text-xs font-semibold ${isDone ? 'text-white/35 line-through' : isOverdue ? 'text-app-danger' : 'text-white/80'}`}>
               📅 {fmtDate(fu.followUpDate)}
             </span>
             {isOverdue && !isDone && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">Overdue</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-app-danger/15 text-app-danger">Overdue</span>
             )}
             {isDone && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-600">Done</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-app-success/15 text-app-success">Done</span>
             )}
           </div>
           {fu.note && (
-            <p className={`text-xs mt-0.5 ${isDone ? 'text-gray-400' : 'text-gray-500'}`}>{fu.note}</p>
+            <p className={`text-xs mt-0.5 ${isDone ? 'text-white/30' : 'text-white/50'}`}>{fu.note}</p>
           )}
         </div>
         <div className="flex gap-1 shrink-0">
           {!isDone && onDone && (
             <button onClick={onDone} disabled={loading}
-              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-green-200 text-green-600 bg-white hover:bg-green-500 hover:text-white hover:border-green-500 transition disabled:opacity-50 flex items-center gap-1">
+              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-app-success/25 text-app-success bg-white/[0.03] hover:bg-app-success hover:text-white hover:border-app-success transition disabled:opacity-50 flex items-center gap-1">
               {loading ? <CircularProgress size={10} color="inherit" /> : null}
               Done
             </button>
@@ -1274,19 +1275,19 @@ function FollowUpRow({ fu, onDone, onUndo, onDelete, onReschedule, loading }) {
           {!isDone && onReschedule && (
             <button onClick={() => setEditing((e) => !e)} disabled={loading}
               title="Reschedule"
-              className={`px-2 py-1 text-[11px] font-semibold rounded-lg border transition disabled:opacity-50 ${editing ? 'bg-amber-500 text-white border-amber-500' : 'border-amber-200 text-amber-600 bg-white hover:bg-amber-500 hover:text-white hover:border-amber-500'}`}>
+              className={`px-2 py-1 text-[11px] font-semibold rounded-lg border transition disabled:opacity-50 ${editing ? 'bg-app-warning text-white border-app-warning' : 'border-app-warning/25 text-app-warning bg-white/[0.03] hover:bg-app-warning hover:text-white hover:border-app-warning'}`}>
               📅
             </button>
           )}
           {isDone && onUndo && (
             <button onClick={onUndo} disabled={loading}
-              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-gray-200 text-gray-500 bg-white hover:bg-gray-200 transition disabled:opacity-50 flex items-center gap-1">
+              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-white/[0.08] text-white/60 bg-white/[0.03] hover:bg-white/[0.10] transition disabled:opacity-50 flex items-center gap-1">
               {loading ? <CircularProgress size={10} color="inherit" /> : null}
               Undo
             </button>
           )}
           <button onClick={onDelete} disabled={loading}
-            className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition disabled:opacity-50">
+            className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-app-danger/25 text-app-danger bg-white/[0.03] hover:bg-app-danger hover:text-white hover:border-app-danger transition disabled:opacity-50">
             ×
           </button>
         </div>
@@ -1302,7 +1303,6 @@ function FollowUpRow({ fu, onDone, onUndo, onDelete, onReschedule, loading }) {
   )
 }
 
-// ─── Interview Modal ──────────────────────────────────────────────────────────
 const INTERVIEW_TYPE_LABELS = {
   PHONE_SCREEN: 'Phone Screen', VIDEO_CALL: 'Video Call', ONSITE: 'Onsite',
   TECHNICAL: 'Technical', HR: 'HR', BEHAVIORAL: 'Behavioral',
@@ -1310,11 +1310,11 @@ const INTERVIEW_TYPE_LABELS = {
 }
 
 const INTERVIEW_OUTCOME_CONFIG = {
-  AWAITING_RESPONSE: { label: 'Awaiting Response', cls: 'bg-amber-100 text-amber-700'   },
-  PASSED:            { label: 'Passed',             cls: 'bg-green-100 text-green-700'   },
-  FAILED:            { label: 'Failed',             cls: 'bg-red-100 text-red-600'       },
-  NO_SHOW:           { label: 'No Show',            cls: 'bg-gray-100 text-gray-500'     },
-  RESCHEDULED:       { label: 'Rescheduled',        cls: 'bg-blue-100 text-blue-700'     },
+  AWAITING_RESPONSE: { label: 'Awaiting Response', cls: 'bg-app-warning/15 text-app-warning'   },
+  PASSED:            { label: 'Passed',             cls: 'bg-app-success/15 text-app-success'   },
+  FAILED:            { label: 'Failed',             cls: 'bg-app-danger/15 text-app-danger'       },
+  NO_SHOW:           { label: 'No Show',            cls: 'bg-white/[0.08] text-white/50'     },
+  RESCHEDULED:       { label: 'Rescheduled',        cls: 'bg-app-accent/15 text-app-accent-soft'     },
 }
 
 const EMPTY_INTERVIEW_FORM = {
@@ -1326,51 +1326,50 @@ function InterviewFormFields({ form, setField, inputCls }) {
   return (
     <>
       <div>
-        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Date & Time <span className="text-red-500">*</span></label>
+        <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Date & Time <span className="text-app-danger">*</span></label>
         <input type="datetime-local" value={form.scheduledAt} onChange={setField('scheduledAt')} className={inputCls} />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Round Name</label>
+          <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Round Name</label>
           <input type="text" value={form.round} onChange={setField('round')} placeholder="e.g. HR Round" className={inputCls} />
         </div>
         <div>
-          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Type</label>
+          <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Type</label>
           <select value={form.interviewType} onChange={setField('interviewType')} className={inputCls}>
-            <option value="">Select type</option>
-            {Object.entries(INTERVIEW_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            <option value="" className="bg-app-surface text-white">Select type</option>
+            {Object.entries(INTERVIEW_TYPE_LABELS).map(([v, l]) => <option key={v} value={v} className="bg-app-surface text-white">{l}</option>)}
           </select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Location / Link</label>
+          <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Location / Link</label>
           <input type="text" value={form.location} onChange={setField('location')} placeholder="Zoom / office" className={inputCls} />
         </div>
         <div>
-          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Interviewer</label>
+          <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Interviewer</label>
           <input type="text" value={form.interviewerName} onChange={setField('interviewerName')} placeholder="Name" className={inputCls} />
         </div>
       </div>
       <div>
-        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Outcome</label>
+        <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Outcome</label>
         <select value={form.outcome} onChange={setField('outcome')} className={inputCls}>
-          {Object.entries(INTERVIEW_OUTCOME_CONFIG).map(([v, { label }]) => <option key={v} value={v}>{label}</option>)}
+          {Object.entries(INTERVIEW_OUTCOME_CONFIG).map(([v, { label }]) => <option key={v} value={v} className="bg-app-surface text-white">{label}</option>)}
         </select>
       </div>
       <div>
-        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Questions Asked</label>
+        <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Questions Asked</label>
         <textarea value={form.questionsAsked} onChange={setField('questionsAsked')} rows={2} placeholder="What questions were asked?" className={`${inputCls} resize-none`} />
       </div>
       <div>
-        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Feedback Received</label>
+        <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Feedback Received</label>
         <textarea value={form.feedbackReceived} onChange={setField('feedbackReceived')} rows={2} placeholder="What feedback did you get?" className={`${inputCls} resize-none`} />
       </div>
     </>
   )
 }
 
-// ─── Delete Modal ─────────────────────────────────────────────────────────────
 function DeleteModal({ open, app, onClose, onDeleted }) {
   return (
     <ConfirmDeleteModal
@@ -1380,24 +1379,27 @@ function DeleteModal({ open, app, onClose, onDeleted }) {
       title="Delete Application"
       message={
         <>
-          Remove <span className="font-semibold text-gray-700">{app?.role}</span> at{' '}
-          <span className="font-semibold text-gray-700">{app?.companyName}</span>?
-          <span className="block text-xs text-red-500 mt-1">This action cannot be undone.</span>
+          Remove <span className="font-semibold text-white/80">{app?.role}</span> at{' '}
+          <span className="font-semibold text-white/80">{app?.companyName}</span>?
+          <span className="block text-xs text-app-danger mt-1">This action cannot be undone.</span>
         </>
       }
     />
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Applications() {
   const [applications, setApplications] = useState([])
+  const [allApplications, setAllApplications] = useState([])
   const [companies, setCompanies] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [success, setSuccess] = useTransientMessage()
 
   const [filterStatus, setFilterStatus] = useState('')
+  const [companyFilter, setCompanyFilter] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('')
   const [search, setSearch] = useState('')
   const [datePreset, setDatePreset] = useState('')  // 'week' | 'month' | '3months' | 'year' | 'custom'
   const [dateFrom, setDateFrom] = useState('')
@@ -1405,6 +1407,8 @@ export default function Applications() {
   const [sortBy, setSortBy] = useState('createdAt')
   const [order, setOrder] = useState('desc')
   const [viewMode, setViewMode] = useState('list')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const searchInputRef = useRef(null)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -1436,35 +1440,47 @@ export default function Applications() {
     }
   }, [filterStatus, sortBy, order, activeSortOption])
 
+  const fetchAllApplications = useCallback(async () => {
+    try {
+      const res = await getApplications({})
+      setAllApplications(res.data)
+    } catch {
+    }
+  }, [])
+
   useEffect(() => { fetchApplications() }, [fetchApplications])
+  useEffect(() => { fetchAllApplications() }, [fetchAllApplications])
+
+  useSearchShortcut(searchInputRef)
 
   const openAdd      = () => { setEditTarget(null); setModalOpen(true) }
   const openEdit     = (a) => { setEditTarget(a); setModalOpen(true) }
   const openView     = (a) => { setViewTarget(a) }
   const openFollowUp = (a) => { setFollowUpTarget(a) }
 
+  useAddQueryParam(openAdd)
+
   const handleSaved = () => {
     setModalOpen(false)
     setSuccess(editTarget ? 'Application updated.' : 'Application added.')
     fetchApplications()
-    setTimeout(() => setSuccess(''), 3000)
+    fetchAllApplications()
   }
 
   const handleDeleted = () => {
     setDeleteTarget(null)
     setSuccess('Application removed.')
     fetchApplications()
-    setTimeout(() => setSuccess(''), 3000)
+    fetchAllApplications()
   }
 
-  // Compute effective date range from preset or custom inputs
   const effectiveDateRange = (() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const toStr = (d) => d.toISOString().slice(0, 10)
     if (datePreset === 'week') {
       const from = new Date(today)
-      from.setDate(today.getDate() - today.getDay())  // Sunday start
+      from.setDate(today.getDate() - today.getDay())  
       return { from: toStr(from), to: toStr(today) }
     }
     if (datePreset === 'month') {
@@ -1484,7 +1500,6 @@ export default function Applications() {
     return { from: null, to: null }
   })()
 
-  // Client-side search + date filter
   const q = search.trim().toLowerCase()
   const filteredApplications = applications.filter((a) => {
     if (q && !(
@@ -1493,12 +1508,29 @@ export default function Applications() {
       (SOURCE_LABELS[a.source] || a.source || '').toLowerCase().includes(q) ||
       a.notes?.toLowerCase().includes(q)
     )) return false
+    if (companyFilter && String(a.companyId ?? '') !== companyFilter) return false
+    if (roleFilter && a.role !== roleFilter) return false
+    if (sourceFilter && a.source !== sourceFilter) return false
     if (effectiveDateRange.from && a.applicationDate && a.applicationDate < effectiveDateRange.from) return false
     if (effectiveDateRange.to   && a.applicationDate && a.applicationDate > effectiveDateRange.to)   return false
     return true
   })
 
-  // Client-side sort (for fields not handled server-side)
+  const roleOptions = [...new Set(allApplications.map((a) => a.role).filter(Boolean))].sort()
+
+  const companyById = Object.fromEntries(companies.map((c) => [c.id, c]))
+
+  const activeFilterCount = [companyFilter, roleFilter, sourceFilter, filterStatus].filter(Boolean).length
+  const isFiltered = search.trim() || activeFilterCount > 0
+
+  const clearAllFilters = () => {
+    setSearch('')
+    setCompanyFilter('')
+    setRoleFilter('')
+    setSourceFilter('')
+    setFilterStatus('')
+  }
+
   const displayApplications = activeSortOption?.clientSide
     ? [...filteredApplications].sort((a, b) => {
         const va = (a.companyName || '').toLowerCase()
@@ -1508,37 +1540,50 @@ export default function Applications() {
       })
     : filteredApplications
 
-  // Analytics — derived from full unfiltered list
-  const thisMonth = (() => {
-    const now = new Date()
-    const y = now.getFullYear(), m = now.getMonth()
-    return applications.filter((a) => {
-      if (!a.applicationDate) return false
-      const d = new Date(a.applicationDate)
-      return d.getFullYear() === y && d.getMonth() === m
-    }).length
-  })()
-  const activeCount = applications.filter(
+  const dateOfApp = (a) => a.applicationDate ? new Date(a.applicationDate) : null
+  const inMonth = (d, y, m) => d && d.getFullYear() === y && d.getMonth() === m
+
+  const now = new Date()
+  const curY = now.getFullYear(), curM = now.getMonth()
+  const prevDate = new Date(curY, curM - 1, 1)
+  const prevY = prevDate.getFullYear(), prevM = prevDate.getMonth()
+
+  const createdThisMonth = allApplications.filter((a) => inMonth(dateOfApp(a), curY, curM))
+  const createdLastMonth = allApplications.filter((a) => inMonth(dateOfApp(a), prevY, prevM))
+
+  const pctChange = (curr, prev) => {
+    if (prev === 0) return curr > 0 ? 100 : 0
+    return Math.round(((curr - prev) / prev) * 100)
+  }
+
+  const thisMonth = createdThisMonth.length
+  const thisMonthTrend = pctChange(createdThisMonth.length, createdLastMonth.length)
+
+  const activeCount = allApplications.filter(
     (a) => !['REJECTED', 'JOINED'].includes(a.status)
   ).length
-  const offerCount = applications.filter((a) => a.status === 'OFFER_RECEIVED').length
-  const conversionRate = applications.length > 0
-    ? ((offerCount / applications.length) * 100).toFixed(1)
+  const activeCreatedThisMonth = createdThisMonth.filter((a) => !['REJECTED', 'JOINED'].includes(a.status)).length
+  const activeCreatedLastMonth = createdLastMonth.filter((a) => !['REJECTED', 'JOINED'].includes(a.status)).length
+  const activeTrend = pctChange(activeCreatedThisMonth, activeCreatedLastMonth)
+
+  const totalTrend = thisMonthTrend
+  const offerCount = allApplications.filter((a) => a.status === 'OFFER_RECEIVED').length
+  const conversionRate = allApplications.length > 0
+    ? ((offerCount / allApplications.length) * 100).toFixed(1)
     : null
-  const interviewsScheduled = applications.filter((a) => a.status === 'INTERVIEW_SCHEDULED').length
-  const interviewsCleared   = applications.filter((a) => a.status === 'INTERVIEW_CLEARED').length
+  const interviewsScheduled = allApplications.filter((a) => a.status === 'INTERVIEW_SCHEDULED').length
+  const interviewsCleared   = allApplications.filter((a) => a.status === 'INTERVIEW_CLEARED').length
   const totalInterviews     = interviewsScheduled + interviewsCleared
   const interviewSuccessRate = totalInterviews > 0
     ? ((interviewsCleared / totalInterviews) * 100).toFixed(1)
     : null
 
-  // Monthly trend — last 12 months
   const monthlyTrend = (() => {
     const now = new Date()
     return Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
       const y = d.getFullYear(), m = d.getMonth()
-      const count = applications.filter((a) => {
+      const count = allApplications.filter((a) => {
         if (!a.applicationDate) return false
         const ad = new Date(a.applicationDate)
         return ad.getFullYear() === y && ad.getMonth() === m
@@ -1551,14 +1596,12 @@ export default function Applications() {
       }
     })
   })()
-  const trendMax = Math.max(...monthlyTrend.map((m) => m.count), 1)
 
-  // Top companies by application count
   const topCompanies = (() => {
     const map = {}
-    applications.forEach((a) => {
+    allApplications.forEach((a) => {
       if (!a.companyId) return
-      if (!map[a.companyId]) map[a.companyId] = { name: a.companyName, count: 0, statuses: [] }
+      if (!map[a.companyId]) map[a.companyId] = { name: a.companyName, website: companyById[a.companyId]?.website, count: 0, statuses: [] }
       map[a.companyId].count++
       map[a.companyId].statuses.push(a.status)
     })
@@ -1566,12 +1609,10 @@ export default function Applications() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5)
   })()
-  const topCompanyMax = topCompanies[0]?.count || 1
 
-  // Source analysis
   const sourceAnalysis = (() => {
     const map = {}
-    applications.forEach((a) => {
+    allApplications.forEach((a) => {
       const key = a.source || 'OTHER'
       if (!map[key]) map[key] = { total: 0, offers: 0, interviews: 0 }
       map[key].total++
@@ -1589,10 +1630,8 @@ export default function Applications() {
       }))
       .sort((a, b) => b.total - a.total)
   })()
-  const sourceMax = sourceAnalysis[0]?.total || 1
   const bestSource = sourceAnalysis.filter((s) => s.total >= 2).sort((a, b) => b.offerRate - a.offerRate)[0] ?? null
 
-  // Directory view: group by company name alphabetically
   const grouped = displayApplications.reduce((acc, a) => {
     const letter = a.companyName?.[0]?.toUpperCase() || '#'
     if (!acc[letter]) acc[letter] = []
@@ -1603,265 +1642,167 @@ export default function Applications() {
 
   const handleStatusChanged = (updated) => {
     setApplications(prev => prev.map(a => a.id === updated.id ? updated : a))
+    setAllApplications(prev => prev.map(a => a.id === updated.id ? updated : a))
     setViewTarget(prev => prev?.id === updated.id ? updated : prev)
   }
 
   const cardProps = { onView: openView, onEdit: openEdit, onDelete: setDeleteTarget, onFollowUp: openFollowUp, onCompany: setCompanyDetailId, onStatusChanged: handleStatusChanged }
+  const drawerOpen = !!viewTarget || modalOpen
 
   return (
-    <Layout>
-      <PageHeader
-        title="Applications"
-        subtitle="Track every job application you submit"
-        icon="📨"
-        gradient="from-violet-500 to-purple-600"
-        action={
-          <button onClick={openAdd}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl hover:shadow-lg hover:shadow-purple-200 hover:-translate-y-0.5 transition-all shadow-sm">
-            <Add fontSize="small" />Add Application
-          </button>
-        }
-      />
+    <Layout
+      headerAction={
+        <button onClick={openAdd}
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 hover:-translate-y-0.5 transition-all shadow-glow shadow-app-accent/40">
+          <Add fontSize="small" />Add Application
+        </button>
+      }
+    >
+      <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
+      <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
+      <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
-      {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
-      {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
-
-      {/* Analytics bar */}
       {!loading && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-          {[
-            { label: 'Submitted', value: applications.length, icon: '📨', color: 'text-blue-600',   bg: 'bg-blue-50'   },
-            { label: 'This Month',      value: thisMonth,           icon: '📅', color: 'text-violet-600', bg: 'bg-violet-50' },
-            { label: 'Active',          value: activeCount,         icon: '⚡', color: 'text-amber-600',  bg: 'bg-amber-50'  },
-          ].map(({ label, value, icon, color, bg }) => (
-            <div key={label} className={`${bg} rounded-2xl px-4 py-3 flex items-center gap-3`}>
-              <span className="text-xl shrink-0">{icon}</span>
-              <div className="min-w-0">
-                <p className={`text-2xl font-black leading-none ${color}`}>{value}</p>
-                <p className="text-[11px] text-gray-500 font-medium mt-0.5 truncate">{label}</p>
-              </div>
-            </div>
-          ))}
-          {/* Offer conversion rate */}
-          <div className="bg-green-50 rounded-2xl px-4 py-3 flex items-center gap-3">
-            <span className="text-xl shrink-0">🎯</span>
-            <div className="min-w-0">
-              <p className="text-2xl font-black leading-none text-green-600">
-                {conversionRate !== null ? `${conversionRate}%` : '—'}
-              </p>
-              <p className="text-[11px] text-gray-500 font-medium mt-0.5">Offer Rate</p>
-              {conversionRate !== null && (
-                <p className="text-[10px] text-gray-400 leading-tight">{offerCount} of {applications.length}</p>
-              )}
-            </div>
-          </div>
-          {/* Interview success rate */}
-          <div className="bg-purple-50 rounded-2xl px-4 py-3 flex items-center gap-3">
-            <span className="text-xl shrink-0">🧠</span>
-            <div className="min-w-0">
-              <p className="text-2xl font-black leading-none text-purple-600">
-                {interviewSuccessRate !== null ? `${interviewSuccessRate}%` : '—'}
-              </p>
-              <p className="text-[11px] text-gray-500 font-medium mt-0.5">Interview Rate</p>
-              {interviewSuccessRate !== null && (
-                <p className="text-[10px] text-gray-400 leading-tight">{interviewsCleared} of {totalInterviews}</p>
-              )}
-            </div>
-          </div>
+          <AnalyticsTile icon={<WorkOutlineRounded sx={{ fontSize: 18 }} />} tint="#8184F5"
+            value={allApplications.length} label="Total Applications" trend={totalTrend} />
+          <AnalyticsTile icon={<SendRounded sx={{ fontSize: 18 }} />} tint="#8184F5"
+            value={thisMonth} label="Applied This Month" trend={thisMonthTrend} />
+          <AnalyticsTile icon={<BoltRounded sx={{ fontSize: 18 }} />} tint="#F59E0B"
+            value={activeCount} label="Active Applications" trend={activeTrend} />
+          <AnalyticsTile icon={<TrackChangesRounded sx={{ fontSize: 18 }} />} tint="#22C55E"
+            value={conversionRate !== null ? `${conversionRate}%` : '—'} label="Offer Rate"
+            subtext={conversionRate !== null ? `${offerCount} of ${allApplications.length}` : null} valueClassName="text-app-success" />
+          <AnalyticsTile icon={<PsychologyRounded sx={{ fontSize: 18 }} />} tint="#EC4899"
+            value={interviewSuccessRate !== null ? `${interviewSuccessRate}%` : '—'} label="Interview Rate"
+            subtext={totalInterviews > 0 ? `${interviewsCleared} of ${totalInterviews}` : null} valueClassName="text-app-accent-soft" />
         </div>
       )}
 
-      {/* Monthly trend + top companies */}
-      {!loading && applications.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-
-          {/* Monthly trend chart */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-4 pb-3">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Monthly Trend</p>
-            <div className="flex items-end gap-1.5 h-24 overflow-x-auto sm:overflow-visible">
-              {monthlyTrend.map(({ label, fullLabel, count, isCurrent }) => {
-                const heightPct = trendMax > 0 ? (count / trendMax) * 100 : 0
-                return (
-                  <div key={fullLabel} className="flex-1 min-w-[24px] sm:min-w-0 flex flex-col items-center gap-1 group relative">
-                    <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 z-10
-                      hidden group-hover:flex flex-col items-center pointer-events-none">
-                      <div className="bg-gray-800 text-white text-[11px] font-semibold px-2 py-1 rounded-lg whitespace-nowrap shadow-lg">
-                        {fullLabel}: {count}
-                      </div>
-                      <div className="w-1.5 h-1.5 bg-gray-800 rotate-45 -mt-[3px]" />
-                    </div>
-                    <div className="w-full flex items-end" style={{ height: '80px' }}>
-                      <div
-                        className={`w-full rounded-t-md transition-all duration-500 ${
-                          isCurrent ? 'bg-blue-500' : count === 0 ? 'bg-gray-100' : 'bg-blue-200 group-hover:bg-blue-400'
-                        }`}
-                        style={{ height: count === 0 ? '3px' : `${Math.max(heightPct, 6)}%` }}
-                      />
-                    </div>
-                    <span className={`text-[10px] font-semibold ${isCurrent ? 'text-blue-600' : 'text-gray-400'}`}>
-                      {label}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Top companies */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-4 pb-3">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Most Applied</p>
-            {topCompanies.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-6">No data yet</p>
-            ) : (
-              <div className="space-y-3">
-                {topCompanies.map(({ name, count, statuses }, i) => {
-                  const barPct = (count / topCompanyMax) * 100
-                  const hasOffer = statuses.includes('OFFER_RECEIVED')
-                  const hasInterview = statuses.some((s) => s.startsWith('INTERVIEW'))
-                  const tag = hasOffer ? { label: 'Offer', cls: 'bg-green-100 text-green-700' }
-                    : hasInterview ? { label: 'Interview', cls: 'bg-purple-100 text-purple-700' }
-                    : null
-                  return (
-                    <div key={name}>
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[11px] font-bold text-gray-400 w-4 shrink-0">#{i + 1}</span>
-                          <span className="text-xs font-semibold text-gray-700 truncate">{name}</span>
-                          {tag && (
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${tag.cls}`}>
-                              {tag.label}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs font-bold text-gray-500 shrink-0 ml-2">{count}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-400 rounded-full transition-all duration-500"
-                          style={{ width: `${barPct}%` }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
+      {!loading && allApplications.length > 0 && (
+        <div className="mb-8 space-y-6">
+          <div className={`grid grid-cols-1 gap-6 ${drawerOpen ? 'xl:grid-cols-3' : 'lg:grid-cols-3'}`}>
+            <AnalyticsCard className={drawerOpen ? 'xl:col-span-2' : 'lg:col-span-2'}>
+              <div className="flex items-baseline justify-between">
+                <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Monthly Trend</p>
+                <p className="text-xs text-white/30">Last 12 months</p>
               </div>
-            )}
+              <div className="mt-5">
+                <MonthlyTrendChart data={monthlyTrend} />
+              </div>
+            </AnalyticsCard>
+
+            <MostAppliedCard
+              companies={topCompanies}
+              onViewAll={() => {
+                setFiltersOpen(true)
+                searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }}
+            />
           </div>
+
+          {sourceAnalysis.length > 0 && (
+            <ApplicationSourcesCard
+              sources={sourceAnalysis}
+              bestSource={bestSource}
+              onViewAll={() => {
+                setFiltersOpen(true)
+                searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }}
+            />
+          )}
         </div>
       )}
 
-      {/* Source analysis */}
-      {!loading && sourceAnalysis.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-4 pb-4 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Application Sources</p>
-            {bestSource && (
-              <span className="text-[11px] font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full">
-                🏆 Best: {bestSource.label} ({bestSource.offerRate.toFixed(0)}% offer rate)
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[14rem]">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by company, role, source..."
+              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-app-text bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-app-text-muted/80"
+            />
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted pointer-events-none flex">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
+              </svg>
+            </span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-app-text-muted pointer-events-none">
+              ⌘K
+            </span>
+          </div>
+
+          <button onClick={() => setFiltersOpen((o) => !o)}
+            className={`h-11 px-4 flex items-center gap-2 border rounded-xl text-sm font-medium transition whitespace-nowrap ${
+              filtersOpen || activeFilterCount > 0
+                ? 'border-app-accent/40 bg-app-accent/10 text-app-accent-soft'
+                : 'border-white/[0.06] bg-white/[0.03] text-app-text-soft hover:bg-white/[0.05] hover:border-white/[0.12]'
+            }`}>
+            <FilterListRounded fontSize="small" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-app-accent text-white text-[11px] font-bold leading-none">
+                {activeFilterCount}
               </span>
             )}
-          </div>
-          <div className="space-y-3">
-            {sourceAnalysis.map(({ key, label, total, offers, interviews, offerRate }) => {
-              const isBest = bestSource?.key === key
-              return (
-                <div key={key}>
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className={`text-xs font-semibold w-28 shrink-0 truncate ${isBest ? 'text-green-700' : 'text-gray-700'}`}>
-                      {label}
-                      {isBest && <span className="ml-1 text-green-500">★</span>}
-                    </span>
-                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${isBest ? 'bg-green-400' : 'bg-blue-300'}`}
-                        style={{ width: `${(total / sourceMax) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-gray-500 w-5 text-right shrink-0">{total}</span>
-                    <div className="flex gap-2 shrink-0">
-                      {interviews > 0 && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600">
-                          {interviews} interview{interviews !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                      {offers > 0 && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-50 text-green-700">
-                          {offers} offer{offers !== 1 ? 's' : ''} · {offerRate.toFixed(0)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+            <KeyboardArrowDown fontSize="small" className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isFiltered && (
+            <button onClick={clearAllFilters}
+              className="text-sm font-medium text-app-accent-soft hover:text-white transition whitespace-nowrap">
+              Clear All
+            </button>
+          )}
+
+          <div className="ml-auto">
+            <ViewToggle value={viewMode} onChange={setViewMode} />
           </div>
         </div>
-      )}
 
-      {/* Status summary bar */}
-      {!loading && applications.length > 0 && (
+        {filtersOpen && (
+          <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+            <FilterSelect value={companyFilter} onChange={setCompanyFilter} allLabel="All Companies"
+              options={companies.map((c) => ({ value: String(c.id), label: c.name }))} />
+            <FilterSelect value={roleFilter} onChange={setRoleFilter} allLabel="All Roles"
+              options={roleOptions.map((r) => ({ value: r, label: r }))} />
+            <FilterSelect value={sourceFilter} onChange={setSourceFilter} allLabel="All Sources"
+              options={Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))} />
+            <FilterSelect value={filterStatus} onChange={setFilterStatus} allLabel="All Statuses"
+              options={Object.entries(STATUS_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label }))} />
+
+            <div className="relative shrink-0 w-40">
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-app-text bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value} className="bg-app-surface text-white">{opt.label}</option>
+                ))}
+              </select>
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-app-text-muted">
+                <KeyboardArrowDown fontSize="small" />
+              </span>
+            </div>
+
+            <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+              className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-app-text-soft hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap shrink-0">
+              {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {!loading && allApplications.length > 0 && (
         <StatusSummaryBar
-          items={applications}
+          items={allApplications}
           statusConfig={STATUS_CONFIG}
           activeFilter={filterStatus}
           onFilter={setFilterStatus}
         />
       )}
 
-      {/* Filters + view toggle */}
-      <div className="flex flex-col gap-3 mb-3">
-        <div className="relative">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by company, role, source..."
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
-          />
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
-            </svg>
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1.5 overflow-x-auto flex-1 min-w-0">
-            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pr-1 shrink-0">Sort</span>
-            {SORT_OPTIONS.map((opt) => {
-              const isActive = sortBy === opt.value
-              const dir = isActive ? order : null
-              return (
-                <button
-                  key={opt.value}
-                  onClick={() => {
-                    if (isActive) {
-                      setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
-                    } else {
-                      setSortBy(opt.value)
-                      setOrder('desc')
-                    }
-                  }}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 ${
-                    isActive
-                      ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
-                      : 'text-gray-400 hover:text-gray-600 hover:bg-white'
-                  }`}
-                >
-                  {opt.label}
-                  {isActive && (
-                    <span className="text-gray-400 text-[11px]">{dir === 'desc' ? '↓' : '↑'}</span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          <ViewToggle value={viewMode} onChange={setViewMode} />
-        </div>
-      </div>
-
-      {/* Date range filter */}
       {(() => {
         const DATE_PRESETS = [
           { value: 'week',    label: 'This Week' },
@@ -1877,15 +1818,15 @@ export default function Applications() {
         return (
           <div className="mb-6">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Applied:</span>
+              <span className="text-xs font-semibold text-white/35 uppercase tracking-wide mr-1">Applied:</span>
               {DATE_PRESETS.map(({ value, label }) => (
                 <button
                   key={value}
                   onClick={() => togglePreset(value)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                     datePreset === value
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700'
+                      ? 'bg-app-accent text-white border-app-accent shadow-card'
+                      : 'bg-white/[0.03] text-white/50 border-white/[0.08] hover:border-white/[0.16] hover:text-white/80'
                   }`}
                 >
                   {label}
@@ -1894,7 +1835,7 @@ export default function Applications() {
               {datePreset && (
                 <button
                   onClick={() => { setDatePreset(''); setDateFrom(''); setDateTo('') }}
-                  className="ml-1 text-xs text-gray-400 hover:text-gray-600 transition"
+                  className="ml-1 text-xs text-white/35 hover:text-white/70 transition"
                 >
                   ✕ Clear
                 </button>
@@ -1907,21 +1848,21 @@ export default function Applications() {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
+                  className="px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition"
                 />
-                <span className="text-xs text-gray-400">to</span>
+                <span className="text-xs text-white/35">to</span>
                 <input
                   type="date"
                   value={dateTo}
                   min={dateFrom || undefined}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
+                  className="px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition"
                 />
               </div>
             )}
 
             {datePreset && datePreset !== 'custom' && (
-              <p className="mt-1.5 text-xs text-gray-400">
+              <p className="mt-1.5 text-xs text-white/35">
                 {effectiveDateRange.from} → {effectiveDateRange.to}
               </p>
             )}
@@ -1931,7 +1872,7 @@ export default function Applications() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex justify-center py-16"><CircularProgress /></div>
+        <PageSpinner />
       ) : applications.length === 0 ? (
         <EmptyState
           icon="📋"
@@ -1939,7 +1880,7 @@ export default function Applications() {
           description={filterStatus ? 'Try a different status filter above.' : 'Start recording your job applications.'}
           action={!filterStatus && (
             <button onClick={openAdd}
-              className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+              className="px-6 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition shadow-glow shadow-app-accent/40">
               Add your first application
             </button>
           )}
@@ -1948,41 +1889,47 @@ export default function Applications() {
         <EmptyState
           icon="🔍"
           title="No results found"
-          description={
-            search && datePreset
-              ? `No applications match your search and date filter.`
-              : search
-              ? `No applications match "${search}".`
-              : `No applications in this date range.`
+          description="Try adjusting your search or filters."
+          action={
+            <button onClick={clearAllFilters}
+              className="px-6 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition shadow-glow shadow-app-accent/40">
+              Clear All
+            </button>
           }
         />
       ) : viewMode === 'list' ? (
-        <div className="space-y-3">
-          <p className="text-xs text-gray-400 font-medium">
+        <div>
+          <p className="text-xs text-white/35 font-medium mb-3">
             {displayApplications.length} {displayApplications.length === 1 ? 'application' : 'applications'}
             {(q || datePreset) && applications.length !== displayApplications.length && (
-              <span className="ml-1 text-gray-400">of {applications.length}</span>
+              <span className="ml-1 text-white/35">of {applications.length}</span>
             )}
           </p>
-          {displayApplications.map((a) => <ApplicationCard key={a.id} app={a} {...cardProps} />)}
+          <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card overflow-x-auto">
+            <ApplicationTableHeader />
+            {displayApplications.map((a) => (
+              <ApplicationTableRow key={a.id} app={a} company={companyById[a.companyId]} {...cardProps} />
+            ))}
+          </div>
         </div>
       ) : (
         <div>
-          <p className="text-xs text-gray-400 font-medium mb-4">
+          <p className="text-xs text-white/35 font-medium mb-4">
             {displayApplications.length} {displayApplications.length === 1 ? 'application' : 'applications'}
             {(q || datePreset) && applications.length !== displayApplications.length && (
-              <span className="ml-1 text-gray-400">of {applications.length}</span>
+              <span className="ml-1 text-white/35">of {applications.length}</span>
             )}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {displayApplications.map((a) => (
-              <ApplicationDirectoryCard key={a.id} app={a} {...cardProps} />
+              <ApplicationDirectoryCard key={a.id} app={a} company={companyById[a.companyId]} {...cardProps} />
             ))}
           </div>
         </div>
       )}
+      </div>
 
-      <DetailModal open={!!viewTarget} app={viewTarget}
+      <DetailModal open={!!viewTarget} app={viewTarget} company={viewTarget ? companyById[viewTarget.companyId] : null}
         onClose={() => setViewTarget(null)} onEdit={openEdit} onDelete={setDeleteTarget} onStatusChanged={handleStatusChanged} onCompany={setCompanyDetailId} />
       <AddEditModal open={modalOpen} app={editTarget} companies={companies}
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />

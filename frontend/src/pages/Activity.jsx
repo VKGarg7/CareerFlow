@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CircularProgress } from '@mui/material'
 import { ArrowBackOutlined } from '@mui/icons-material'
 import Layout from '../components/Layout'
-import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
+import PageSpinner from '../components/PageSpinner'
 import ActionFilterSelect from '../components/ActionFilterSelect'
 import { getMyActivity } from '../api/auditLog'
 import { fmtDateTime } from '../utils/auditLog'
@@ -33,29 +32,23 @@ export default function Activity() {
 
   if (loading) return (
     <Layout>
-      <div className="flex justify-center py-20"><CircularProgress /></div>
+      <PageSpinner py="py-20" />
     </Layout>
   )
 
   return (
     <Layout>
+      <div className="overflow-x-hidden">
       <button
         onClick={() => navigate('/profile')}
-        className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition mb-4"
+        className="flex items-center gap-1.5 text-sm font-medium text-white/45 hover:text-white/85 transition mb-4"
       >
         <ArrowBackOutlined sx={{ fontSize: 16 }} />
         Back to Profile
       </button>
 
-      <PageHeader
-        title="My Activity"
-        subtitle="A history of actions taken on your account"
-        icon="📜"
-        gradient="from-slate-500 to-gray-600"
-      />
-
       {error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 text-red-700 text-sm px-4 py-3 mb-6">
+        <div className="rounded-xl border border-app-danger/20 bg-app-danger/10 text-app-danger text-sm px-4 py-3 mb-6">
           {error}
         </div>
       )}
@@ -71,18 +64,19 @@ export default function Activity() {
           description="Actions you take on your account will show up here."
         />
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50 shadow-sm overflow-hidden">
+        <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card divide-y divide-white/[0.05]">
           {logs.map((l) => (
-            <div key={l.id} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors">
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 shrink-0">
+            <div key={l.id} className="flex items-center gap-4 px-5 py-4 hover:bg-white/[0.03] transition-colors">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-app-accent/10 text-app-accent-soft shrink-0">
                 {l.action.replaceAll('_', ' ')}
               </span>
-              <p className="text-sm text-gray-700 flex-1 min-w-0 truncate">{l.description}</p>
-              <span className="text-xs text-gray-400 shrink-0">{fmtDateTime(l.occurredAt)}</span>
+              <p className="text-sm text-white/70 flex-1 min-w-0 truncate">{l.description}</p>
+              <span className="text-xs text-white/35 shrink-0">{fmtDateTime(l.occurredAt)}</span>
             </div>
           ))}
         </div>
       )}
+      </div>
     </Layout>
   )
 }
