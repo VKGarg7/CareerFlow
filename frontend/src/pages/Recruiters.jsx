@@ -3,7 +3,7 @@ import { Alert, CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
-  Add, Search, KeyboardArrowDown, LinkedIn, Email, Phone,
+  Search, KeyboardArrowDown, LinkedIn, Email, Phone,
   Close, Send, Check, Clear, EditNote, FilterListRounded,
   VisibilityOutlined, EditOutlined, DeleteOutlineRounded,
   FormatBoldRounded, FormatItalicRounded, FormatListBulletedRounded,
@@ -27,6 +27,10 @@ import useFetchOnce from '../hooks/useFetchOnce'
 import { DrawerShell, DrawerHeader, CloseIconButton } from '../components/DrawerShell'
 import { fieldInputCls, FieldErrorText, FieldLabel, FormFooterButtons } from '../components/formKit'
 import EntityListRow from '../components/EntityListRow'
+import FilterSelect from '../components/FilterSelect'
+import HeaderAddButton from '../components/HeaderAddButton'
+import useCrudModals from '../hooks/useCrudModals'
+import useFilterState from '../hooks/useFilterState'
 
 const STATUS_CONFIG = {
   NEW:               { label: 'New',               badge: 'bg-white/[0.06] text-white/60',           border: 'border-l-white/10',    dot: 'bg-white/40',     hex: '#8B8FA3' },
@@ -595,6 +599,7 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
   if (!open) return null
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  const setVal = (key) => (val) => setForm((f) => ({ ...f, [key]: val }))
 
   const validate = () => {
     const errs = {}
@@ -648,7 +653,7 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
               placeholder="e.g. Priya Sharma" className={inputCls('name')} />
             <FieldError field="name" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel>Job Title</FieldLabel>
               <input type="text" value={form.jobTitle} onChange={set('jobTitle')}
@@ -668,7 +673,7 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
               placeholder="priya@google.com" className={inputCls('email')} />
             <FieldError field="email" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel>Phone</FieldLabel>
               <input type="tel" value={form.phone} onChange={set('phone')}
@@ -682,23 +687,26 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
               <FieldError field="linkedIn" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel>Status</FieldLabel>
-              <select value={form.status} onChange={set('status')} className={inputCls('status')}>
-                {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                  <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
-                ))}
-              </select>
+              <FilterSelect
+                value={form.status}
+                onChange={setVal('status')}
+                options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
+                hideAll
+                className="w-full"
+              />
             </div>
             <div>
               <FieldLabel>Source</FieldLabel>
-              <select value={form.source} onChange={set('source')} className={inputCls('source')}>
-                <option value="" className="bg-app-surface text-white">— Select —</option>
-                {Object.entries(SOURCE_LABELS).map(([val, label]) => (
-                  <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
-                ))}
-              </select>
+              <FilterSelect
+                value={form.source}
+                onChange={setVal('source')}
+                allLabel="— Select —"
+                options={Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))}
+                className="w-full"
+              />
             </div>
           </div>
           <div>
@@ -749,18 +757,15 @@ export default function Recruiters() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const searchInputRef = useRef(null)
 
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
   const [viewTarget, setViewTarget] = useState(null)
   const [viewFocusNotes, setViewFocusNotes] = useState(false)
 
   const {
     items: recruiters, setItems: setRecruiters, loading, error, setError,
-    setPage, refetch: fetchRecruiters,
+    setPage, size, setSize, refetch: fetchRecruiters,
   } = usePagedList(
     useCallback(
-      (page) => getRecruiters({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page }),
+      (page, size) => getRecruiters({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
       [search, statusFilter, sortBy, order]
     ),
     'Failed to load recruiter contacts.'
@@ -783,28 +788,17 @@ export default function Recruiters() {
     [recruiters, sourceFilter]
   )
 
+  const {
+    modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
+    handleSaved, handleDeleted,
+  } = useCrudModals('Recruiter contact', setSuccess, [fetchRecruiters, fetchAllRecruiters, fetchStats])
+
   const openAdd   = () => { setViewTarget(null); setEditTarget(null); setModalOpen(true) }
   const openEdit  = (r) => { setViewTarget(null); setEditTarget(r); setModalOpen(true) }
   const openView  = (r) => { setModalOpen(false); setViewFocusNotes(false); setViewTarget(r.id) }
   const openNotes = (r) => { setModalOpen(false); setViewFocusNotes(true); setViewTarget(r.id) }
 
   useAddQueryParam(openAdd)
-
-  const handleSaved = () => {
-    setModalOpen(false)
-    setSuccess(editTarget ? 'Recruiter contact updated.' : 'Recruiter contact added.')
-    fetchRecruiters()
-    fetchAllRecruiters()
-    fetchStats()
-  }
-
-  const handleDeleted = () => {
-    setDeleteTarget(null)
-    setSuccess('Recruiter contact removed.')
-    fetchRecruiters()
-    fetchAllRecruiters()
-    fetchStats()
-  }
 
   const handleNotesChanged = (recruiterId, newCount) => {
     setRecruiters((prev) => prev.map((r) => r.id === recruiterId ? { ...r, noteCount: newCount } : r))
@@ -817,14 +811,10 @@ export default function Recruiters() {
     fetchStats()
   }
 
-  const activeFilterCount = [statusFilter, sourceFilter].filter(Boolean).length
-  const isFiltered = search.trim() || activeFilterCount > 0
-
-  const clearAllFilters = () => {
-    setSearch('')
-    setStatusFilter('')
-    setSourceFilter('')
-  }
+  const { activeFilterCount, isFiltered, clearAllFilters } = useFilterState(search, setSearch, [
+    [statusFilter, setStatusFilter],
+    [sourceFilter, setSourceFilter],
+  ])
 
   const drawerOpen = modalOpen || viewTarget !== null
 
@@ -839,12 +829,8 @@ export default function Recruiters() {
 
   return (
     <Layout
-      headerAction={
-        <button onClick={openAdd}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 hover:-translate-y-0.5 transition-all shadow-glow shadow-app-accent/40">
-          <Add fontSize="small" />Add Recruiter
-        </button>
-      }
+      drawerOpen={drawerOpen}
+      headerAction={<HeaderAddButton label="Add Recruiter" onClick={openAdd} drawerOpen={drawerOpen} />}
     >
       <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
       <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
@@ -907,41 +893,13 @@ export default function Recruiters() {
 
         {filtersOpen && (
           <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[9rem]">
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
-                <option value="" className="bg-app-surface text-white">All Statuses</option>
-                {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                  <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
-                ))}
-              </select>
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
-                <KeyboardArrowDown fontSize="small" />
-              </span>
-            </div>
+            <FilterSelect value={statusFilter} onChange={setStatusFilter} allLabel="All Statuses" className="flex-1 min-w-[9rem]"
+              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))} />
 
-            <div className="relative flex-1 min-w-[9rem]">
-              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
-                <option value="" className="bg-app-surface text-white">All Sources</option>
-                {sourceOptions.map((s) => (
-                  <option key={s} value={s} className="bg-app-surface text-white">{SOURCE_LABELS[s] || s}</option>
-                ))}
-              </select>
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
-                <KeyboardArrowDown fontSize="small" />
-              </span>
-            </div>
+            <FilterSelect value={sourceFilter} onChange={setSourceFilter} allLabel="All Sources" className="flex-1 min-w-[9rem]"
+              options={sourceOptions.map((s) => ({ value: s, label: SOURCE_LABELS[s] || s }))} />
 
-            <div className="relative flex-1 min-w-[9rem]">
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
-                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-app-surface text-white">{o.label}</option>)}
-              </select>
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
-                <KeyboardArrowDown fontSize="small" />
-              </span>
-            </div>
+            <FilterSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} hideAll className="flex-1 min-w-[9rem]" />
 
             <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
               className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-white/60 hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap">
@@ -976,7 +934,7 @@ export default function Recruiters() {
             ))}
           </div>
           <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
-            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} />
+            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       ) : (
         <div>
@@ -989,7 +947,7 @@ export default function Recruiters() {
             ))}
           </div>
           <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
-            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} />
+            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       )}
       </div>

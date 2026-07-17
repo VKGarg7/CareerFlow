@@ -26,8 +26,8 @@ export default function DashboardTopBar({ profile, pendingFollowUpCount = 0 }) {
   const initial = profileInitial(profile)
 
   return (
-    <div className="flex w-full items-center gap-3">
-      <div className="relative min-w-[14rem] flex-1">
+    <div className="flex w-full flex-wrap items-center gap-3">
+      <div className="relative min-w-[10rem] flex-1">
         <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30">
           <Search sx={{ fontSize: 18 }} />
         </span>
@@ -80,7 +80,7 @@ export default function DashboardTopBar({ profile, pendingFollowUpCount = 0 }) {
           <KeyboardArrowDownRounded sx={{ fontSize: 16 }} className={`transition-transform ${addOpen ? 'rotate-180' : ''}`} />
         </button>
         {addOpen && (
-          <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-52 rounded-xl border border-white/[0.08] bg-app-raised py-1.5 shadow-card-hover animate-scale-in origin-top-right">
+          <div className="absolute left-0 top-[calc(100%+8px)] z-30 w-52 rounded-xl border border-white/[0.08] bg-app-raised py-1.5 shadow-card-hover animate-scale-in origin-top-left sm:left-auto sm:right-0 sm:origin-top-right">
             <button
               onClick={() => { setAddOpen(false); navigate('/companies?add=1') }}
               className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm text-white/75 transition-colors hover:bg-white/[0.06] hover:text-white"

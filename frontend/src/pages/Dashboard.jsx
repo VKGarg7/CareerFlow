@@ -16,7 +16,7 @@ import DashboardTopBar from '../components/DashboardTopBar'
 import CompanyLogo from '../components/CompanyLogo'
 import StatusBadge from '../components/StatusBadge'
 import { todayStr } from '../utils/followup'
-import { getProfile } from '../api/user'
+import { useProfile } from '../context/ProfileContext'
 import { getCompanies, getCompanyStats } from '../api/company'
 import { getApplications, getApplicationStats } from '../api/application'
 import { getRecruiters, getRecruiterStats } from '../api/recruiter'
@@ -143,8 +143,8 @@ function StatusDonut({ statusCounts, total, size = 128, strokeWidth = 16 }) {
 function KpiWidget({ icon, label, value, trend, trendLabel, tint, sparkline, onClick }) {
   const positive = trend >= 0
   return (
-    <button onClick={onClick} className="w-full text-left">
-      <Surface interactive className="p-5">
+    <button onClick={onClick} className="h-full w-full text-left">
+      <Surface interactive className="flex h-full flex-col p-5">
         <div className="flex items-start justify-between">
           <div
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-inner-highlight"
@@ -164,10 +164,12 @@ function KpiWidget({ icon, label, value, trend, trendLabel, tint, sparkline, onC
           )}
         </div>
 
-        <p className="font-display mt-5 text-[1.85rem] font-bold leading-none tracking-tight text-white tabular-nums">{value}</p>
-        <div className="mt-2 flex items-center justify-between">
-          <p className="text-[13px] font-medium text-white/45">{label}</p>
-          {trendLabel && <p className="text-[11px] text-white/25">{trendLabel}</p>}
+        <div className="flex-1">
+          <p className="font-display mt-5 text-[1.85rem] font-bold leading-none tracking-tight text-white tabular-nums">{value}</p>
+          <div className="mt-2 flex items-center justify-between">
+            <p className="text-[13px] font-medium text-white/45">{label}</p>
+            {trendLabel && <p className="text-[11px] text-white/25">{trendLabel}</p>}
+          </div>
         </div>
 
         {sparkline && (
@@ -287,7 +289,7 @@ function ChecklistItem({ done, text, index }) {
 }
 
 export default function Dashboard() {
-  const [profile,      setProfile]      = useState(null)
+  const { profile, loading: profileLoading } = useProfile()
   const [companies,    setCompanies]    = useState([])
   const [applications, setApplications] = useState([])
   const [recruiters,   setRecruiters]   = useState([])
@@ -303,10 +305,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.allSettled([
-      getProfile(), getCompanies({ size: 1000 }), getApplications({ size: 1000 }), getRecruiters({ size: 1000 }), getAllFollowUps({ status: 'PENDING', size: 1000 }),
+      getCompanies({ size: 1000 }), getApplications({ size: 1000 }), getRecruiters({ size: 1000 }), getAllFollowUps({ status: 'PENDING', size: 1000 }),
       getCompanyStats(), getApplicationStats(), getRecruiterStats(),
-    ]).then(([p, c, a, r, f, cs, as, rs]) => {
-      if (p.status === 'fulfilled') setProfile(p.value.data)
+    ]).then(([c, a, r, f, cs, as, rs]) => {
       if (c.status === 'fulfilled') setCompanies(c.value.data  || [])
       if (a.status === 'fulfilled') setApplications(a.value.data || [])
       if (r.status === 'fulfilled') setRecruiters(r.value.data  || [])
@@ -407,7 +408,7 @@ export default function Dashboard() {
     })
   }, [applications])
 
-  if (loading) return (
+  if (loading || profileLoading) return (
     <Layout>
       <PageSpinner py="py-24" size={28} />
     </Layout>
@@ -487,9 +488,9 @@ export default function Dashboard() {
           {totalApplications === 0 ? (
             <p className="relative py-6 text-center text-xs text-white/35">No applications tracked yet.</p>
           ) : (
-            <div className="relative flex w-full items-center gap-6">
+            <div className="relative flex w-full flex-wrap items-center gap-6">
               <StatusDonut statusCounts={statusCounts} total={totalApplications} />
-              <div className="grid flex-1 grid-cols-1 gap-1.5">
+              <div className="grid min-w-[8rem] flex-1 grid-cols-1 gap-1.5">
                 {Object.entries(STATUS_CFG).filter(([k]) => statusCounts[k]).map(([k, cfg]) => (
                   <div key={k} className="flex items-center gap-2">
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cfg.hex }} />

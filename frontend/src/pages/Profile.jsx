@@ -6,7 +6,8 @@ import Layout from '../components/Layout'
 import EmptyState from '../components/EmptyState'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
-import { getProfile, createProfile, updateProfile, updateProfileDocuments, downloadProfileDocument } from '../api/user'
+import { createProfile, updateProfile, updateProfileDocuments, downloadProfileDocument } from '../api/user'
+import { useProfile } from '../context/ProfileContext'
 import { profileInitial } from '../utils/followup'
 import { fmtFileSize, isAllowedDocExt, openDocInNewTab, downloadDoc } from '../utils/documents'
 import { FieldLabel } from '../components/formKit'
@@ -47,10 +48,9 @@ function Input({ label, value, onChange, type = 'text', placeholder = '', textar
 
 export default function Profile() {
   const navigate = useNavigate()
-  const [profile,  setProfile]  = useState(null)
+  const { profile, setProfile, refetch: refreshProfile, loading: profileLoading } = useProfile()
   const [editing,  setEditing]  = useState(false)
   const [form,     setForm]     = useState(emptyForm)
-  const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
   const [success,  setSuccess]  = useState('')
@@ -69,12 +69,9 @@ export default function Profile() {
     education: p.education || [], experience: p.experience || [], projects: p.projects || [],
   })
 
-  const refreshProfile = () =>
-    getProfile()
-      .then((res) => { setProfile(res.data); setForm(toForm(res.data)) })
-      .catch(() => setProfile(null))
-
-  useEffect(() => { refreshProfile().finally(() => setLoading(false)) }, [])
+  useEffect(() => {
+    if (profile) setForm(toForm(profile))
+  }, [profile])
 
   const set         = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
   const setListItem = (list, idx, key) => (e) =>
@@ -143,7 +140,7 @@ export default function Profile() {
     } finally { setSaving(false) }
   }
 
-  if (loading) return (
+  if (profileLoading) return (
     <Layout>
       <PageSpinner py="py-20" />
     </Layout>
@@ -219,11 +216,11 @@ export default function Profile() {
                     <Delete fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input label="Institution"    value={edu.institution}  onChange={setListItem('education', i, 'institution')}  placeholder="MIT" />
                   <Input label="Degree"         value={edu.degree}       onChange={setListItem('education', i, 'degree')}       placeholder="B.Tech" />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Input label="Field of Study" value={edu.fieldOfStudy} onChange={setListItem('education', i, 'fieldOfStudy')} placeholder="Computer Science" />
                   <Input label="Start Year"     value={edu.startYear}    onChange={setListItem('education', i, 'startYear')}    placeholder="2020" />
                   <Input label="End Year"       value={edu.endYear}      onChange={setListItem('education', i, 'endYear')}      placeholder="2024" />
@@ -243,11 +240,11 @@ export default function Profile() {
                     <Delete fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input label="Company" value={exp.company} onChange={setListItem('experience', i, 'company')} placeholder="Google" />
                   <Input label="Role"    value={exp.role}    onChange={setListItem('experience', i, 'role')}    placeholder="Software Engineer" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input label="Start Date (MM/YYYY)" value={exp.startDate} onChange={setListItem('experience', i, 'startDate')} placeholder="06/2022" />
                   {!exp.currentlyWorking && (
                     <Input label="End Date (MM/YYYY)" value={exp.endDate} onChange={setListItem('experience', i, 'endDate')} placeholder="06/2024" />
@@ -276,7 +273,7 @@ export default function Profile() {
                 </Tooltip>
                 <Input label="Project Name" value={proj.name}        onChange={setListItem('projects', i, 'name')}        placeholder="My Awesome Project" />
                 <Input label="Description"  value={proj.description} onChange={setListItem('projects', i, 'description')} textarea placeholder="What does this project do?" />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input label="Website URL" value={proj.websiteUrl} onChange={setListItem('projects', i, 'websiteUrl')} placeholder="https://myproject.com" />
                   <Input label="GitHub URL"  value={proj.githubUrl}  onChange={setListItem('projects', i, 'githubUrl')}  placeholder="https://github.com/you/repo" />
                 </div>

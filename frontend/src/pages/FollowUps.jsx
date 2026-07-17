@@ -12,7 +12,7 @@ import {
 import Layout from '../components/Layout'
 import EmptyState from '../components/EmptyState'
 import { ConfirmDeleteModal } from '../components/ModalShell'
-import { getAllFollowUps, updateFollowUp, deleteFollowUp } from '../api/followup'
+import { getAllFollowUps, updateFollowUp, deleteFollowUp, getFollowUpCounts } from '../api/followup'
 import { todayStr, fmtDate, fmtDateTime, daysLabel, initials } from '../utils/followup'
 import useTransientMessage from '../hooks/useTransientMessage'
 import RescheduleInline from '../components/RescheduleInline'
@@ -248,17 +248,35 @@ export default function FollowUps() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [collapsedSections, setCollapsedSections] = useState({})
   const [completedCount, setCompletedCount] = useState(0)
+  const [counts, setCounts] = useState({ overdue: 0, dueToday: 0, upcoming: 0, completed: 0 })
 
   const toggleSection = (key) => setCollapsedSections((s) => ({ ...s, [key]: !s[key] }))
+
+  const fetchCounts = useCallback(async () => {
+    try {
+      const { data } = await getFollowUpCounts()
+      setCounts(data)
+      setCompletedCount(data.completed)
+    } catch { /* stat tiles fall back to previous values */ }
+  }, [])
+
+  const SECTION_SIZE = 500
 
   const fetch = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const params = { status: tab === 'history' ? 'DONE' : 'PENDING', size: 1000 }
-      const res = await getAllFollowUps(params)
-      setFollowUps(res.data)
-      if (tab === 'history') setCompletedCount(res.data.totalElements)
+      if (tab === 'history') {
+        const res = await getAllFollowUps({ status: 'DONE', size: 1000 })
+        setFollowUps(res.data)
+      } else {
+        const [overdueRes, todayRes, upcomingRes] = await Promise.all([
+          getAllFollowUps({ status: 'PENDING', bucket: 'OVERDUE', size: SECTION_SIZE }),
+          getAllFollowUps({ status: 'PENDING', bucket: 'TODAY', size: SECTION_SIZE }),
+          getAllFollowUps({ status: 'PENDING', bucket: 'UPCOMING', size: SECTION_SIZE }),
+        ])
+        setFollowUps([...overdueRes.data, ...todayRes.data, ...upcomingRes.data])
+      }
     } catch {
       setError('Failed to load follow-ups.')
     } finally {
@@ -266,16 +284,12 @@ export default function FollowUps() {
     }
   }, [tab])
 
-  useEffect(() => {
-    setActiveChip(null)
-    fetch()
-  }, [fetch])
+  const refreshAll = useCallback(() => { fetch(); fetchCounts() }, [fetch, fetchCounts])
 
   useEffect(() => {
-    if (tab === 'active') {
-      getAllFollowUps({ status: 'DONE' }).then((res) => setCompletedCount(res.data.totalElements)).catch(() => {})
-    }
-  }, [tab])
+    setActiveChip(null)
+    refreshAll()
+  }, [refreshAll])
 
   const flash = setSuccess
 
@@ -283,8 +297,7 @@ export default function FollowUps() {
     try {
       await updateFollowUp(fu.id, { status: 'DONE' })
       flash('Marked as completed.')
-      setCompletedCount((c) => c + 1)
-      fetch()
+      refreshAll()
     } catch { setError('Failed to update follow-up.') }
   }
 
@@ -292,25 +305,22 @@ export default function FollowUps() {
     try {
       await updateFollowUp(fu.id, { status: 'PENDING' })
       flash('Moved back to pending.')
-      setCompletedCount((c) => Math.max(0, c - 1))
-      fetch()
+      refreshAll()
     } catch { setError('Failed to update follow-up.') }
   }
 
   const handleDeleteConfirmed = async () => {
-    const wasCompleted = deleteTarget.status === 'DONE'
     await deleteFollowUp(deleteTarget.id)
     setDeleteTarget(null)
     flash('Follow-up deleted.')
-    if (wasCompleted) setCompletedCount((c) => Math.max(0, c - 1))
-    fetch()
+    refreshAll()
   }
 
   const handleReschedule = async (fu, newDate) => {
     try {
       await updateFollowUp(fu.id, { followUpDate: newDate })
       flash('Follow-up rescheduled.')
-      fetch()
+      refreshAll()
     } catch {
       setError('Failed to reschedule follow-up.')
       throw new Error('reschedule failed')
@@ -328,11 +338,11 @@ export default function FollowUps() {
   }
 
   const activeGroups = [
-    { key: 'overdue',  Icon: EventBusyRounded,      label: 'Overdue',   accent: 'text-app-danger',      items: overdue,
+    { key: 'overdue',  Icon: EventBusyRounded,      label: 'Overdue',   accent: 'text-app-danger',      items: overdue,  totalCount: counts.overdue,
       emptyTitle: 'No overdue follow-ups',   emptyDescription: "Nothing slipped through the cracks." },
-    { key: 'today',    Icon: TodayRounded,          label: 'Due Today', accent: 'text-app-warning',     items: dueToday,
+    { key: 'today',    Icon: TodayRounded,          label: 'Due Today', accent: 'text-app-warning',     items: dueToday, totalCount: counts.dueToday,
       emptyTitle: 'No follow-ups due today', emptyDescription: "You're all caught up for today!" },
-    { key: 'upcoming', Icon: EventAvailableRounded, label: 'Upcoming',  accent: 'text-app-accent-soft', items: upcoming,
+    { key: 'upcoming', Icon: EventAvailableRounded, label: 'Upcoming',  accent: 'text-app-accent-soft', items: upcoming, totalCount: counts.upcoming,
       emptyTitle: 'Nothing upcoming',        emptyDescription: 'Scheduled follow-ups will show up here.' },
   ]
 
@@ -363,11 +373,11 @@ export default function FollowUps() {
         <>
           {!loading && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-              <StatTile Icon={EventBusyRounded}      tint="#F43F5E" value={overdue.length}  label="Overdue"
+              <StatTile Icon={EventBusyRounded}      tint="#F43F5E" value={counts.overdue}  label="Overdue"
                 onClick={() => setActiveChip(activeChip === 'overdue'  ? null : 'overdue')}  active={activeChip === 'overdue'}  />
-              <StatTile Icon={TodayRounded}          tint="#F59E0B" value={dueToday.length} label="Due Today"
+              <StatTile Icon={TodayRounded}          tint="#F59E0B" value={counts.dueToday} label="Due Today"
                 onClick={() => setActiveChip(activeChip === 'today'    ? null : 'today')}    active={activeChip === 'today'}    />
-              <StatTile Icon={EventAvailableRounded} tint="#5B5FEF" value={upcoming.length} label="Upcoming"
+              <StatTile Icon={EventAvailableRounded} tint="#5B5FEF" value={counts.upcoming} label="Upcoming"
                 onClick={() => setActiveChip(activeChip === 'upcoming' ? null : 'upcoming')} active={activeChip === 'upcoming'} />
               <StatTile Icon={CheckCircleRounded}     tint="#22C55E" value={completedCount}  label="Completed"
                 onClick={() => setTab('history')} active={false} />
@@ -384,11 +394,11 @@ export default function FollowUps() {
             />
           ) : (
             <div className="space-y-8">
-              {filteredGroups.map(({ key, Icon, label, accent, items, emptyTitle, emptyDescription }) => {
+              {filteredGroups.map(({ key, Icon, label, accent, items, totalCount, emptyTitle, emptyDescription }) => {
                 const collapsed = !!collapsedSections[key]
                 return (
                   <section key={key}>
-                    <SectionHeader Icon={Icon} label={label} count={items.length} accent={accent}
+                    <SectionHeader Icon={Icon} label={label} count={totalCount} accent={accent}
                       collapsed={collapsed} onToggle={() => toggleSection(key)} />
                     {!collapsed && (
                       items.length === 0 ? (

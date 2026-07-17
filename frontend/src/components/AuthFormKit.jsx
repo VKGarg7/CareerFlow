@@ -19,14 +19,14 @@ export function AuthFormSide({ children }) {
 
       <Link
         to="/"
-        className="absolute right-6 top-6 z-10 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-white/50 backdrop-blur-sm transition-colors hover:border-white/20 hover:text-white"
+        className="absolute right-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-2 text-xs font-semibold text-white/50 backdrop-blur-sm transition-colors hover:border-white/20 hover:text-white sm:right-6 sm:top-6 sm:px-3.5"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to site
+        <span className="hidden sm:inline">Back to site</span>
       </Link>
 
-      <div className="relative z-[1] flex h-full items-center justify-center overflow-y-auto px-6 py-6">
-        <div className="w-full max-w-sm">{children}</div>
+      <div className="relative z-[1] flex h-full justify-center overflow-y-auto px-6 pb-6 pt-16 sm:pt-20">
+        <div className="m-auto w-full max-w-sm">{children}</div>
       </div>
     </div>
   )
@@ -35,7 +35,7 @@ export function AuthFormSide({ children }) {
 export function AuthDecoTile({ label, value, sub, className = '', style }) {
   return (
     <div
-      className={`animate-float pointer-events-none absolute z-0 hidden w-44 rounded-xl border border-white/10 bg-[#0B0C14]/95 p-3.5 shadow-2xl backdrop-blur-xl lg:block ${className}`}
+      className={`animate-float pointer-events-none absolute z-0 hidden w-44 rounded-xl border border-white/10 bg-[#0B0C14]/95 p-3.5 shadow-2xl backdrop-blur-xl xl:block ${className}`}
       style={style}
     >
       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-white/35">{label}</p>

@@ -7,7 +7,7 @@ import {
   AdminPanelSettingsOutlined, KeyboardArrowDownRounded,
   BusinessCenterOutlined, HandshakeOutlined, PersonAddAltOutlined,
 } from '@mui/icons-material'
-import { getProfile } from '../api/user'
+import { useProfile } from '../context/ProfileContext'
 import { profileInitial } from '../utils/followup'
 
 const PAGE_META = {
@@ -61,12 +61,8 @@ function SidebarContent({ onClose, onLogout }) {
   const items = isAdmin ? [...NAV, ADMIN_NAV] : NAV
 
   const navigate = useNavigate()
-  const [profile, setProfile] = useState(null)
+  const { profile } = useProfile()
   const [accountOpen, setAccountOpen] = useState(false)
-
-  useEffect(() => {
-    getProfile().then((res) => setProfile(res.data)).catch(() => {})
-  }, [])
 
   useEffect(() => {
     if (!accountOpen) return
@@ -190,12 +186,8 @@ function SidebarContent({ onClose, onLogout }) {
 
 function UserChip() {
   const navigate = useNavigate()
-  const [profile, setProfile] = useState(null)
+  const { profile } = useProfile()
   const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    getProfile().then((res) => setProfile(res.data)).catch(() => {})
-  }, [])
 
   const name = profile?.firstName ? `${profile.firstName}${profile.lastName ? ' ' + profile.lastName : ''}` : 'Account'
   const initial = profileInitial(profile)
@@ -218,7 +210,7 @@ function UserChip() {
   )
 }
 
-export default function Layout({ children, headerAction }) {
+export default function Layout({ children, headerAction, drawerOpen = false }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -269,7 +261,7 @@ export default function Layout({ children, headerAction }) {
           <Brand />
         </header>
 
-        <header className="sticky top-0 z-20 hidden h-20 items-center justify-between gap-4 px-8 lg:flex">
+        <header className={`sticky top-0 z-20 hidden h-20 items-center justify-between gap-4 px-8 lg:flex transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
           <div className="min-w-0">
             <h1 className="font-display text-[30px] font-bold leading-tight tracking-tight text-app-text truncate">{meta.title}</h1>
             {meta.sub && <p className="mt-1 text-sm text-app-text-muted truncate">{meta.sub}</p>}
@@ -280,7 +272,7 @@ export default function Layout({ children, headerAction }) {
         </header>
 
         <main className="mx-auto w-full max-w-[84rem] flex-1 px-8 pb-10 pt-2">
-          {headerAction && <div className="mb-6 flex justify-end lg:hidden">{headerAction}</div>}
+          {headerAction && <div className="mb-6 flex flex-wrap justify-end gap-2 lg:hidden">{headerAction}</div>}
           {children}
         </main>
       </div>

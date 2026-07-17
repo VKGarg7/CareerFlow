@@ -3,7 +3,7 @@ import { Alert, CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
-  Add, Close, WorkOutlineRounded, SendRounded, BoltRounded,
+  Close, WorkOutlineRounded, SendRounded, BoltRounded,
   TrackChangesRounded, PsychologyRounded, TrendingUpRounded, TrendingDownRounded,
   KeyboardArrowDown, FilterListRounded, VisibilityOutlined, EditOutlined,
   DeleteOutlineRounded, NotificationsNoneOutlined, BookmarkBorderRounded, BookmarkRounded,
@@ -31,6 +31,9 @@ import CompanyLogo from '../components/CompanyLogo'
 import MonthlyTrendChart from '../components/MonthlyTrendChart'
 import MostAppliedCard from '../components/MostAppliedCard'
 import FilterSelect from '../components/FilterSelect'
+import HeaderAddButton from '../components/HeaderAddButton'
+import useCrudModals from '../hooks/useCrudModals'
+import useFilterState from '../hooks/useFilterState'
 import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
@@ -241,8 +244,8 @@ function ApplicationTableRow({ app, company, onView, onEdit, onDelete, onFollowU
   const step = nextStepInfo(app)
   return (
     <div onClick={() => onView(app)}
-      className="group flex items-center gap-4 border-b border-white/[0.05] px-4 py-3.5 cursor-pointer transition-colors hover:bg-white/[0.025] last:border-0">
-      <div className="w-56 min-w-0 shrink-0 flex items-center gap-3">
+      className="group flex items-center gap-2.5 sm:gap-4 border-b border-white/[0.05] px-3 sm:px-4 py-3.5 cursor-pointer transition-colors hover:bg-white/[0.025] last:border-0 min-w-0 md:min-w-0">
+      <div className="w-28 sm:w-56 min-w-0 shrink-0 flex items-center gap-2 sm:gap-3">
         <CompanyLogo name={app.companyName} website={company?.website} dotColor={dotHex(app.status)} className="h-9 w-9 shrink-0" />
         <div className="min-w-0">
           <p className="text-sm font-bold text-white/90 truncate">{app.companyName}</p>
@@ -250,7 +253,7 @@ function ApplicationTableRow({ app, company, onView, onEdit, onDelete, onFollowU
         </div>
       </div>
 
-      <div className="w-36 shrink-0" onClick={(e) => e.stopPropagation()}>
+      <div className="w-24 sm:w-36 min-w-0 shrink-0" onClick={(e) => e.stopPropagation()}>
         <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
       </div>
 
@@ -295,8 +298,8 @@ function ApplicationTableRow({ app, company, onView, onEdit, onDelete, onFollowU
 function ApplicationTableHeader() {
   return (
     <div className="hidden md:flex items-center gap-4 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-white/35 border-b border-white/[0.06]">
-      <div className="w-56 shrink-0">Application</div>
-      <div className="w-36 shrink-0">Status</div>
+      <div className="w-40 sm:w-56 shrink-0">Application</div>
+      <div className="w-28 sm:w-36 shrink-0">Status</div>
       <div className="w-44 shrink-0">Role</div>
       <div className="w-32 shrink-0 hidden lg:block">Company</div>
       <div className="w-28 shrink-0 hidden lg:block">Source</div>
@@ -477,7 +480,7 @@ function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete
 
           <div>
             <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest mb-3">Role & Application</p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <DetailField label="Role" value={app.role} />
               <DetailField label="Applied On" value={app.applicationDate ? fmtDate(app.applicationDate) : null} />
               <DetailField label="Source" value={SOURCE_LABELS[app.source] || app.source} />
@@ -716,6 +719,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
   }, [open, app])
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  const setVal = (key) => (val) => setForm((f) => ({ ...f, [key]: val }))
 
   const handleResumePick = (e) => {
     const file = e.target.files[0]
@@ -824,10 +828,13 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
             <FieldLabel>
               Company <span className="text-app-danger">*</span>
             </FieldLabel>
-            <select value={form.companyId} onChange={set('companyId')} className={inputCls}>
-              <option value="" className="bg-app-surface text-white">Select a company</option>
-              {companies.map((c) => <option key={c.id} value={c.id} className="bg-app-surface text-white">{c.name}</option>)}
-            </select>
+            <FilterSelect
+              value={form.companyId}
+              onChange={setVal('companyId')}
+              allLabel="Select a company"
+              options={companies.map((c) => ({ value: c.id, label: c.name }))}
+              className="w-full"
+            />
           </div>
           <div>
             <FieldLabel>
@@ -835,7 +842,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
             </FieldLabel>
             <input type="text" value={form.role} onChange={set('role')} placeholder="e.g. SDE Intern" className={inputCls} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel>Application Date</FieldLabel>
               <input type="date" value={form.applicationDate} onChange={set('applicationDate')} className={inputCls} />
@@ -849,21 +856,24 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
           </div>
           <div>
             <FieldLabel>Status</FieldLabel>
-            <select value={form.status} onChange={set('status')} className={inputCls}>
-              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
-              ))}
-            </select>
+            <FilterSelect
+              value={form.status}
+              onChange={setVal('status')}
+              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
+              hideAll
+              className="w-full"
+            />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel>Source</FieldLabel>
-              <select value={form.source} onChange={set('source')} className={inputCls}>
-                <option value="" className="bg-app-surface text-white">Select source</option>
-                {Object.entries(SOURCE_LABELS).map(([val, label]) => (
-                  <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
-                ))}
-              </select>
+              <FilterSelect
+                value={form.source}
+                onChange={setVal('source')}
+                allLabel="Select source"
+                options={Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))}
+                className="w-full"
+              />
             </div>
             <div>
               <FieldLabel>Expected Salary</FieldLabel>
@@ -1332,20 +1342,23 @@ function InterviewFormFields({ form, setField, inputCls }) {
         <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Date & Time <span className="text-app-danger">*</span></label>
         <input type="datetime-local" value={form.scheduledAt} onChange={setField('scheduledAt')} className={inputCls} />
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
           <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Round Name</label>
           <input type="text" value={form.round} onChange={setField('round')} placeholder="e.g. HR Round" className={inputCls} />
         </div>
         <div>
           <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Type</label>
-          <select value={form.interviewType} onChange={setField('interviewType')} className={inputCls}>
-            <option value="" className="bg-app-surface text-white">Select type</option>
-            {Object.entries(INTERVIEW_TYPE_LABELS).map(([v, l]) => <option key={v} value={v} className="bg-app-surface text-white">{l}</option>)}
-          </select>
+          <FilterSelect
+            value={form.interviewType}
+            onChange={(val) => setField('interviewType')({ target: { value: val } })}
+            allLabel="Select type"
+            options={Object.entries(INTERVIEW_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
+            className="w-full"
+          />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
           <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Location / Link</label>
           <input type="text" value={form.location} onChange={setField('location')} placeholder="Zoom / office" className={inputCls} />
@@ -1357,9 +1370,13 @@ function InterviewFormFields({ form, setField, inputCls }) {
       </div>
       <div>
         <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Outcome</label>
-        <select value={form.outcome} onChange={setField('outcome')} className={inputCls}>
-          {Object.entries(INTERVIEW_OUTCOME_CONFIG).map(([v, { label }]) => <option key={v} value={v} className="bg-app-surface text-white">{label}</option>)}
-        </select>
+        <FilterSelect
+          value={form.outcome}
+          onChange={(val) => setField('outcome')({ target: { value: val } })}
+          options={Object.entries(INTERVIEW_OUTCOME_CONFIG).map(([value, { label }]) => ({ value, label }))}
+          hideAll
+          className="w-full"
+        />
       </div>
       <div>
         <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">Questions Asked</label>
@@ -1409,10 +1426,7 @@ export default function Applications() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const searchInputRef = useRef(null)
 
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState(null)
   const [viewTarget, setViewTarget] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
   const [followUpTarget, setFollowUpTarget] = useState(null)
   const [companyDetailId, setCompanyDetailId] = useState(null)
 
@@ -1424,15 +1438,16 @@ export default function Applications() {
 
   const {
     items: applications, setItems: setApplications, loading, error, setError,
-    setPage, refetch: fetchApplications,
+    setPage, size, setSize, refetch: fetchApplications,
   } = usePagedList(
-    useCallback((page) => {
+    useCallback((page, size) => {
       const isClientSort = activeSortOption?.clientSide
       return getApplications({
         status: filterStatus || undefined,
         sortBy: isClientSort ? 'createdAt' : sortBy,
         order: isClientSort ? 'desc' : order,
         page,
+        size,
       })
     }, [filterStatus, sortBy, order, activeSortOption]),
     'Failed to load applications.'
@@ -1445,28 +1460,14 @@ export default function Applications() {
 
   useSearchShortcut(searchInputRef)
 
-  const openAdd      = () => { setEditTarget(null); setModalOpen(true) }
-  const openEdit     = (a) => { setEditTarget(a); setModalOpen(true) }
+  const {
+    modalOpen, setModalOpen, editTarget, deleteTarget, setDeleteTarget,
+    openAdd, openEdit, handleSaved, handleDeleted,
+  } = useCrudModals('Application', setSuccess, [fetchApplications, fetchAllApplications, fetchStats])
   const openView     = (a) => { setViewTarget(a) }
   const openFollowUp = (a) => { setFollowUpTarget(a) }
 
   useAddQueryParam(openAdd)
-
-  const handleSaved = () => {
-    setModalOpen(false)
-    setSuccess(editTarget ? 'Application updated.' : 'Application added.')
-    fetchApplications()
-    fetchAllApplications()
-    fetchStats()
-  }
-
-  const handleDeleted = () => {
-    setDeleteTarget(null)
-    setSuccess('Application removed.')
-    fetchApplications()
-    fetchAllApplications()
-    fetchStats()
-  }
 
   const effectiveDateRange = (() => {
     const today = new Date()
@@ -1514,16 +1515,12 @@ export default function Applications() {
 
   const companyById = Object.fromEntries(companies.map((c) => [c.id, c]))
 
-  const activeFilterCount = [companyFilter, roleFilter, sourceFilter, filterStatus].filter(Boolean).length
-  const isFiltered = search.trim() || activeFilterCount > 0
-
-  const clearAllFilters = () => {
-    setSearch('')
-    setCompanyFilter('')
-    setRoleFilter('')
-    setSourceFilter('')
-    setFilterStatus('')
-  }
+  const { activeFilterCount, isFiltered, clearAllFilters } = useFilterState(search, setSearch, [
+    [companyFilter, setCompanyFilter],
+    [roleFilter, setRoleFilter],
+    [sourceFilter, setSourceFilter],
+    [filterStatus, setFilterStatus],
+  ])
 
   const displayApplications = activeSortOption?.clientSide
     ? [...filteredApplications].sort((a, b) => {
@@ -1647,19 +1644,15 @@ export default function Applications() {
 
   return (
     <Layout
-      headerAction={
-        <button onClick={openAdd}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 hover:-translate-y-0.5 transition-all shadow-glow shadow-app-accent/40">
-          <Add fontSize="small" />Add Application
-        </button>
-      }
+      drawerOpen={drawerOpen}
+      headerAction={<HeaderAddButton label="Add Application" onClick={openAdd} drawerOpen={drawerOpen} />}
     >
       <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
       <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
       <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
       {!loading && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+        <div className={`grid gap-3 mb-6 ${drawerOpen ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}>
           <AnalyticsTile icon={<WorkOutlineRounded sx={{ fontSize: 18 }} />} tint="#8184F5"
             value={totalApplications} label="Total Applications" trend={totalTrend} />
           <AnalyticsTile icon={<SendRounded sx={{ fontSize: 18 }} />} tint="#8184F5"
@@ -1760,27 +1753,17 @@ export default function Applications() {
         </div>
 
         {filtersOpen && (
-          <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
-            <FilterSelect value={companyFilter} onChange={setCompanyFilter} allLabel="All Companies"
+          <div className="flex flex-wrap items-center gap-3">
+            <FilterSelect value={companyFilter} onChange={setCompanyFilter} allLabel="All Companies" className="flex-1 min-w-[8rem]"
               options={companies.map((c) => ({ value: String(c.id), label: c.name }))} />
-            <FilterSelect value={roleFilter} onChange={setRoleFilter} allLabel="All Roles"
+            <FilterSelect value={roleFilter} onChange={setRoleFilter} allLabel="All Roles" className="flex-1 min-w-[8rem]"
               options={roleOptions.map((r) => ({ value: r, label: r }))} />
-            <FilterSelect value={sourceFilter} onChange={setSourceFilter} allLabel="All Sources"
+            <FilterSelect value={sourceFilter} onChange={setSourceFilter} allLabel="All Sources" className="flex-1 min-w-[8rem]"
               options={Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))} />
-            <FilterSelect value={filterStatus} onChange={setFilterStatus} allLabel="All Statuses"
+            <FilterSelect value={filterStatus} onChange={setFilterStatus} allLabel="All Statuses" className="flex-1 min-w-[8rem]"
               options={Object.entries(STATUS_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label }))} />
 
-            <div className="relative shrink-0 w-40">
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-app-text bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-app-surface text-white">{opt.label}</option>
-                ))}
-              </select>
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-app-text-muted">
-                <KeyboardArrowDown fontSize="small" />
-              </span>
-            </div>
+            <FilterSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} hideAll className="flex-1 min-w-[8rem]" />
 
             <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
               className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-app-text-soft hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap shrink-0">
@@ -1910,7 +1893,7 @@ export default function Applications() {
             ))}
           </div>
           <Pagination page={applications.page} totalPages={applications.totalPages}
-            totalElements={applications.totalElements} size={applications.size} onPageChange={setPage} />
+            totalElements={applications.totalElements} size={applications.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       ) : (
         <div>
@@ -1920,13 +1903,13 @@ export default function Applications() {
               <span className="ml-1 text-white/35">of {applications.length}</span>
             )}
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className={`grid gap-3 ${drawerOpen ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
             {displayApplications.map((a) => (
               <ApplicationDirectoryCard key={a.id} app={a} company={companyById[a.companyId]} {...cardProps} />
             ))}
           </div>
           <Pagination page={applications.page} totalPages={applications.totalPages}
-            totalElements={applications.totalElements} size={applications.size} onPageChange={setPage} />
+            totalElements={applications.totalElements} size={applications.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       )}
       </div>

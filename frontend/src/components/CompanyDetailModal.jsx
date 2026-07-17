@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
+import useFloatingMenu from '../hooks/useFloatingMenu'
+import useCloseOnOutsideEvent from '../hooks/useCloseOnOutsideEvent'
 import { CircularProgress } from '@mui/material'
 import {
   CloseRounded, BusinessCenterOutlined, Place, LanguageOutlined, WorkOutlineOutlined,
@@ -146,7 +148,6 @@ function ActivityTimeline({ events }) {
 function MoreActionsMenu({ company }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState(null)
   const triggerRef = useRef(null)
   const menuRef = useRef(null)
 
@@ -157,23 +158,8 @@ function MoreActionsMenu({ company }) {
     { key: 'recruiter', label: 'Add Recruiter', icon: PeopleOutlined, to: '/recruiters' },
   ]
 
-  useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    const menuWidth = 208
-    setPos({ bottom: window.innerHeight - rect.top + 6, left: Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8)) })
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const onDocClick = (e) => {
-      if (triggerRef.current?.contains(e.target)) return
-      if (menuRef.current?.contains(e.target)) return
-      setOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [open])
+  const pos = useFloatingMenu(open, triggerRef, { width: 208, flipThreshold: Infinity })
+  useCloseOnOutsideEvent(open, () => setOpen(false), [triggerRef, menuRef])
 
   return (
     <div className="relative flex-1">

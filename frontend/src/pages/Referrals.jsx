@@ -3,7 +3,7 @@ import { Alert, CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
-  Add, Search, KeyboardArrowDown, LinkedIn, Email,
+  Search, KeyboardArrowDown, LinkedIn, Email,
   Close, OpenInNew, Work, FilterListRounded,
   VisibilityOutlined, EditOutlined, DeleteOutlineRounded,
 } from '@mui/icons-material'
@@ -25,6 +25,9 @@ import useFetchOnce from '../hooks/useFetchOnce'
 import { DrawerShell, DrawerHeader, CloseIconButton } from '../components/DrawerShell'
 import { fieldInputCls, FieldErrorText, FieldLabel, FormFooterButtons } from '../components/formKit'
 import EntityListRow from '../components/EntityListRow'
+import FilterSelect from '../components/FilterSelect'
+import HeaderAddButton from '../components/HeaderAddButton'
+import useCrudModals from '../hooks/useCrudModals'
 
 const STATUS_CONFIG = {
   DRAFT:          { label: 'Draft',          badge: 'bg-white/[0.06] text-white/60',           border: 'border-l-white/10',    dot: 'bg-white/40',     hex: '#8B8FA3' },
@@ -93,19 +96,19 @@ function ReferralListRow({ referral, drawerOpen, onView, onEdit, onDelete, onSta
         { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(referral), tone: 'danger' },
       ]}
     >
-      <div className={`w-40 min-w-0 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'md:block'}`}>
+      <div className={`w-40 min-w-0 shrink-0 ${drawerOpen ? 'hidden' : 'hidden md:block'}`}>
         <p className="text-[11px] text-white/35">Target Role</p>
         <p className="text-sm font-medium text-white/70 truncate mt-0.5">{referral.targetRole}</p>
       </div>
 
-      <div className={`w-28 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'lg:block'}`}>
+      <div className={`w-28 shrink-0 ${drawerOpen ? 'hidden' : 'hidden lg:block'}`}>
         <p className="text-[11px] text-white/35">Requested</p>
         <p className="text-sm font-medium text-white/70 mt-0.5">
           {referral.requestedDate ? fmtDate(referral.requestedDate) : '—'}
         </p>
       </div>
 
-      <div className={`w-28 shrink-0 hidden ${drawerOpen ? '2xl:block' : 'xl:block'}`}>
+      <div className={`w-28 shrink-0 ${drawerOpen ? 'hidden' : 'hidden xl:block'}`}>
         <p className="text-[11px] text-white/35">Follow-Up</p>
         <p className={`text-sm font-medium mt-0.5 ${overdue ? 'text-app-danger font-semibold' : 'text-white/70'}`}>
           {referral.followUpDate ? fmtDate(referral.followUpDate) : '—'}
@@ -113,7 +116,7 @@ function ReferralListRow({ referral, drawerOpen, onView, onEdit, onDelete, onSta
       </div>
 
       {overdue && (
-        <span className="hidden lg:inline-flex shrink-0 text-[10px] font-semibold text-app-danger bg-app-danger/10 px-2 py-0.5 rounded-full">
+        <span className={`shrink-0 text-[10px] font-semibold text-app-danger bg-app-danger/10 px-2 py-0.5 rounded-full ${drawerOpen ? 'hidden' : 'hidden lg:inline-flex'}`}>
           Overdue
         </span>
       )}
@@ -554,6 +557,7 @@ function AddEditDrawer({ open, referral, onClose, onSaved }) {
   if (!open) return null
 
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }))
+  const setVal = (key) => (val) => setForm(f => ({ ...f, [key]: val }))
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -668,13 +672,15 @@ function AddEditDrawer({ open, referral, onClose, onSaved }) {
           <p className="text-xs font-bold text-white/40 uppercase tracking-wider pt-1">Tracking</p>
           <div>
             <FieldLabel>Status</FieldLabel>
-            <select value={form.status} onChange={set('status')} className={inputCls('status')}>
-              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
-              ))}
-            </select>
+            <FilterSelect
+              value={form.status}
+              onChange={setVal('status')}
+              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
+              hideAll
+              className="w-full"
+            />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel>Date Requested</FieldLabel>
               <input type="date" value={form.requestedDate} onChange={set('requestedDate')}
@@ -713,17 +719,14 @@ export default function Referrals() {
 
   const [viewMode, setViewMode]       = useState('list')
 
-  const [modalOpen, setModalOpen]     = useState(false)
-  const [editTarget, setEditTarget]   = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
   const [viewTarget, setViewTarget]   = useState(null)
 
   const {
     items: referrals, setItems: setReferrals, loading, error, setError,
-    setPage, refetch: fetchReferrals,
+    setPage, size, setSize, refetch: fetchReferrals,
   } = usePagedList(
     useCallback(
-      (page) => getReferrals({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page }),
+      (page, size) => getReferrals({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
       [search, statusFilter, sortBy, order]
     ),
     'Failed to load referral requests.'
@@ -733,29 +736,19 @@ export default function Referrals() {
 
   useSearchShortcut(searchInputRef)
 
+  const {
+    modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
+    handleSaved, handleDeleted,
+  } = useCrudModals('Referral request', setSuccess, [fetchReferrals, fetchStats], { onDeleted: () => setViewTarget(null) })
+
   const openAdd  = () => { setViewTarget(null); setEditTarget(null); setModalOpen(true) }
   const openEdit = (r) => { setViewTarget(null); setEditTarget(r); setModalOpen(true) }
   const openView = (r) => { setModalOpen(false); setViewTarget(r.id) }
 
   useAddQueryParam(openAdd)
 
-  const handleSaved = () => {
-    setModalOpen(false)
-    setSuccess(editTarget ? 'Referral request updated.' : 'Referral request added.')
-    fetchReferrals()
-    fetchStats()
-  }
-
   const handleStatusChanged = (updated) => {
     setReferrals(prev => prev.map(r => r.id === updated.id ? updated : r))
-    fetchStats()
-  }
-
-  const handleDeleted = () => {
-    setDeleteTarget(null)
-    setViewTarget(null)
-    setSuccess('Referral request removed.')
-    fetchReferrals()
     fetchStats()
   }
 
@@ -772,12 +765,8 @@ export default function Referrals() {
 
   return (
     <Layout
-      headerAction={
-        <button onClick={openAdd}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 hover:-translate-y-0.5 transition-all shadow-glow shadow-app-accent/40">
-          <Add fontSize="small" />New Request
-        </button>
-      }
+      drawerOpen={drawerOpen}
+      headerAction={<HeaderAddButton label="New Request" onClick={openAdd} drawerOpen={drawerOpen} />}
     >
       <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
       <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
@@ -793,6 +782,7 @@ export default function Referrals() {
             onFilter={setStatusFilter}
             totalLabel="Total Requests"
             totalIcon={<Work sx={{ fontSize: 18 }} />}
+            compact={drawerOpen}
           />
         </div>
       )}
@@ -841,28 +831,10 @@ export default function Referrals() {
 
         {filtersOpen && (
           <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[9rem]">
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
-                <option value="" className="bg-app-surface text-white">All Statuses</option>
-                {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                  <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
-                ))}
-              </select>
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
-                <KeyboardArrowDown fontSize="small" />
-              </span>
-            </div>
+            <FilterSelect value={statusFilter} onChange={setStatusFilter} allLabel="All Statuses" className="flex-1 min-w-[9rem]"
+              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))} />
 
-            <div className="relative flex-1 min-w-[9rem]">
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
-                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-app-surface text-white">{o.label}</option>)}
-              </select>
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
-                <KeyboardArrowDown fontSize="small" />
-              </span>
-            </div>
+            <FilterSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} hideAll className="flex-1 min-w-[9rem]" />
 
             <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
               className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-white/60 hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap">
@@ -898,20 +870,20 @@ export default function Referrals() {
             ))}
           </div>
           <Pagination page={referrals.page} totalPages={referrals.totalPages}
-            totalElements={referrals.totalElements} size={referrals.size} onPageChange={setPage} />
+            totalElements={referrals.totalElements} size={referrals.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       ) : (
         <div>
           <h2 className="text-[18px] font-semibold text-white mb-4">
             {referrals.length} {referrals.length === 1 ? 'Request' : 'Requests'}
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={`grid gap-4 ${drawerOpen ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
             {referrals.map((r) => (
               <DirectoryCard key={r.id} referral={r} {...cardProps} />
             ))}
           </div>
           <Pagination page={referrals.page} totalPages={referrals.totalPages}
-            totalElements={referrals.totalElements} size={referrals.size} onPageChange={setPage} />
+            totalElements={referrals.totalElements} size={referrals.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       )}
       </div>
