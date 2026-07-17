@@ -6,6 +6,7 @@ import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
 import com.careerflow.company.dto.CompanyUpdateRequest;
 import jakarta.validation.Valid;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +39,11 @@ public class CompanyController {
     @GetMapping("/stats")
     public ResponseEntity<StatusCountsResponse> getMyCompanyStats() {
         return ResponseEntity.ok(companyService.getMyCompanyStats());
+    }
+
+    @GetMapping("/application-counts")
+    public ResponseEntity<Map<Long, Long>> getMyApplicationCountsByCompany() {
+        return ResponseEntity.ok(companyService.getMyApplicationCountsByCompany());
     }
 
     @PatchMapping("/{id}")
