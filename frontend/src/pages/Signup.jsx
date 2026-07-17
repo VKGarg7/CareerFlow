@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { register, login } from '../api/auth'
+import { register, login, oauthLoginUrl } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
 import {
   AuthCard, AuthField, authInputCls, authInputIconCls, AuthInputIcon, AuthErrorBanner,
   AuthSubmitButton, EyeIcon, AuthFormSide, AuthDecoTile, UserIcon, MailIcon, LockIcon,
   AuthCheckbox, AuthDivider, AuthSocialRow,
 } from '../components/AuthFormKit'
-
-const PROVIDER_NAMES = { google: 'Google', linkedin: 'LinkedIn', github: 'GitHub' }
 
 const STEPS = [
   { icon: '📈', title: 'Track everything', text: 'Keep all your applications, interviews and follow-ups in one place.' },
@@ -152,7 +150,7 @@ export default function Signup() {
             <AuthDivider>Or continue with</AuthDivider>
             <AuthSocialRow
               providers={['google', 'linkedin', 'github']}
-              onSelect={(provider) => setErrors({ general: `${PROVIDER_NAMES[provider]} sign-up is not available yet.` })}
+              onSelect={(provider) => { window.location.href = oauthLoginUrl(provider) }}
             />
 
             <p className="mt-3 text-center text-sm text-white/45">
