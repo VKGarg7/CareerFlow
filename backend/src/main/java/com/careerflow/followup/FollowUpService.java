@@ -6,6 +6,7 @@ import com.careerflow.common.PageResponse;
 import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.exception.ResourceNotFoundException;
+import com.careerflow.followup.dto.FollowUpCountsResponse;
 import com.careerflow.followup.dto.FollowUpRequest;
 import com.careerflow.followup.dto.FollowUpResponse;
 import com.careerflow.followup.dto.FollowUpUpdateRequest;
@@ -51,15 +52,39 @@ public class FollowUpService {
                 .stream().map(this::toResponse).toList();
     }
 
-    public PageResponse<FollowUpResponse> getAllFollowUps(FollowUpStatus status, int page, int size) {
+    public PageResponse<FollowUpResponse> getAllFollowUps(FollowUpStatus status, FollowUpBucket bucket, int page, int size) {
         User user = securityUtils.getCurrentUser();
+        Long userId = user.getId();
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? PaginationHelper.DEFAULT_SIZE : Math.min(size, PaginationHelper.MAX_SIZE);
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "followUpDate"));
-        Page<FollowUp> results = status != null
-                ? followUpRepository.findAllByUserIdAndStatusOrderByFollowUpDateAsc(user.getId(), status, pageable)
-                : followUpRepository.findAllByUserIdOrderByFollowUpDateAsc(user.getId(), pageable);
+
+        Page<FollowUp> results;
+        if (bucket != null && status == FollowUpStatus.PENDING) {
+            LocalDate today = LocalDate.now();
+            results = switch (bucket) {
+                case OVERDUE -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDateBefore(userId, status, today, pageable);
+                case TODAY -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDate(userId, status, today, pageable);
+                case UPCOMING -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDateAfter(userId, status, today, pageable);
+            };
+        } else if (status != null) {
+            results = followUpRepository.findAllByUserIdAndStatusOrderByFollowUpDateAsc(userId, status, pageable);
+        } else {
+            results = followUpRepository.findAllByUserIdOrderByFollowUpDateAsc(userId, pageable);
+        }
         return PageResponse.of(results.map(this::toResponse));
+    }
+
+    public FollowUpCountsResponse getFollowUpCounts() {
+        User user = securityUtils.getCurrentUser();
+        Long userId = user.getId();
+        LocalDate today = LocalDate.now();
+        return FollowUpCountsResponse.builder()
+                .overdue(followUpRepository.countByUserIdAndStatusAndFollowUpDateBefore(userId, FollowUpStatus.PENDING, today))
+                .dueToday(followUpRepository.countByUserIdAndStatusAndFollowUpDate(userId, FollowUpStatus.PENDING, today))
+                .upcoming(followUpRepository.countByUserIdAndStatusAndFollowUpDateAfter(userId, FollowUpStatus.PENDING, today))
+                .completed(followUpRepository.countByUserIdAndStatus(userId, FollowUpStatus.DONE))
+                .build();
     }
 
     public FollowUpResponse updateFollowUp(Long id, FollowUpUpdateRequest request) {

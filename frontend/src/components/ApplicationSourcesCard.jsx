@@ -88,21 +88,23 @@ export default function ApplicationSourcesCard({ sources, bestSource, onViewAll 
       {sources.length === 0 ? (
         <p className="py-10 text-center text-xs text-white/30">No applications yet</p>
       ) : (
-        <div className="mt-5">
-          <div className="grid grid-cols-[1.5rem_8rem_1fr_3.5rem_3.5rem_5rem] gap-4 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-white/25">
-            <span />
-            <span>Source</span>
-            <span>Applications</span>
-            <span className="text-center">Interviews</span>
-            <span className="text-center">Offers</span>
-            <span>Offer Rate</span>
-          </div>
-          <div className="space-y-0.5">
-            {sources.map((s) => (
-              <SourceRow key={s.key} sourceKey={s.key} label={s.label} total={s.total}
-                offers={s.offers} interviews={s.interviews} offerRate={s.offerRate}
-                maxTotal={maxTotal} isBest={bestSource?.key === s.key} />
-            ))}
+        <div className="mt-5 overflow-x-auto">
+          <div className="min-w-[28rem]">
+            <div className="grid grid-cols-[1.5rem_8rem_1fr_3.5rem_3.5rem_5rem] gap-4 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-white/25">
+              <span />
+              <span>Source</span>
+              <span>Applications</span>
+              <span className="text-center">Interviews</span>
+              <span className="text-center">Offers</span>
+              <span>Offer Rate</span>
+            </div>
+            <div className="space-y-0.5">
+              {sources.map((s) => (
+                <SourceRow key={s.key} sourceKey={s.key} label={s.label} total={s.total}
+                  offers={s.offers} interviews={s.interviews} offerRate={s.offerRate}
+                  maxTotal={maxTotal} isBest={bestSource?.key === s.key} />
+              ))}
+            </div>
           </div>
         </div>
       )}

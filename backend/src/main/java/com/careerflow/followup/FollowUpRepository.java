@@ -31,4 +31,30 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, Long> {
 
     @Query("SELECT f.application.id, MIN(f.followUpDate) FROM FollowUp f WHERE f.application.id IN :appIds AND f.status = 'PENDING' AND f.followUpDate >= :today GROUP BY f.application.id")
     List<Object[]> findNearestUpcomingFollowUpDates(@Param("appIds") List<Long> appIds, @Param("today") LocalDate today);
+
+    long countByUserIdAndStatus(Long userId, FollowUpStatus status);
+
+    long countByUserIdAndStatusAndFollowUpDateBefore(Long userId, FollowUpStatus status, LocalDate date);
+
+    long countByUserIdAndStatusAndFollowUpDate(Long userId, FollowUpStatus status, LocalDate date);
+
+    long countByUserIdAndStatusAndFollowUpDateAfter(Long userId, FollowUpStatus status, LocalDate date);
+
+    @Query(value = "SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company " +
+            "WHERE f.user.id = :userId AND f.status = :status AND f.followUpDate < :today",
+            countQuery = "SELECT COUNT(f) FROM FollowUp f WHERE f.user.id = :userId AND f.status = :status AND f.followUpDate < :today")
+    Page<FollowUp> findAllByUserIdAndStatusAndFollowUpDateBefore(
+            @Param("userId") Long userId, @Param("status") FollowUpStatus status, @Param("today") LocalDate today, Pageable pageable);
+
+    @Query(value = "SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company " +
+            "WHERE f.user.id = :userId AND f.status = :status AND f.followUpDate = :today",
+            countQuery = "SELECT COUNT(f) FROM FollowUp f WHERE f.user.id = :userId AND f.status = :status AND f.followUpDate = :today")
+    Page<FollowUp> findAllByUserIdAndStatusAndFollowUpDate(
+            @Param("userId") Long userId, @Param("status") FollowUpStatus status, @Param("today") LocalDate today, Pageable pageable);
+
+    @Query(value = "SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company " +
+            "WHERE f.user.id = :userId AND f.status = :status AND f.followUpDate > :today",
+            countQuery = "SELECT COUNT(f) FROM FollowUp f WHERE f.user.id = :userId AND f.status = :status AND f.followUpDate > :today")
+    Page<FollowUp> findAllByUserIdAndStatusAndFollowUpDateAfter(
+            @Param("userId") Long userId, @Param("status") FollowUpStatus status, @Param("today") LocalDate today, Pageable pageable);
 }

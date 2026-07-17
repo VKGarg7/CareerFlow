@@ -3,7 +3,7 @@ import { Alert, CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
-  Add, Search, KeyboardArrowDown, Language, CalendarTodayOutlined,
+  Search, KeyboardArrowDown, Language, CalendarTodayOutlined,
   VisibilityOutlined, EditOutlined, DeleteOutlineRounded, Place, BusinessCenterOutlined,
   FilterListRounded, SwapVertRounded,
 } from '@mui/icons-material'
@@ -32,6 +32,9 @@ import useFetchOnce from '../hooks/useFetchOnce'
 import { DrawerShell } from '../components/DrawerShell'
 import { FormFooterButtons } from '../components/formKit'
 import { CloseGlyphIcon } from '../components/CloseGlyphIcon'
+import HeaderAddButton from '../components/HeaderAddButton'
+import useCrudModals from '../hooks/useCrudModals'
+import useFilterState from '../hooks/useFilterState'
 
 const STATUS_CONFIG = {
   TARGETING:    { label: 'Targeting',    badge: 'bg-app-accent/10 text-app-accent-soft',  border: 'border-l-app-accent',   dot: 'bg-app-accent',   hex: '#5B5FEF' },
@@ -72,26 +75,26 @@ function CompanyStatusChanger({ company, onStatusChanged }) {
   )
 }
 
-function CompanyListRow({ company, onEdit, onDelete, onView, onStatusChanged, stats, order, onToggleOrder }) {
+function CompanyListRow({ company, onEdit, onDelete, onView, onStatusChanged, stats, order, onToggleOrder, compact }) {
   const { applicationCount, recruiter, lastActivity, nextFollowUp } = stats
   const cfg = STATUS_CONFIG[company.status] || STATUS_CONFIG.TARGETING
 
   return (
     <div onClick={() => onView(company.id)}
-      className={`group relative flex items-center gap-4 rounded-card border border-white/[0.06] border-l-4 ${cfg.border} bg-app-surface shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.1] hover:shadow-card-hover cursor-pointer px-5 py-3.5`}>
+      className={`group relative flex items-center gap-2 sm:gap-4 min-w-0 rounded-card border border-white/[0.06] border-l-4 ${cfg.border} bg-app-surface shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.1] hover:shadow-card-hover cursor-pointer px-3 sm:px-5 py-3.5`}>
 
       <CompanyLogo name={company.name} website={company.website} dotColor={dotHex(company.status)} className="w-10 h-10 shrink-0" />
 
-      <div className="w-44 min-w-0 shrink-0">
+      <div className={`min-w-0 shrink-0 ${compact ? 'w-24' : 'w-28 sm:w-44'}`}>
         <p className="text-sm font-bold text-white/90 truncate">{company.name}</p>
         {company.industry && <p className="text-xs text-white/40 truncate mt-0.5">{company.industry}</p>}
       </div>
 
-      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+      <div className={`shrink-0 min-w-0 w-[6.5rem] ${compact ? 'ml-auto' : 'sm:w-28'}`} onClick={(e) => e.stopPropagation()}>
         <CompanyStatusChanger company={company} onStatusChanged={onStatusChanged} />
       </div>
 
-      <div className="w-40 min-w-0 shrink-0 hidden md:block">
+      <div className={`min-w-[6rem] max-w-[10rem] flex-1 shrink basis-0 ${compact ? 'hidden' : 'hidden md:block'}`}>
         {company.location && (
           <p className="flex items-center gap-1 text-xs text-white/50 truncate">
             <Place sx={{ fontSize: 13 }} className="text-app-danger shrink-0" />
@@ -108,17 +111,17 @@ function CompanyListRow({ company, onEdit, onDelete, onView, onStatusChanged, st
         )}
       </div>
 
-      <div className="w-20 shrink-0 hidden lg:block">
+      <div className={`w-16 shrink-0 ${compact ? 'hidden' : 'hidden lg:block'}`}>
         <p className="text-[11px] text-white/35">Applications</p>
         <p className="text-sm font-semibold text-white/80 mt-0.5">{applicationCount}</p>
       </div>
 
-      <div className="w-32 min-w-0 shrink-0 hidden lg:block">
+      <div className={`min-w-[5rem] max-w-[8rem] flex-1 shrink basis-0 ${compact ? 'hidden' : 'hidden lg:block'}`}>
         <p className="text-[11px] text-white/35">Recruiter</p>
         <p className="text-sm font-semibold text-white/80 truncate mt-0.5">{recruiter ? recruiter.name : '—'}</p>
       </div>
 
-      <div className="w-28 shrink-0 hidden xl:block">
+      <div className={`w-24 shrink-0 ${compact ? 'hidden' : 'hidden xl:block'}`}>
         <p className="text-[11px] text-white/35">Last Activity</p>
         <p className="flex items-center gap-1.5 text-sm font-medium text-white/70 mt-0.5">
           {lastActivity && <span className="w-1.5 h-1.5 rounded-full bg-app-success shrink-0" />}
@@ -129,12 +132,12 @@ function CompanyListRow({ company, onEdit, onDelete, onView, onStatusChanged, st
       <div className="ml-auto flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
         {onToggleOrder && (
           <button onClick={onToggleOrder} title={order === 'desc' ? 'Sort ascending' : 'Sort descending'}
-            className="flex items-center justify-center w-9 h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white hover:bg-white/[0.08] transition">
+            className={`items-center justify-center w-9 h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white hover:bg-white/[0.08] transition ${compact ? 'hidden' : 'hidden sm:flex'}`}>
             <SwapVertRounded sx={{ fontSize: 18 }} />
           </button>
         )}
         <button onClick={() => onView(company.id)} title={nextFollowUp ? `Next follow-up: ${fmtDate(nextFollowUp)}` : 'No pending follow-up'}
-          className={`flex items-center justify-center w-9 h-9 rounded-lg border transition ${
+          className={`items-center justify-center w-9 h-9 rounded-lg border transition ${compact ? 'hidden' : 'hidden sm:flex'} ${
             nextFollowUp
               ? 'border-app-accent/25 bg-app-accent/10 text-app-accent-soft hover:bg-app-accent/20'
               : 'border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white hover:bg-white/[0.08]'
@@ -308,13 +311,15 @@ function AddEditModal({ open, company, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Status</label>
-            <select value={form.status} onChange={set('status')} className={inputCls}>
-              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                <option key={val} value={val} className="bg-app-surface text-white">{label}</option>
-              ))}
-            </select>
+            <FilterSelect
+              value={form.status}
+              onChange={(val) => setForm((f) => ({ ...f, status: val }))}
+              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
+              hideAll
+              className="w-full"
+            />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Website</label>
               <input type="url" value={form.website} onChange={set('website')} placeholder="https://..." className={inputCls} />
@@ -404,10 +409,10 @@ export default function Companies() {
 
   const {
     items: companies, setItems: setCompanies, loading, error, setError,
-    setPage, refetch: fetchCompanies,
+    page, setPage, size, setSize, refetch: fetchCompanies,
   } = usePagedList(
     useCallback(
-      (page) => getCompanies({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page }),
+      (page, size) => getCompanies({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
       [search, statusFilter, sortBy, order]
     ),
     'Failed to load companies.'
@@ -418,9 +423,10 @@ export default function Companies() {
   )
   const { data: stats, refetch: fetchStats } = useFetchOnce(getCompanyStats)
 
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
+  const {
+    modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
+    handleSaved, handleDeleted,
+  } = useCrudModals('Company', setSuccess, [fetchCompanies, fetchAllCompanies, fetchStats])
   const [viewId, setViewId] = useState(null)
 
   const [applications, setApplications] = useState([])
@@ -530,38 +536,18 @@ export default function Companies() {
 
   useAddQueryParam(openAdd)
 
-  const handleSaved = () => {
-    setModalOpen(false)
-    setSuccess(editTarget ? 'Company updated.' : 'Company added.')
-    fetchCompanies()
-    fetchAllCompanies()
-    fetchStats()
-  }
-
-  const handleDeleted = () => {
-    setDeleteTarget(null)
-    setSuccess('Company removed.')
-    fetchCompanies()
-    fetchAllCompanies()
-    fetchStats()
-  }
-
   const handleStatusChanged = (updated) => {
     setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c))
     setAllCompanies(prev => prev.map(c => c.id === updated.id ? updated : c))
     fetchStats()
   }
 
-  const activeFilterCount = [statusFilter, industryFilter, locationFilter, recruiterFilter].filter(Boolean).length
-  const isFiltered = search.trim() || activeFilterCount > 0
-
-  const clearAllFilters = () => {
-    setSearch('')
-    setStatusFilter('')
-    setIndustryFilter('')
-    setLocationFilter('')
-    setRecruiterFilter('')
-  }
+  const { activeFilterCount, isFiltered, clearAllFilters } = useFilterState(search, setSearch, [
+    [statusFilter, setStatusFilter],
+    [industryFilter, setIndustryFilter],
+    [locationFilter, setLocationFilter],
+    [recruiterFilter, setRecruiterFilter],
+  ])
 
   const grouped = filteredCompanies.reduce((acc, c) => {
     const letter = c.name[0]?.toUpperCase() || '#'
@@ -577,12 +563,8 @@ export default function Companies() {
 
   return (
     <Layout
-      headerAction={
-        <button onClick={openAdd}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 hover:-translate-y-0.5 transition-all shadow-glow shadow-app-accent/40">
-          <Add fontSize="small" />Add Company
-        </button>
-      }
+      drawerOpen={drawerOpen}
+      headerAction={<HeaderAddButton label="Add Company" onClick={openAdd} drawerOpen={drawerOpen} />}
     >
       <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
       <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
@@ -600,6 +582,7 @@ export default function Companies() {
             totalLabel="Total Companies"
             totalIcon={<BusinessCenterOutlined sx={{ fontSize: 18 }} />}
             trendByStatus={trendByStatus}
+            compact={drawerOpen}
           />
         </div>
       )}
@@ -657,15 +640,7 @@ export default function Companies() {
             <FilterSelect value={recruiterFilter} onChange={setRecruiterFilter} allLabel="All Recruiters" className="flex-1 min-w-[7rem]"
               options={recruiterOptions.map((r) => ({ value: String(r.id), label: r.name }))} />
 
-            <div className="relative flex-1 min-w-[7rem]">
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="w-full h-11 appearance-none pl-4 pr-9 border border-white/[0.06] rounded-xl text-sm text-app-text bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition cursor-pointer">
-                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-app-surface text-white">{o.label}</option>)}
-              </select>
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-app-text-muted">
-                <KeyboardArrowDown fontSize="small" />
-              </span>
-            </div>
+            <FilterSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} hideAll className="flex-1 min-w-[7rem]" />
 
             <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
               className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-app-text-soft hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap">
@@ -697,24 +672,24 @@ export default function Companies() {
           <div className="space-y-3">
             {filteredCompanies.map((c) => (
               <CompanyListRow key={c.id} company={c} {...cardProps} stats={getCardStats(c)}
-                order={order} onToggleOrder={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))} />
+                order={order} onToggleOrder={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))} compact={drawerOpen} />
             ))}
           </div>
           <Pagination page={companies.page} totalPages={companies.totalPages}
-            totalElements={companies.totalElements} size={companies.size} onPageChange={setPage} />
+            totalElements={companies.totalElements} size={companies.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       ) : (
         <div>
           <h2 className="text-[18px] font-semibold text-app-text mb-4">
             {filteredCompanies.length} {filteredCompanies.length === 1 ? 'Company' : 'Companies'}
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className={`grid gap-6 ${drawerOpen ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
             {filteredCompanies.map((c) => (
               <CompanyDirectoryCard key={c.id} company={c} {...cardProps} stats={getCardStats(c)} />
             ))}
           </div>
           <Pagination page={companies.page} totalPages={companies.totalPages}
-            totalElements={companies.totalElements} size={companies.size} onPageChange={setPage} />
+            totalElements={companies.totalElements} size={companies.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       )}
       </div>

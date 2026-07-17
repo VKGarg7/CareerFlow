@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ProfileProvider } from './context/ProfileContext'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -17,13 +18,13 @@ import Activity from './pages/Activity'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
-  return token ? children : <Navigate to="/login" replace />
+  return token ? <ProfileProvider>{children}</ProfileProvider> : <Navigate to="/login" replace />
 }
 
 function AdminRoute({ children }) {
   const token = localStorage.getItem('token')
   if (!token) return <Navigate to="/login" replace />
-  return localStorage.getItem('role') === 'ADMIN' ? children : <Navigate to="/dashboard" replace />
+  return localStorage.getItem('role') === 'ADMIN' ? <ProfileProvider>{children}</ProfileProvider> : <Navigate to="/dashboard" replace />
 }
 
 function RootRoute() {

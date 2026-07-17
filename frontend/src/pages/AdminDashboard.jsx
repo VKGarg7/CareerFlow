@@ -211,14 +211,14 @@ export default function AdminDashboard() {
         <BreakdownCard title="Referrals by Status" data={stats?.referralsByStatus} />
       </div>
 
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 className="text-xs font-bold text-white/40 uppercase tracking-widest">Manage Users</h2>
         <input
           type="text"
           value={userSearch}
           onChange={(e) => searchUsers(e.target.value)}
           placeholder="Search by name or email…"
-          className="text-xs font-medium border border-white/[0.08] rounded-xl px-3 py-2 text-white/70 bg-white/[0.03] w-56 hover:border-white/[0.14] focus:outline-none focus:ring-2 focus:ring-app-accent/40 transition placeholder:text-white/25"
+          className="text-xs font-medium border border-white/[0.08] rounded-xl px-3 py-2 text-white/70 bg-white/[0.03] w-full sm:w-56 hover:border-white/[0.14] focus:outline-none focus:ring-2 focus:ring-app-accent/40 transition placeholder:text-white/25"
         />
       </div>
       <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card">

@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import useFloatingMenu from '../hooks/useFloatingMenu'
+import useCloseOnOutsideEvent from '../hooks/useCloseOnOutsideEvent'
 
 const EditIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
@@ -31,38 +33,11 @@ const TONE_CLASSES = {
 
 export function CardMenu({ items = [] }) {
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState(null)
   const triggerRef = useRef(null)
   const menuRef = useRef(null)
 
-  useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    const menuWidth = 176 // w-44
-    const left = Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)
-    setPos({ top: rect.bottom + 6, left: Math.max(8, left) })
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const onDocClick = (e) => {
-      if (triggerRef.current?.contains(e.target)) return
-      if (menuRef.current?.contains(e.target)) return
-      setOpen(false)
-    }
-    const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
-    const onScroll = () => setOpen(false)
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onEsc)
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onScroll)
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onEsc)
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', onScroll)
-    }
-  }, [open])
+  const pos = useFloatingMenu(open, triggerRef, { width: 176, align: 'right', flipThreshold: 160 })
+  useCloseOnOutsideEvent(open, () => setOpen(false), [triggerRef, menuRef])
 
   if (items.length === 0) return null
 
@@ -77,8 +52,8 @@ export function CardMenu({ items = [] }) {
       </button>
       {open && pos && createPortal(
         <div ref={menuRef} role="menu"
-          style={{ position: 'fixed', top: pos.top, left: pos.left }}
-          className="w-44 rounded-xl border border-white/[0.08] bg-app-raised shadow-card-hover py-1.5 z-[100] animate-scale-in origin-top-right">
+          style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left }}
+          className={`w-44 rounded-xl border border-white/[0.08] bg-app-raised shadow-card-hover py-1.5 z-[100] animate-scale-in ${pos.bottom !== undefined ? 'origin-bottom-right' : 'origin-top-right'}`}>
           {items.map(({ key, label, icon, onClick: onAction, tone = 'default' }) => (
             <button key={key || label} role="menuitem"
               onClick={(e) => { e.stopPropagation(); setOpen(false); onAction?.(e) }}

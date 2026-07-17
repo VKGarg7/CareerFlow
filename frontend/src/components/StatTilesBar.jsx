@@ -28,6 +28,7 @@ export default function StatTilesBar({
   trendByStatus = {},
   counts: countsOverride,
   total: totalOverride,
+  compact = false,
 }) {
   const counts = countsOverride ?? countByStatus(items, statusKey, statusConfig)
 
@@ -38,17 +39,17 @@ export default function StatTilesBar({
     .filter((t) => t.count > 0)
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className={`grid gap-3 ${compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-6'}`}>
       <button
         onClick={() => onFilter('')}
-        className={`text-left rounded-xl border px-4 py-3 transition-all flex items-center gap-3 ${
+        className={`text-left rounded-xl border px-4 py-3 transition-all flex items-center gap-3 min-w-0 ${
           allActive
             ? 'bg-app-accent/10 border-app-accent/40'
             : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.04]'
         }`}
       >
         {totalIcon && (
-          <span className="w-9 h-9 rounded-lg bg-app-accent/15 text-app-accent-soft flex items-center justify-center shrink-0">
+          <span className={`w-9 h-9 rounded-lg bg-app-accent/15 text-app-accent-soft items-center justify-center shrink-0 ${compact ? 'hidden' : 'flex'}`}>
             {totalIcon}
           </span>
         )}
@@ -66,13 +67,13 @@ export default function StatTilesBar({
           <button
             key={key}
             onClick={() => onFilter(isActive ? '' : key)}
-            className={`text-left rounded-xl border px-4 py-3 transition-all ${
+            className={`text-left rounded-xl border px-4 py-3 transition-all min-w-0 ${
               isActive
                 ? `${cfg.badge} border-current/40`
                 : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.04]'
             }`}
           >
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
               <span className={`relative flex w-5 h-5 rounded-full shrink-0 items-center justify-center ${cfg.dot}`}>
                 <span className="w-2 h-2 rounded-full bg-white/90" />
               </span>

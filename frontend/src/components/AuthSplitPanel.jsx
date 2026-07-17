@@ -69,7 +69,7 @@ function DashboardIllustration() {
 export function AuthBrand({ mobile = false }) {
   if (mobile) {
     return (
-      <Link to="/" className="mb-8 flex items-center justify-center gap-2.5 lg:hidden">
+      <Link to="/" className="mb-8 flex items-center justify-center gap-2.5 px-16 lg:hidden">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#5B5FEF] to-[#8B5CF6] shadow-[0_0_20px_rgba(91,95,239,0.5)]">
           <span className="font-display text-xs font-bold text-white">CF</span>
         </div>
@@ -106,7 +106,7 @@ export default function AuthPanel({ eyebrow = 'Field notes', title, subtitle, it
         />
       )}
 
-      <div className="relative z-10 flex h-full flex-col">
+      <div className="relative z-10 flex h-full flex-col overflow-y-auto no-scrollbar">
         <AuthBrand />
 
         <div className="my-8">
@@ -119,7 +119,7 @@ export default function AuthPanel({ eyebrow = 'Field notes', title, subtitle, it
 
         {items.length > 0 && (
           detailed ? (
-            <ul className="space-y-4">
+            <ul className="mb-auto space-y-4">
               {items.map(({ icon, title, text }) => (
                 <li key={title} className="flex items-start gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-base ring-1 ring-white/10">

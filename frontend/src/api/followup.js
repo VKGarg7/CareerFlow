@@ -8,6 +8,8 @@ export const createFollowUp = (applicationId, data) =>
 
 export const getAllFollowUps = (params) => api.get('/follow-ups', { params }).then(unwrapPage)
 
+export const getFollowUpCounts = () => api.get('/follow-ups/counts')
+
 export const updateFollowUp = (id, data) => api.patch(`/follow-ups/${id}`, data)
 
 export const deleteFollowUp = (id) => api.delete(`/follow-ups/${id}`)
