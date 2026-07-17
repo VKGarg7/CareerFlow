@@ -37,3 +37,4 @@ jwt.expiration-ms=86400000
 # Actuator
 management.endpoints.web.exposure.include=health,info
 management.endpoint.health.show-details=always
+management.health.mail.enabled=false
