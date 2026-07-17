@@ -20,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
 import java.util.Set;
 
 @SuppressWarnings("null")
@@ -80,6 +81,10 @@ public class CompanyService {
     public StatusCountsResponse getMyCompanyStats() {
         User user = securityUtils.getCurrentUser();
         return StatusCountsResponse.fromGroupedCounts(companyRepository.countByStatusGroupedForUser(user.getId()));
+    }
+
+    public Map<Long, Long> getMyApplicationCountsByCompany() {
+        return applicationService.getMyApplicationCountsByCompany();
     }
 
     public CompanyResponse updateCompany(Long id, CompanyUpdateRequest request) {

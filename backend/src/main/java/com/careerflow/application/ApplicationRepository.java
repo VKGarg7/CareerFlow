@@ -50,6 +50,14 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
     @Query("SELECT a.status AS status, COUNT(a) AS total FROM JobApplication a WHERE a.user.id = :userId GROUP BY a.status")
     List<StatusCount> countByStatusGroupedForUser(@Param("userId") Long userId);
 
+    @Query("SELECT a.company.id AS companyId, COUNT(a) AS total FROM JobApplication a WHERE a.user.id = :userId GROUP BY a.company.id")
+    List<CompanyCount> countByCompanyGroupedForUser(@Param("userId") Long userId);
+
         interface StatusCount extends GroupedCountRow<ApplicationStatus> {
+    }
+
+    interface CompanyCount {
+        Long getCompanyId();
+        Long getTotal();
     }
 }

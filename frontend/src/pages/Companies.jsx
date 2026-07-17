@@ -12,7 +12,7 @@ import ViewToggle from '../components/ViewToggle'
 import Pagination from '../components/Pagination'
 import StatTilesBar from '../components/StatTilesBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
-import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats } from '../api/company'
+import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats, getApplicationCountsByCompany } from '../api/company'
 import { getApplications } from '../api/application'
 import { getAllFollowUps } from '../api/followup'
 import { getRecruiters } from '../api/recruiter'
@@ -422,11 +422,12 @@ export default function Companies() {
     useCallback(() => getCompanies({ sortBy, order, size: 1000 }), [sortBy, order]), []
   )
   const { data: stats, refetch: fetchStats } = useFetchOnce(getCompanyStats)
+  const { data: applicationCountsByCompany, refetch: fetchApplicationCounts } = useFetchOnce(getApplicationCountsByCompany, {})
 
   const {
     modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
     handleSaved, handleDeleted,
-  } = useCrudModals('Company', setSuccess, [fetchCompanies, fetchAllCompanies, fetchStats])
+  } = useCrudModals('Company', setSuccess, [fetchCompanies, fetchAllCompanies, fetchStats, fetchApplicationCounts])
   const [viewId, setViewId] = useState(null)
 
   const [applications, setApplications] = useState([])
@@ -469,9 +470,8 @@ export default function Companies() {
     const map = {}
     for (const app of applications) {
       if (app.companyId == null) continue
-      if (!map[app.companyId]) map[app.companyId] = { appIds: [], lastActivity: null, recruiter: null, nextFollowUp: null }
+      if (!map[app.companyId]) map[app.companyId] = { lastActivity: null, recruiter: null, nextFollowUp: null }
       const s = map[app.companyId]
-      s.appIds.push(app.id)
       const activityDate = app.appliedDate || app.createdAt
       if (activityDate && (!s.lastActivity || activityDate > s.lastActivity)) s.lastActivity = activityDate
     }
@@ -524,7 +524,7 @@ export default function Companies() {
     const s = statsByCompany[company.id]
     const recruiter = recruiterByCompanyName[company.name?.trim().toLowerCase()]
     return {
-      applicationCount: s?.appIds.length || 0,
+      applicationCount: applicationCountsByCompany[company.id] || 0,
       lastActivity: s?.lastActivity || null,
       nextFollowUp: s?.nextFollowUp || null,
       recruiter: recruiter || null,
