@@ -216,12 +216,6 @@ public class ApplicationService {
                 .toList();
     }
 
-    public Map<Long, Long> getMyApplicationCountsByCompany() {
-        User user = securityUtils.getCurrentUser();
-        return applicationRepository.countByCompanyGroupedForUser(user.getId()).stream()
-                .collect(Collectors.toMap(ApplicationRepository.CompanyCount::getCompanyId, ApplicationRepository.CompanyCount::getTotal));
-    }
-
     public ApplicationResponse updateApplication(Long id, ApplicationUpdateRequest request) {
         User user = securityUtils.getCurrentUser();
         JobApplication application = findOwned(id, user.getId());

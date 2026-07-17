@@ -111,9 +111,4 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
         Long getInterviews();
         Long getOffers();
     }
-
-    interface CompanyCount {
-        Long getCompanyId();
-        Long getTotal();
-    }
 }
