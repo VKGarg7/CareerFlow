@@ -1,14 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { login } from '../api/auth'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { login, oauthLoginUrl } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
 import {
   AuthCard, AuthField, authInputIconCls, AuthInputIcon, AuthErrorBanner, AuthSubmitButton,
   EyeIcon, AuthFormSide, AuthDecoTile, MailIcon, LockIcon, AuthCheckbox, AuthDivider,
   AuthSocialRow, AuthTrustFooter,
 } from '../components/AuthFormKit'
-
-const PROVIDER_NAMES = { google: 'Google', linkedin: 'LinkedIn', github: 'GitHub' }
 
 const FEATURES = [
   { icon: '🏢', title: 'Track every company', text: 'Stay organized with your target companies' },
@@ -19,9 +17,10 @@ const FEATURES = [
 
 export default function Login() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [form, setForm] = useState({ email: '', password: '' })
   const [remember, setRemember] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(searchParams.get('error') || '')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -109,7 +108,7 @@ export default function Login() {
             <AuthDivider>Or continue with</AuthDivider>
             <AuthSocialRow
               providers={['google', 'linkedin', 'github']}
-              onSelect={(provider) => setError(`${PROVIDER_NAMES[provider]} sign-in is not available yet.`)}
+              onSelect={(provider) => { window.location.href = oauthLoginUrl(provider) }}
             />
 
             <p className="mt-4 text-center text-sm text-white/45">
