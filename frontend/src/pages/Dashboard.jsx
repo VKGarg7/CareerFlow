@@ -15,12 +15,12 @@ import Layout from '../components/Layout'
 import DashboardTopBar from '../components/DashboardTopBar'
 import CompanyLogo from '../components/CompanyLogo'
 import StatusBadge from '../components/StatusBadge'
-import { todayStr } from '../utils/followup'
+import { todayStr, daysDiff } from '../utils/followup'
 import { useProfile } from '../context/ProfileContext'
 import { getCompanies, getCompanyStats } from '../api/company'
-import { getApplications, getApplicationStats } from '../api/application'
+import { getApplications, getApplicationStats, getWeeklyTrend, getUpcomingDeadlines } from '../api/application'
 import { getRecruiters, getRecruiterStats } from '../api/recruiter'
-import { getAllFollowUps } from '../api/followup'
+import { getUpcomingFollowUps } from '../api/followup'
 
 const STATUS_CFG = {
   SAVED:               { label: 'Saved',               tone: 'muted',   hex: '#8B8FA3' },
@@ -63,19 +63,15 @@ function Surface({ className = '', children, interactive = false }) {
   )
 }
 
-function WeeklyTrendChart({ applications }) {
+function WeeklyTrendChart({ dailyTrend }) {
   const data = useMemo(() => {
-    const days = Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(Date.now() - (6 - i) * 86400000)
-      return { key: d.toISOString().slice(0, 10), label: d.toLocaleDateString('en-US', { weekday: 'short' }), count: 0 }
+    // dailyTrend covers the last 14 days; show only the most recent 7 for the chart.
+    const last7 = dailyTrend.slice(-7)
+    return last7.map((d) => {
+      const date = new Date(`${d.date}T00:00:00`)
+      return { key: d.date, label: date.toLocaleDateString('en-US', { weekday: 'short' }), count: d.count }
     })
-    const byDay = Object.fromEntries(days.map((d) => [d.key, d]))
-    applications.forEach((a) => {
-      const key = (a.appliedDate || a.createdAt || '').slice(0, 10)
-      if (byDay[key]) byDay[key].count += 1
-    })
-    return days
-  }, [applications])
+  }, [dailyTrend])
 
   const thisWeek = data.reduce((s, d) => s + d.count, 0)
 
@@ -293,7 +289,9 @@ export default function Dashboard() {
   const [companies,    setCompanies]    = useState([])
   const [applications, setApplications] = useState([])
   const [recruiters,   setRecruiters]   = useState([])
-  const [followUps,    setFollowUps]    = useState([])
+  const [upcomingFollowUps, setUpcomingFollowUpsState] = useState([])
+  const [upcomingDeadlines, setUpcomingDeadlines] = useState([])
+  const [dailyTrend,   setDailyTrend]   = useState([])
   const [companyStats,     setCompanyStats]     = useState(null)
   const [applicationStats, setApplicationStats] = useState(null)
   const [recruiterStats,   setRecruiterStats]   = useState(null)
@@ -305,13 +303,16 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.allSettled([
-      getCompanies({ size: 1000 }), getApplications({ size: 1000 }), getRecruiters({ size: 1000 }), getAllFollowUps({ status: 'PENDING', size: 1000 }),
+      getCompanies({ size: 1000 }), getApplications({ size: 1000 }), getRecruiters({ size: 1000 }),
+      getUpcomingFollowUps(7), getUpcomingDeadlines(7), getWeeklyTrend(14),
       getCompanyStats(), getApplicationStats(), getRecruiterStats(),
-    ]).then(([c, a, r, f, cs, as, rs]) => {
+    ]).then(([c, a, r, f, d, wt, cs, as, rs]) => {
       if (c.status === 'fulfilled') setCompanies(c.value.data  || [])
       if (a.status === 'fulfilled') setApplications(a.value.data || [])
       if (r.status === 'fulfilled') setRecruiters(r.value.data  || [])
-      if (f.status === 'fulfilled') setFollowUps(f.value.data   || [])
+      if (f.status === 'fulfilled') setUpcomingFollowUpsState(f.value.data || [])
+      if (d.status === 'fulfilled') setUpcomingDeadlines(d.value.data || [])
+      if (wt.status === 'fulfilled') setDailyTrend(wt.value.data || [])
       if (cs.status === 'fulfilled') setCompanyStats(cs.value.data)
       if (as.status === 'fulfilled') setApplicationStats(as.value.data)
       if (rs.status === 'fulfilled') setRecruiterStats(rs.value.data)
@@ -337,28 +338,25 @@ export default function Dashboard() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   const today = todayStr()
-  const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-  const overdueFollowUps  = followUps.filter((f) => f.followUpDate < today)
-  const todayFollowUps    = followUps.filter((f) => f.followUpDate === today)
-  const upcomingFollowUps = followUps.filter((f) => f.followUpDate > today && f.followUpDate <= in7Days)
-  const followUpList = [...overdueFollowUps, ...todayFollowUps, ...upcomingFollowUps].slice(0, 5)
+  const overdueFollowUps  = upcomingFollowUps.filter((f) => f.followUpDate < today)
+  const todayFollowUps    = upcomingFollowUps.filter((f) => f.followUpDate === today)
+  const laterFollowUps    = upcomingFollowUps.filter((f) => f.followUpDate > today)
+  const followUpList = [...overdueFollowUps, ...todayFollowUps, ...laterFollowUps].slice(0, 5)
 
-  const deadlineList = applications
-    .filter((a) => a.deadline && a.deadline >= today)
-    .map((a) => ({ ...a, daysLeft: Math.round((new Date(a.deadline) - new Date(today)) / 86400000) }))
-    .sort((a, b) => a.daysLeft - b.daysLeft)
+  const deadlineList = upcomingDeadlines
+    .map((a) => ({ ...a, daysLeft: daysDiff(today, a.deadline) }))
     .slice(0, 5)
 
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
   const interviewFollowUpIds = new Set(
-    followUps.filter((f) => f.followUpDate === today || f.followUpDate === tomorrow).map((f) => f.applicationId)
+    upcomingFollowUps.filter((f) => f.followUpDate === today || f.followUpDate === tomorrow).map((f) => f.applicationId)
   )
   const interviewReminders = applications.filter((a) => a.status === 'INTERVIEW_SCHEDULED' && interviewFollowUpIds.has(a.id))
 
   const fmtFollowUpDate = (d) => {
     if (d === today) return 'Today'
-    if (d < today) return `${Math.round((new Date(today) - new Date(d)) / 86400000)}d overdue`
-    return `in ${Math.round((new Date(d) - new Date(today)) / 86400000)}d`
+    if (d < today) return `${daysDiff(d, today)}d overdue`
+    return `in ${daysDiff(today, d)}d`
   }
 
   const dismissSummary = () => {
@@ -391,22 +389,18 @@ export default function Dashboard() {
   const totalRecruiters   = recruiterStats?.total   ?? recruiters.length
 
   const weekTrend = useMemo(() => {
-    const thisWeekStart = Date.now() - 7 * 86400000
-    const lastWeekStart = Date.now() - 14 * 86400000
-    const dateOf = (a) => new Date(a.appliedDate || a.createdAt || 0).getTime()
-    const thisWeek = applications.filter((a) => dateOf(a) >= thisWeekStart).length
-    const lastWeek = applications.filter((a) => dateOf(a) >= lastWeekStart && dateOf(a) < thisWeekStart).length
+    const last7 = dailyTrend.slice(-7)
+    const prev7 = dailyTrend.slice(-14, -7)
+    const thisWeek = last7.reduce((s, d) => s + d.count, 0)
+    const lastWeek = prev7.reduce((s, d) => s + d.count, 0)
     if (lastWeek === 0) return thisWeek > 0 ? 100 : 0
     return Math.round(((thisWeek - lastWeek) / lastWeek) * 100)
-  }, [applications])
+  }, [dailyTrend])
 
-  const sparkline14 = useMemo(() => {
-    return Array.from({ length: 14 }).map((_, i) => {
-      const key = new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10)
-      const v = applications.filter((a) => (a.appliedDate || a.createdAt || '').slice(0, 10) === key).length
-      return { v }
-    })
-  }, [applications])
+  const sparkline14 = useMemo(
+    () => dailyTrend.map((d) => ({ v: d.count })),
+    [dailyTrend]
+  )
 
   if (loading || profileLoading) return (
     <Layout>
@@ -505,7 +499,7 @@ export default function Dashboard() {
 
         <Surface className="p-5 lg:col-span-1">
           <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-white/40">Activity Trend</h2>
-          <WeeklyTrendChart applications={applications} />
+          <WeeklyTrendChart dailyTrend={dailyTrend} />
         </Surface>
 
         <div className="lg:col-span-1">

@@ -48,6 +48,9 @@ public interface RecruiterContactRepository extends JpaRepository<RecruiterConta
     @Query("SELECT r.status AS status, COUNT(r) AS total FROM RecruiterContact r WHERE r.user.id = :userId GROUP BY r.status")
     List<StatusCount> countByStatusGroupedForUser(@Param("userId") Long userId);
 
+    @Query("SELECT DISTINCT r.source FROM RecruiterContact r WHERE r.user.id = :userId AND r.source IS NOT NULL ORDER BY r.source ASC")
+    List<RecruiterSource> findDistinctSourcesForUser(@Param("userId") Long userId);
+
     interface StatusCount extends GroupedCountRow<RecruiterStatus> {
     }
 }

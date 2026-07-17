@@ -34,16 +34,23 @@ public class FollowUpController {
 
     @GetMapping("/api/follow-ups")
     public ResponseEntity<PageResponse<FollowUpResponse>> getAll(
+            @RequestParam(required = false) Long companyId,
             @RequestParam(required = false) FollowUpStatus status,
             @RequestParam(required = false) FollowUpBucket bucket,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(followUpService.getAllFollowUps(status, bucket, page, size));
+        return ResponseEntity.ok(followUpService.getAllFollowUps(companyId, status, bucket, page, size));
     }
 
     @GetMapping("/api/follow-ups/counts")
     public ResponseEntity<FollowUpCountsResponse> getCounts() {
         return ResponseEntity.ok(followUpService.getFollowUpCounts());
+    }
+
+    @GetMapping("/api/follow-ups/upcoming")
+    public ResponseEntity<List<FollowUpResponse>> getUpcoming(
+            @RequestParam(defaultValue = "7") int withinDays) {
+        return ResponseEntity.ok(followUpService.getUpcomingFollowUps(withinDays));
     }
 
     @PatchMapping("/api/follow-ups/{id}")
