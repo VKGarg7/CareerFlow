@@ -110,6 +110,11 @@ public class RecruiterContactService {
         return StatusCountsResponse.fromGroupedCounts(recruiterRepository.countByStatusGroupedForUser(user.getId()));
     }
 
+    public List<RecruiterSource> getMySources() {
+        User user = securityUtils.getCurrentUser();
+        return recruiterRepository.findDistinctSourcesForUser(user.getId());
+    }
+
     public RecruiterContactResponse updateRecruiter(Long id, RecruiterContactUpdateRequest request) {
         User user = securityUtils.getCurrentUser();
         RecruiterContact recruiter = findOwned(id, user.getId());

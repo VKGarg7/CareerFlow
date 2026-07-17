@@ -14,7 +14,7 @@ import Pagination from '../components/Pagination'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
-import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecruiter, getRecruiterStats } from '../api/recruiter'
+import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecruiter, getRecruiterStats, getRecruiterSources } from '../api/recruiter'
 import EmptyState from '../components/EmptyState'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
@@ -775,13 +775,9 @@ export default function Recruiters() {
     useCallback(() => getRecruiters({ sortBy, order, size: 1000 }), [sortBy, order]), []
   )
   const { data: stats, refetch: fetchStats } = useFetchOnce(getRecruiterStats)
+  const { data: sourceOptions, refetch: fetchSourceOptions } = useFetchOnce(getRecruiterSources, [])
 
   useSearchShortcut(searchInputRef)
-
-  const sourceOptions = useMemo(
-    () => [...new Set(allRecruiters.map((r) => r.source).filter(Boolean))].sort(),
-    [allRecruiters]
-  )
 
   const filteredRecruiters = useMemo(
     () => sourceFilter ? recruiters.filter((r) => r.source === sourceFilter) : recruiters,
@@ -791,7 +787,7 @@ export default function Recruiters() {
   const {
     modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
     handleSaved, handleDeleted,
-  } = useCrudModals('Recruiter contact', setSuccess, [fetchRecruiters, fetchAllRecruiters, fetchStats])
+  } = useCrudModals('Recruiter contact', setSuccess, [fetchRecruiters, fetchAllRecruiters, fetchStats, fetchSourceOptions])
 
   const openAdd   = () => { setViewTarget(null); setEditTarget(null); setModalOpen(true) }
   const openEdit  = (r) => { setViewTarget(null); setEditTarget(r); setModalOpen(true) }

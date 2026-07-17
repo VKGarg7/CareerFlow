@@ -14,7 +14,7 @@ import {
 import { getCompany, updateCompany } from '../api/company'
 import { getApplications } from '../api/application'
 import { getInterviewsForApplication } from '../api/interview'
-import { getAllFollowUps } from '../api/followup'
+import { getFollowUpsByCompany } from '../api/followup'
 import InlineStatusChanger from './InlineStatusChanger'
 import CompanyLogo from './CompanyLogo'
 import { DrawerShell } from './DrawerShell'
@@ -217,7 +217,7 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
 
         const [interviewResults, followUpRes] = await Promise.all([
           Promise.allSettled(apps.map((a) => getInterviewsForApplication(a.id))),
-          getAllFollowUps({ size: 1000 }).catch(() => ({ data: [] })),
+          getFollowUpsByCompany(companyId, { size: 1000 }).catch(() => ({ data: [] })),
         ])
         const byApp = {}
         apps.forEach((a, i) => {
@@ -226,8 +226,7 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
         })
         setInterviewsByApp(byApp)
 
-        const appIds = new Set(apps.map((a) => a.id))
-        setFollowUps((followUpRes.data || []).filter((f) => appIds.has(f.applicationId)))
+        setFollowUps(followUpRes.data || [])
       })
       .catch(() => setError('Failed to load company details.'))
       .finally(() => setLoading(false))

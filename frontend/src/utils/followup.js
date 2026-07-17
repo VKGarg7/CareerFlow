@@ -45,10 +45,13 @@ export function countByStatus(items, statusKey, statusConfig) {
   }, {})
 }
 
+// Whole-day difference (to - from), e.g. daysDiff(today, deadline) > 0 means deadline is in the future.
+export function daysDiff(from, to) {
+  return Math.round((new Date(to) - new Date(from)) / 86400000)
+}
+
 export function daysLabel(dateStr) {
-  const today = new Date(todayStr())
-  const d = new Date(dateStr)
-  const diff = Math.round((d - today) / 86400000)
+  const diff = daysDiff(todayStr(), dateStr)
   if (diff === 0) return 'Today'
   if (diff === 1) return 'Tomorrow'
   if (diff === -1) return 'Yesterday'

@@ -14,12 +14,12 @@ import Pagination from '../components/Pagination'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
-import { getApplications, addApplication, updateApplication, deleteApplication, uploadApplicationDocuments, downloadApplicationDocument, viewApplicationDocument, getApplicationStats } from '../api/application'
+import { getApplications, addApplication, updateApplication, deleteApplication, uploadApplicationDocuments, downloadApplicationDocument, viewApplicationDocument, getApplicationStats, getApplicationRoles, getMonthlyTrend, getSourceAnalysis } from '../api/application'
 import { getCompanies } from '../api/company'
 import { getProfile } from '../api/user'
 import { getFollowUpsForApplication, createFollowUp, updateFollowUp, deleteFollowUp } from '../api/followup'
 import { getInterviewsForApplication, createInterview, updateInterview, deleteInterview } from '../api/interview'
-import { todayStr, fmtDate, fmt } from '../utils/followup'
+import { todayStr, fmtDate, fmt, daysDiff } from '../utils/followup'
 import { fmtFileSize, isAllowedDocExt, openDocInNewTab, downloadDoc } from '../utils/documents'
 import RescheduleInline from '../components/RescheduleInline'
 import EmptyState from '../components/EmptyState'
@@ -210,7 +210,7 @@ function DetailField({ label, value }) {
 function nextStepInfo(app) {
   const today = todayStr()
   if (app.nextFollowUpDate) {
-    const days = Math.round((new Date(app.nextFollowUpDate) - new Date(today)) / 86400000)
+    const days = daysDiff(today, app.nextFollowUpDate)
     const overdue = app.nextFollowUpDate < today
     return {
       label: overdue ? `Follow-up ${Math.abs(days)}d overdue` : days === 0 ? 'Follow-up today' : `Follow-up in ${days}d`,
@@ -218,7 +218,7 @@ function nextStepInfo(app) {
     }
   }
   if (app.deadline) {
-    const days = Math.round((new Date(app.deadline) - new Date(today)) / 86400000)
+    const days = daysDiff(today, app.deadline)
     const past = app.deadline < today
     return {
       label: past ? 'Deadline passed' : days === 0 ? 'Deadline today' : `Deadline in ${days}d`,
@@ -1457,13 +1457,16 @@ export default function Applications() {
     useCallback(() => getApplications({ size: 1000 }), []), []
   )
   const { data: stats, refetch: fetchStats } = useFetchOnce(getApplicationStats)
+  const { data: roleOptionsData, refetch: fetchRoleOptions } = useFetchOnce(getApplicationRoles, [])
+  const { data: monthlyTrendData, refetch: fetchMonthlyTrend } = useFetchOnce(getMonthlyTrend, [])
+  const { data: sourceAnalysisData, refetch: fetchSourceAnalysis } = useFetchOnce(getSourceAnalysis, [])
 
   useSearchShortcut(searchInputRef)
 
   const {
     modalOpen, setModalOpen, editTarget, deleteTarget, setDeleteTarget,
     openAdd, openEdit, handleSaved, handleDeleted,
-  } = useCrudModals('Application', setSuccess, [fetchApplications, fetchAllApplications, fetchStats])
+  } = useCrudModals('Application', setSuccess, [fetchApplications, fetchAllApplications, fetchStats, fetchRoleOptions, fetchMonthlyTrend, fetchSourceAnalysis])
   const openView     = (a) => { setViewTarget(a) }
   const openFollowUp = (a) => { setFollowUpTarget(a) }
 
@@ -1511,7 +1514,7 @@ export default function Applications() {
     return true
   })
 
-  const roleOptions = [...new Set(allApplications.map((a) => a.role).filter(Boolean))].sort()
+  const roleOptions = roleOptionsData ?? []
 
   const companyById = Object.fromEntries(companies.map((c) => [c.id, c]))
 
@@ -1531,40 +1534,27 @@ export default function Applications() {
       })
     : filteredApplications
 
-  const dateOfApp = (a) => a.applicationDate ? new Date(a.applicationDate) : null
-  const inMonth = (d, y, m) => d && d.getFullYear() === y && d.getMonth() === m
-
-  const now = new Date()
-  const curY = now.getFullYear(), curM = now.getMonth()
-  const prevDate = new Date(curY, curM - 1, 1)
-  const prevY = prevDate.getFullYear(), prevM = prevDate.getMonth()
-
-  const createdThisMonth = allApplications.filter((a) => inMonth(dateOfApp(a), curY, curM))
-  const createdLastMonth = allApplications.filter((a) => inMonth(dateOfApp(a), prevY, prevM))
-
   const pctChange = (curr, prev) => {
     if (prev === 0) return curr > 0 ? 100 : 0
     return Math.round(((curr - prev) / prev) * 100)
   }
 
-  const thisMonth = createdThisMonth.length
-  const thisMonthTrend = pctChange(createdThisMonth.length, createdLastMonth.length)
+  const thisMonth = stats?.createdThisMonth ?? 0
+  const thisMonthTrend = pctChange(stats?.createdThisMonth ?? 0, stats?.createdLastMonth ?? 0)
 
-  const activeCount = allApplications.filter(
-    (a) => !['REJECTED', 'JOINED'].includes(a.status)
-  ).length
-  const activeCreatedThisMonth = createdThisMonth.filter((a) => !['REJECTED', 'JOINED'].includes(a.status)).length
-  const activeCreatedLastMonth = createdLastMonth.filter((a) => !['REJECTED', 'JOINED'].includes(a.status)).length
-  const activeTrend = pctChange(activeCreatedThisMonth, activeCreatedLastMonth)
+  const activeCount = Object.entries(stats?.byStatus ?? {})
+    .filter(([status]) => !['REJECTED', 'JOINED'].includes(status))
+    .reduce((sum, [, count]) => sum + count, 0)
+  const activeTrend = thisMonthTrend
 
   const totalTrend = thisMonthTrend
   const totalApplications = stats?.total ?? allApplications.length
-  const offerCount = stats?.byStatus?.OFFER_RECEIVED ?? allApplications.filter((a) => a.status === 'OFFER_RECEIVED').length
+  const offerCount = stats?.byStatus?.OFFER_RECEIVED ?? 0
   const conversionRate = totalApplications > 0
     ? ((offerCount / totalApplications) * 100).toFixed(1)
     : null
-  const interviewsScheduled = allApplications.filter((a) => a.status === 'INTERVIEW_SCHEDULED').length
-  const interviewsCleared   = allApplications.filter((a) => a.status === 'INTERVIEW_CLEARED').length
+  const interviewsScheduled = stats?.byStatus?.INTERVIEW_SCHEDULED ?? 0
+  const interviewsCleared   = stats?.byStatus?.INTERVIEW_CLEARED ?? 0
   const totalInterviews     = interviewsScheduled + interviewsCleared
   const interviewSuccessRate = totalInterviews > 0
     ? ((interviewsCleared / totalInterviews) * 100).toFixed(1)
@@ -1572,19 +1562,13 @@ export default function Applications() {
 
   const monthlyTrend = (() => {
     const now = new Date()
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
-      const y = d.getFullYear(), m = d.getMonth()
-      const count = allApplications.filter((a) => {
-        if (!a.applicationDate) return false
-        const ad = new Date(a.applicationDate)
-        return ad.getFullYear() === y && ad.getMonth() === m
-      }).length
+    return monthlyTrendData.map((item) => {
+      const d = new Date(item.year, item.month - 1, 1)
       return {
         label: d.toLocaleDateString('en-US', { month: 'short' }),
         fullLabel: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-        count,
-        isCurrent: y === now.getFullYear() && m === now.getMonth(),
+        count: item.count,
+        isCurrent: item.year === now.getFullYear() && item.month - 1 === now.getMonth(),
       }
     })
   })()
@@ -1603,23 +1587,18 @@ export default function Applications() {
   })()
 
   const sourceAnalysis = (() => {
-    const map = {}
-    allApplications.forEach((a) => {
-      const key = a.source || 'OTHER'
-      if (!map[key]) map[key] = { total: 0, offers: 0, interviews: 0 }
-      map[key].total++
-      if (a.status === 'OFFER_RECEIVED') map[key].offers++
-      if (a.status === 'INTERVIEW_SCHEDULED' || a.status === 'INTERVIEW_CLEARED') map[key].interviews++
-    })
-    return Object.entries(map)
-      .map(([key, { total, offers, interviews }]) => ({
-        key,
-        label: SOURCE_LABELS[key] || key,
-        total,
-        offers,
-        interviews,
-        offerRate: total > 0 ? (offers / total) * 100 : 0,
-      }))
+    return sourceAnalysisData
+      .map(({ source, total, offers, interviews }) => {
+        const key = source || 'OTHER'
+        return {
+          key,
+          label: SOURCE_LABELS[key] || key,
+          total,
+          offers,
+          interviews,
+          offerRate: total > 0 ? (offers / total) * 100 : 0,
+        }
+      })
       .sort((a, b) => b.total - a.total)
   })()
   const bestSource = sourceAnalysis.filter((s) => s.total >= 2).sort((a, b) => b.offerRate - a.offerRate)[0] ?? null
@@ -1637,6 +1616,7 @@ export default function Applications() {
     setAllApplications(prev => prev.map(a => a.id === updated.id ? updated : a))
     setViewTarget(prev => prev?.id === updated.id ? updated : prev)
     fetchStats()
+    fetchSourceAnalysis()
   }
 
   const cardProps = { onView: openView, onEdit: openEdit, onDelete: setDeleteTarget, onFollowUp: openFollowUp, onCompany: setCompanyDetailId, onStatusChanged: handleStatusChanged }

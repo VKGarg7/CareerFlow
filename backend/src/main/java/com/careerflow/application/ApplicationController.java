@@ -2,9 +2,12 @@ package com.careerflow.application;
 
 import com.careerflow.application.dto.ApplicationRequest;
 import com.careerflow.application.dto.ApplicationResponse;
+import com.careerflow.application.dto.ApplicationStatsResponse;
 import com.careerflow.application.dto.ApplicationUpdateRequest;
+import com.careerflow.application.dto.DailyTrendItem;
+import com.careerflow.application.dto.MonthlyTrendItem;
+import com.careerflow.application.dto.SourceAnalysisItem;
 import com.careerflow.common.PageResponse;
-import com.careerflow.common.StatusCountsResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -13,6 +16,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/applications")
@@ -38,8 +43,35 @@ public class ApplicationController {
     }
 
     @GetMapping("/stats")
-    public ResponseEntity<StatusCountsResponse> getMyApplicationStats() {
+    public ResponseEntity<ApplicationStatsResponse> getMyApplicationStats() {
         return ResponseEntity.ok(applicationService.getMyApplicationStats());
+    }
+
+    @GetMapping("/roles")
+    public ResponseEntity<List<String>> getMyRoles() {
+        return ResponseEntity.ok(applicationService.getMyRoles());
+    }
+
+    @GetMapping("/monthly-trend")
+    public ResponseEntity<List<MonthlyTrendItem>> getMyMonthlyTrend() {
+        return ResponseEntity.ok(applicationService.getMyMonthlyTrend());
+    }
+
+    @GetMapping("/source-analysis")
+    public ResponseEntity<List<SourceAnalysisItem>> getMySourceAnalysis() {
+        return ResponseEntity.ok(applicationService.getMySourceAnalysis());
+    }
+
+    @GetMapping("/weekly-trend")
+    public ResponseEntity<List<DailyTrendItem>> getMyWeeklyTrend(
+            @RequestParam(defaultValue = "14") int days) {
+        return ResponseEntity.ok(applicationService.getMyWeeklyTrend(days));
+    }
+
+    @GetMapping("/deadlines")
+    public ResponseEntity<List<ApplicationResponse>> getMyUpcomingDeadlines(
+            @RequestParam(defaultValue = "7") int withinDays) {
+        return ResponseEntity.ok(applicationService.getMyUpcomingDeadlines(withinDays));
     }
 
     @PatchMapping("/{id}")
