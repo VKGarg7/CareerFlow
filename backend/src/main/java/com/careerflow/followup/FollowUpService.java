@@ -2,6 +2,7 @@ package com.careerflow.followup;
 
 import com.careerflow.application.ApplicationRepository;
 import com.careerflow.application.JobApplication;
+import com.careerflow.common.MapCollectors;
 import com.careerflow.common.PageResponse;
 import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
@@ -52,7 +53,7 @@ public class FollowUpService {
                 .stream().map(this::toResponse).toList();
     }
 
-    public PageResponse<FollowUpResponse> getAllFollowUps(FollowUpStatus status, FollowUpBucket bucket, int page, int size) {
+    public PageResponse<FollowUpResponse> getAllFollowUps(Long companyId, FollowUpStatus status, FollowUpBucket bucket, int page, int size) {
         User user = securityUtils.getCurrentUser();
         Long userId = user.getId();
         int safePage = Math.max(page, 0);
@@ -60,7 +61,11 @@ public class FollowUpService {
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "followUpDate"));
 
         Page<FollowUp> results;
-        if (bucket != null && status == FollowUpStatus.PENDING) {
+        if (companyId != null && status != null) {
+            results = followUpRepository.findAllByUserIdAndCompanyIdAndStatusOrderByFollowUpDateAsc(userId, companyId, status, pageable);
+        } else if (companyId != null) {
+            results = followUpRepository.findAllByUserIdAndCompanyIdOrderByFollowUpDateAsc(userId, companyId, pageable);
+        } else if (bucket != null && status == FollowUpStatus.PENDING) {
             LocalDate today = LocalDate.now();
             results = switch (bucket) {
                 case OVERDUE -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDateBefore(userId, status, today, pageable);
@@ -73,6 +78,20 @@ public class FollowUpService {
             results = followUpRepository.findAllByUserIdOrderByFollowUpDateAsc(userId, pageable);
         }
         return PageResponse.of(results.map(this::toResponse));
+    }
+
+    public java.util.Map<Long, LocalDate> getMyNextFollowUpByCompany() {
+        User user = securityUtils.getCurrentUser();
+        return MapCollectors.toMap(followUpRepository.nextFollowUpByCompanyGroupedForUser(user.getId(), LocalDate.now()),
+                FollowUpRepository.CompanyNextFollowUp::getCompanyId, FollowUpRepository.CompanyNextFollowUp::getNextFollowUp);
+    }
+
+    public List<FollowUpResponse> getUpcomingFollowUps(int withinDays) {
+        User user = securityUtils.getCurrentUser();
+        LocalDate until = LocalDate.now().plusDays(Math.max(withinDays, 0));
+        return followUpRepository
+                .findAllByUserIdAndStatusAndFollowUpDateLessThanEqualOrderByFollowUpDateAsc(user.getId(), FollowUpStatus.PENDING, until)
+                .stream().map(this::toResponse).toList();
     }
 
     public FollowUpCountsResponse getFollowUpCounts() {

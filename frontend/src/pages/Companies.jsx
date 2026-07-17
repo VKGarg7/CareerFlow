@@ -12,9 +12,7 @@ import ViewToggle from '../components/ViewToggle'
 import Pagination from '../components/Pagination'
 import StatTilesBar from '../components/StatTilesBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
-import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats, getApplicationCountsByCompany } from '../api/company'
-import { getApplications } from '../api/application'
-import { getAllFollowUps } from '../api/followup'
+import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats, getApplicationCountsByCompany, getCompanyCreationTrend, getCompanyActivitySummary } from '../api/company'
 import { getRecruiters } from '../api/recruiter'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
@@ -423,67 +421,26 @@ export default function Companies() {
   )
   const { data: stats, refetch: fetchStats } = useFetchOnce(getCompanyStats)
   const { data: applicationCountsByCompany, refetch: fetchApplicationCounts } = useFetchOnce(getApplicationCountsByCompany, {})
+  const { data: trendByStatus, refetch: fetchCreationTrend } = useFetchOnce(
+    useCallback(() => getCompanyCreationTrend(7), []), {}
+  )
+  const { data: activitySummaryByCompany, refetch: fetchActivitySummary } = useFetchOnce(getCompanyActivitySummary, {})
 
   const {
     modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
     handleSaved, handleDeleted,
-  } = useCrudModals('Company', setSuccess, [fetchCompanies, fetchAllCompanies, fetchStats, fetchApplicationCounts])
+  } = useCrudModals('Company', setSuccess, [fetchCompanies, fetchAllCompanies, fetchStats, fetchApplicationCounts, fetchCreationTrend, fetchActivitySummary])
   const [viewId, setViewId] = useState(null)
 
-  const [applications, setApplications] = useState([])
-  const [followUps, setFollowUps] = useState([])
   const [recruiters, setRecruiters] = useState([])
-
-  const trendByStatus = useMemo(() => {
-    const DAYS = 7
-    const dayKeys = Array.from({ length: DAYS }, (_, i) => {
-      const d = new Date()
-      d.setDate(d.getDate() - (DAYS - 1 - i))
-      return d.toISOString().slice(0, 10)
-    })
-    const result = {}
-    for (const key of Object.keys(STATUS_CONFIG)) {
-      const inStatus = allCompanies.filter((c) => c.status === key && c.createdAt)
-      let running = 0
-      const beforeWindow = inStatus.filter((c) => c.createdAt.slice(0, 10) < dayKeys[0]).length
-      running = beforeWindow
-      result[key] = dayKeys.map((day) => {
-        running += inStatus.filter((c) => c.createdAt.slice(0, 10) === day).length
-        return running
-      })
-    }
-    return result
-  }, [allCompanies])
 
   useSearchShortcut(searchInputRef)
 
   useEffect(() => {
-    Promise.allSettled([getApplications({ size: 1000 }), getAllFollowUps({ status: 'PENDING', size: 1000 }), getRecruiters({ size: 1000 })])
-      .then(([a, f, r]) => {
-        if (a.status === 'fulfilled') setApplications(a.value.data || [])
-        if (f.status === 'fulfilled') setFollowUps(f.value.data || [])
-        if (r.status === 'fulfilled') setRecruiters(r.value.data || [])
-      })
+    getRecruiters({ size: 1000 }).then((r) => setRecruiters(r.data || [])).catch(() => {})
   }, [])
 
-  const statsByCompany = React.useMemo(() => {
-    const map = {}
-    for (const app of applications) {
-      if (app.companyId == null) continue
-      if (!map[app.companyId]) map[app.companyId] = { lastActivity: null, recruiter: null, nextFollowUp: null }
-      const s = map[app.companyId]
-      const activityDate = app.appliedDate || app.createdAt
-      if (activityDate && (!s.lastActivity || activityDate > s.lastActivity)) s.lastActivity = activityDate
-    }
-    for (const fu of followUps) {
-      const app = applications.find((a) => a.id === fu.applicationId)
-      if (!app || app.companyId == null) continue
-      const s = map[app.companyId]
-      if (!s) continue
-      if (!s.nextFollowUp || fu.followUpDate < s.nextFollowUp) s.nextFollowUp = fu.followUpDate
-    }
-    return map
-  }, [applications, followUps])
+  const statsByCompany = activitySummaryByCompany
 
   const recruiterByCompanyName = React.useMemo(() => {
     const map = {}

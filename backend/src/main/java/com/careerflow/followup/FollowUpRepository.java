@@ -23,6 +23,14 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, Long> {
             countQuery = "SELECT COUNT(f) FROM FollowUp f WHERE f.user.id = :userId AND f.status = :status")
     Page<FollowUp> findAllByUserIdAndStatusOrderByFollowUpDateAsc(@Param("userId") Long userId, @Param("status") FollowUpStatus status, Pageable pageable);
 
+    @Query(value = "SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company WHERE f.user.id = :userId AND a.company.id = :companyId",
+            countQuery = "SELECT COUNT(f) FROM FollowUp f WHERE f.user.id = :userId AND f.application.company.id = :companyId")
+    Page<FollowUp> findAllByUserIdAndCompanyIdOrderByFollowUpDateAsc(@Param("userId") Long userId, @Param("companyId") Long companyId, Pageable pageable);
+
+    @Query(value = "SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company WHERE f.user.id = :userId AND a.company.id = :companyId AND f.status = :status",
+            countQuery = "SELECT COUNT(f) FROM FollowUp f WHERE f.user.id = :userId AND f.application.company.id = :companyId AND f.status = :status")
+    Page<FollowUp> findAllByUserIdAndCompanyIdAndStatusOrderByFollowUpDateAsc(@Param("userId") Long userId, @Param("companyId") Long companyId, @Param("status") FollowUpStatus status, Pageable pageable);
+
     Optional<FollowUp> findByIdAndUserId(Long id, Long userId);
     long countByApplicationIdAndStatus(Long applicationId, FollowUpStatus status);
 
@@ -31,6 +39,16 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, Long> {
 
     @Query("SELECT f.application.id, MIN(f.followUpDate) FROM FollowUp f WHERE f.application.id IN :appIds AND f.status = 'PENDING' AND f.followUpDate >= :today GROUP BY f.application.id")
     List<Object[]> findNearestUpcomingFollowUpDates(@Param("appIds") List<Long> appIds, @Param("today") LocalDate today);
+
+    @Query("SELECT f.application.company.id AS companyId, MIN(f.followUpDate) AS nextFollowUp FROM FollowUp f " +
+            "WHERE f.user.id = :userId AND f.status = com.careerflow.followup.FollowUpStatus.PENDING AND f.followUpDate >= :today " +
+            "GROUP BY f.application.company.id")
+    List<CompanyNextFollowUp> nextFollowUpByCompanyGroupedForUser(@Param("userId") Long userId, @Param("today") LocalDate today);
+
+    interface CompanyNextFollowUp {
+        Long getCompanyId();
+        LocalDate getNextFollowUp();
+    }
 
     long countByUserIdAndStatus(Long userId, FollowUpStatus status);
 
@@ -57,4 +75,10 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, Long> {
             countQuery = "SELECT COUNT(f) FROM FollowUp f WHERE f.user.id = :userId AND f.status = :status AND f.followUpDate > :today")
     Page<FollowUp> findAllByUserIdAndStatusAndFollowUpDateAfter(
             @Param("userId") Long userId, @Param("status") FollowUpStatus status, @Param("today") LocalDate today, Pageable pageable);
+
+    @Query("SELECT f FROM FollowUp f JOIN FETCH f.application a JOIN FETCH a.company " +
+            "WHERE f.user.id = :userId AND f.status = :status AND f.followUpDate <= :until " +
+            "ORDER BY f.followUpDate ASC")
+    List<FollowUp> findAllByUserIdAndStatusAndFollowUpDateLessThanEqualOrderByFollowUpDateAsc(
+            @Param("userId") Long userId, @Param("status") FollowUpStatus status, @Param("until") LocalDate until);
 }

@@ -39,6 +39,11 @@ public class RecruiterContactController {
         return ResponseEntity.ok(recruiterService.getMyRecruiterStats());
     }
 
+    @GetMapping("/sources")
+    public ResponseEntity<java.util.List<RecruiterSource>> getMySources() {
+        return ResponseEntity.ok(recruiterService.getMySources());
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<RecruiterContactResponse> updateRecruiter(
             @PathVariable Long id,

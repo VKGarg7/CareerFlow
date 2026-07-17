@@ -2,10 +2,12 @@ package com.careerflow.company;
 
 import com.careerflow.common.PageResponse;
 import com.careerflow.common.StatusCountsResponse;
+import com.careerflow.company.dto.CompanyActivitySummary;
 import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
 import com.careerflow.company.dto.CompanyUpdateRequest;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -44,6 +46,17 @@ public class CompanyController {
     @GetMapping("/application-counts")
     public ResponseEntity<Map<Long, Long>> getMyApplicationCountsByCompany() {
         return ResponseEntity.ok(companyService.getMyApplicationCountsByCompany());
+    }
+
+    @GetMapping("/creation-trend")
+    public ResponseEntity<Map<String, List<Long>>> getMyCreationTrend(
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(companyService.getCreationTrend(days));
+    }
+
+    @GetMapping("/activity-summary")
+    public ResponseEntity<Map<Long, CompanyActivitySummary>> getMyActivitySummary() {
+        return ResponseEntity.ok(companyService.getMyActivitySummary());
     }
 
     @PatchMapping("/{id}")
