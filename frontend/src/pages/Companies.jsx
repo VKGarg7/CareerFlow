@@ -12,7 +12,9 @@ import ViewToggle from '../components/ViewToggle'
 import Pagination from '../components/Pagination'
 import StatTilesBar from '../components/StatTilesBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
-import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats, getApplicationCountsByCompany, getCompanyCreationTrend, getCompanyActivitySummary } from '../api/company'
+import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats, getApplicationCountsByCompany } from '../api/company'
+import { getApplications } from '../api/application'
+import { getAllFollowUps } from '../api/followup'
 import { getRecruiters } from '../api/recruiter'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
@@ -421,15 +423,11 @@ export default function Companies() {
   )
   const { data: stats, refetch: fetchStats } = useFetchOnce(getCompanyStats)
   const { data: applicationCountsByCompany, refetch: fetchApplicationCounts } = useFetchOnce(getApplicationCountsByCompany, {})
-  const { data: trendByStatus, refetch: fetchCreationTrend } = useFetchOnce(
-    useCallback(() => getCompanyCreationTrend(7), []), {}
-  )
-  const { data: activitySummaryByCompany, refetch: fetchActivitySummary } = useFetchOnce(getCompanyActivitySummary, {})
 
   const {
     modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
     handleSaved, handleDeleted,
-  } = useCrudModals('Company', setSuccess, [fetchCompanies, fetchAllCompanies, fetchStats, fetchApplicationCounts, fetchCreationTrend, fetchActivitySummary])
+  } = useCrudModals('Company', setSuccess, [fetchCompanies, fetchAllCompanies, fetchStats, fetchApplicationCounts])
   const [viewId, setViewId] = useState(null)
 
   const [recruiters, setRecruiters] = useState([])
@@ -440,7 +438,24 @@ export default function Companies() {
     getRecruiters({ size: 1000 }).then((r) => setRecruiters(r.data || [])).catch(() => {})
   }, [])
 
-  const statsByCompany = activitySummaryByCompany
+  const statsByCompany = React.useMemo(() => {
+    const map = {}
+    for (const app of applications) {
+      if (app.companyId == null) continue
+      if (!map[app.companyId]) map[app.companyId] = { lastActivity: null, recruiter: null, nextFollowUp: null }
+      const s = map[app.companyId]
+      const activityDate = app.appliedDate || app.createdAt
+      if (activityDate && (!s.lastActivity || activityDate > s.lastActivity)) s.lastActivity = activityDate
+    }
+    for (const fu of followUps) {
+      const app = applications.find((a) => a.id === fu.applicationId)
+      if (!app || app.companyId == null) continue
+      const s = map[app.companyId]
+      if (!s) continue
+      if (!s.nextFollowUp || fu.followUpDate < s.nextFollowUp) s.nextFollowUp = fu.followUpDate
+    }
+    return map
+  }, [applications, followUps])
 
   const recruiterByCompanyName = React.useMemo(() => {
     const map = {}
