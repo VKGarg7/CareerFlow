@@ -23,7 +23,19 @@ jobs:
           cache: maven
 
       - name: Build and run tests
-        run: mvn -B verify
+        run: |
+          set -o pipefail
+          mvn -B verify 2>&1 | tee build.log
+
+      - name: Surface failure details as annotations
+        if: failure()
+        run: |
+          grep -h "Caused by" target/surefire-reports/*.txt 2>/dev/null | sort -u | head -8 | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
+          grep -hA2 "IllegalState\|BeanCreationException\|UnsatisfiedDependency" target/surefire-reports/*.txt 2>/dev/null | head -12 | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
 
   frontend:
     runs-on: ubuntu-latest
