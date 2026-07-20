@@ -3,10 +3,14 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { login, oauthLoginUrl } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
 import {
-  AuthCard, AuthField, authInputIconCls, AuthInputIcon, AuthErrorBanner, AuthSubmitButton,
+  AuthCard, AuthField, AuthInputIcon, AuthErrorBanner, AuthSubmitButton,
   EyeIcon, AuthFormSide, AuthDecoTile, MailIcon, LockIcon, AuthCheckbox, AuthDivider,
-  AuthSocialRow, AuthTrustFooter,
+  AuthSocialRow, AuthTrustFooter, AuthDemoBanner,
 } from '../components/AuthFormKit'
+import { authInputIconCls } from '../components/authStyles'
+
+const DEMO_EMAIL = import.meta.env.VITE_DEMO_EMAIL || ''
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD || ''
 
 const FEATURES = [
   { icon: '🏢', title: 'Track every company', text: 'Stay organized with your target companies' },
@@ -64,6 +68,11 @@ export default function Login() {
             <p className="mb-4 text-sm text-white/45">Sign in to your CareerFlow account</p>
 
             <AuthErrorBanner>{error}</AuthErrorBanner>
+            <AuthDemoBanner
+              email={DEMO_EMAIL}
+              password={DEMO_PASSWORD}
+              onFill={() => setForm({ email: DEMO_EMAIL, password: DEMO_PASSWORD })}
+            />
 
             <form onSubmit={handleSubmit} className="space-y-3">
               <AuthField label="Email address">

@@ -67,18 +67,6 @@ export function AuthField({ label, error, children }) {
   )
 }
 
-export function authInputCls(hasError) {
-  return `w-full rounded-xl border bg-white/[0.04] px-4 py-2.5 text-sm text-white placeholder-white/25 transition focus:outline-none focus:ring-2 focus:ring-[#5B5FEF]/50 focus:border-[#5B5FEF]/50 hover:border-white/20 ${
-    hasError ? 'border-red-400/50 bg-red-500/[0.06]' : 'border-white/10'
-  }`
-}
-
-export function authInputIconCls(hasError) {
-  return `w-full rounded-xl border bg-white/[0.04] py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/25 transition focus:outline-none focus:ring-2 focus:ring-[#5B5FEF]/50 focus:border-[#5B5FEF]/50 hover:border-white/20 ${
-    hasError ? 'border-red-400/50 bg-red-500/[0.06]' : 'border-white/10'
-  }`
-}
-
 export function AuthInputIcon({ children }) {
   return (
     <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30">
@@ -198,6 +186,25 @@ export function AuthErrorBanner({ children }) {
   return (
     <div className="mb-5 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
       {children}
+    </div>
+  )
+}
+
+export function AuthDemoBanner({ email, password, onFill }) {
+  if (!email || !password) return null
+  return (
+    <div className="mb-4 rounded-xl border border-[#8184F5]/25 bg-[#8184F5]/10 px-4 py-3 text-sm text-white/70">
+      <p className="mb-1.5">
+        <span className="font-semibold text-white">Want to look around first?</span> Use the demo account below.
+      </p>
+      <p className="font-mono text-xs text-white/60">{email} / {password}</p>
+      <button
+        type="button"
+        onClick={onFill}
+        className="mt-2 rounded-full border border-[#8184F5]/40 px-3 py-1 text-xs font-semibold text-[#A78BFA] hover:bg-[#8184F5]/15"
+      >
+        Fill in demo credentials
+      </button>
     </div>
   )
 }

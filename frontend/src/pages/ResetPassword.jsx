@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { resetPassword } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
-import { AuthCard, AuthField, authInputIconCls, AuthInputIcon, LockIcon, AuthErrorBanner, AuthSubmitButton, AuthFormSide, AuthDecoTile, EyeIcon } from '../components/AuthFormKit'
+import { AuthCard, AuthField, AuthInputIcon, LockIcon, AuthErrorBanner, AuthSubmitButton, AuthFormSide, AuthDecoTile, EyeIcon } from '../components/AuthFormKit'
+import { authInputIconCls } from '../components/authStyles'
 
 const TIPS = [
   { icon: '🔑', title: 'Length matters', text: 'Use at least 8 characters' },

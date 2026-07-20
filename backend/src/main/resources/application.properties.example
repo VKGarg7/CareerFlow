@@ -62,3 +62,9 @@ spring.security.oauth2.client.provider.linkedin.user-name-attribute=sub
 management.endpoints.web.exposure.include=health,info
 management.endpoint.health.show-details=always
 management.health.mail.enabled=false
+
+# Demo account auto-reset (leave blank to disable). If set, re-seeds this
+# account's companies/applications/interviews/recruiters/referrals nightly
+# from db/demo_seed_data.sql so a publicly shared demo login stays fresh.
+demo.user.email= demo@careerflow.app
+demo.reset.cron=0 * * * * *
