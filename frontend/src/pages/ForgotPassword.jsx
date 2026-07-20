@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { forgotPassword } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
-import { AuthCard, AuthField, authInputIconCls, AuthInputIcon, MailIcon, AuthErrorBanner, AuthSubmitButton, AuthFormSide, AuthDecoTile } from '../components/AuthFormKit'
+import { AuthCard, AuthField, AuthInputIcon, MailIcon, AuthErrorBanner, AuthSubmitButton, AuthFormSide, AuthDecoTile } from '../components/AuthFormKit'
+import { authInputIconCls } from '../components/authStyles'
 
 const REASSURANCE = [
   { icon: '🔒', title: 'Stays private', text: 'Your data stays private and secure' },

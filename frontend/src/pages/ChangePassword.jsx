@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { changePassword } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
-import { AuthCard, AuthField, authInputIconCls, AuthInputIcon, LockIcon, AuthErrorBanner, AuthFormSide, AuthDecoTile, EyeIcon } from '../components/AuthFormKit'
+import { AuthCard, AuthField, AuthInputIcon, LockIcon, AuthErrorBanner, AuthFormSide, AuthDecoTile, EyeIcon } from '../components/AuthFormKit'
+import { authInputIconCls } from '../components/authStyles'
 
 const TIPS = [
   { icon: '🛡️', title: 'Stay fresh', text: 'Keep your account secure with a fresh password' },

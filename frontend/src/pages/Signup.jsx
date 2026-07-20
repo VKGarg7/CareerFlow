@@ -3,10 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { register, login, oauthLoginUrl } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
 import {
-  AuthCard, AuthField, authInputCls, authInputIconCls, AuthInputIcon, AuthErrorBanner,
+  AuthCard, AuthField, AuthInputIcon, AuthErrorBanner,
   AuthSubmitButton, EyeIcon, AuthFormSide, AuthDecoTile, UserIcon, MailIcon, LockIcon,
   AuthCheckbox, AuthDivider, AuthSocialRow,
 } from '../components/AuthFormKit'
+import { authInputIconCls } from '../components/authStyles'
 
 const STEPS = [
   { icon: '📈', title: 'Track everything', text: 'Keep all your applications, interviews and follow-ups in one place.' },
