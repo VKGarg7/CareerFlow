@@ -8,7 +8,10 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.SQLRestriction;
 
 @Entity
-@Table(name = "companies")
+@Table(name = "companies", indexes = {
+        @Index(name = "idx_companies_user_deleted", columnList = "user_id, deleted_at"),
+        @Index(name = "idx_companies_status", columnList = "status")
+})
 @SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter

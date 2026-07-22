@@ -1,6 +1,12 @@
-import api from './apiClient'
+import api, { unwrapPage } from './apiClient'
 
-export const getApplications = (params) => api.get('/applications', { params })
+export const getApplications = (params) => api.get('/applications', { params }).then(unwrapPage)
+export const getApplicationStats = () => api.get('/applications/stats')
+export const getApplicationRoles = () => api.get('/applications/roles')
+export const getMonthlyTrend = () => api.get('/applications/monthly-trend')
+export const getSourceAnalysis = () => api.get('/applications/source-analysis')
+export const getWeeklyTrend = (days = 14) => api.get('/applications/weekly-trend', { params: { days } })
+export const getUpcomingDeadlines = (withinDays = 7) => api.get('/applications/deadlines', { params: { withinDays } })
 export const addApplication = (data) => api.post('/applications', data)
 export const updateApplication = (id, data) => api.patch(`/applications/${id}`, data)
 export const deleteApplication = (id, documentId) =>

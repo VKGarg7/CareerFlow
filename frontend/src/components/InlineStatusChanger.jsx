@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CircularProgress } from '@mui/material'
-
-const CHEVRON_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%23555555' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`
+import { KeyboardArrowDown, Check } from '@mui/icons-material'
+import useFloatingMenu from '../hooks/useFloatingMenu'
+import useCloseOnOutsideEvent from '../hooks/useCloseOnOutsideEvent'
 
 /**
- * @param {object} item       - entity with .status and .id
- * @param {object} statusConfig - STATUS_CONFIG map for this entity
- * @param {string} defaultStatus - key to fall back to when item.status is unknown
- * @param {function} updateFn  - (id, payload) => Promise — called to persist the new status
- * @param {function} onStatusChanged - called with the server response on success
- * @param {string} [wrapperClass] - extra classes on the outer div
+ * @param {object} item
+ * @param {object} statusConfig
+ * @param {string} defaultStatus
+ * @param {function} updateFn
+ * @param {function} onStatusChanged
+ * @param {string} [wrapperClass]
  */
 export default function InlineStatusChanger({
   item,
@@ -21,11 +23,18 @@ export default function InlineStatusChanger({
 }) {
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
+  const [open, setOpen]     = useState(false)
+  const triggerRef = useRef(null)
+  const menuRef = useRef(null)
 
   const cfg = statusConfig[item.status] || statusConfig[defaultStatus]
 
-  const handleChange = async (e) => {
-    const newStatus = e.target.value
+  const widthFn = useCallback((rect) => Math.max(rect.width, 160), [])
+  const pos = useFloatingMenu(open, triggerRef, { width: widthFn, flipThreshold: 160, maxHeightCap: 280 })
+  useCloseOnOutsideEvent(open, () => setOpen(false), [triggerRef, menuRef])
+
+  const handleSelect = async (newStatus) => {
+    setOpen(false)
     if (newStatus === item.status) return
     setSaving(true)
     setError('')
@@ -40,26 +49,40 @@ export default function InlineStatusChanger({
   }
 
   return (
-    <div onClick={e => e.stopPropagation()} className={`relative flex items-center gap-1.5 ${wrapperClass}`}>
-      {saving && <CircularProgress size={12} />}
-      <select
-        value={item.status}
-        onChange={handleChange}
+    <div onClick={(e) => e.stopPropagation()} className={`relative flex items-center gap-1.5 min-w-0 ${wrapperClass}`}>
+      {saving && <CircularProgress size={12} sx={{ color: 'rgba(255,255,255,0.4)' }} />}
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
         disabled={saving}
         title={error || 'Change status'}
-        style={{
-          backgroundImage: CHEVRON_SVG,
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'right 6px center',
-        }}
-        className={`appearance-none w-fit text-xs font-semibold pl-2 pr-6 py-1 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition disabled:opacity-50 ${cfg.badge} border-current`}
+        className={`appearance-none w-full max-w-full truncate text-[11px] font-medium pl-2.5 pr-6 py-1 rounded-md border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-app-accent/40 transition disabled:opacity-50 relative ${cfg.badge}`}
       >
-        {Object.entries(statusConfig).map(([val, { label }]) => (
-          <option key={val} value={val}>{label}</option>
-        ))}
-      </select>
+        <span className="truncate">{cfg.label}</span>
+        <KeyboardArrowDown sx={{ fontSize: 14 }} className={`absolute right-1 top-1/2 -translate-y-1/2 opacity-60 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && pos && createPortal(
+        <div ref={menuRef} role="listbox"
+          style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width, maxHeight: pos.maxHeight }}
+          className={`rounded-xl border border-white/[0.08] bg-app-raised shadow-card-hover py-1.5 z-[100] overflow-y-auto animate-scale-in ${pos.bottom !== undefined ? 'origin-bottom' : 'origin-top'}`}>
+          {Object.entries(statusConfig).map(([val, { label }]) => (
+            <button key={val} role="option" aria-selected={val === item.status}
+              onClick={(e) => { e.stopPropagation(); handleSelect(val) }}
+              className={`w-full flex items-center justify-between gap-2 px-3.5 py-2 text-sm text-left truncate transition-colors ${
+                val === item.status ? 'text-white bg-white/[0.06]' : 'text-white/70 hover:bg-white/[0.06] hover:text-white'
+              }`}>
+              <span className="truncate">{label}</span>
+              {val === item.status && <Check sx={{ fontSize: 16 }} className="shrink-0 text-app-accent-soft" />}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+
       {error && (
-        <span className="absolute top-full left-0 mt-1 text-[10px] text-red-500 bg-white border border-red-100 rounded-lg px-2 py-1 shadow z-10 whitespace-nowrap">
+        <span className="absolute top-full left-0 mt-1 text-[10px] text-app-danger bg-app-surface border border-white/[0.08] rounded-lg px-2 py-1 shadow-card z-10 whitespace-nowrap">
           {error}
         </span>
       )}

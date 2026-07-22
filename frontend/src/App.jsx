@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ProfileProvider } from './context/ProfileContext'
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import OAuthCallback from './pages/OAuthCallback'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import ChangePassword from './pages/ChangePassword'
@@ -17,22 +20,28 @@ import Activity from './pages/Activity'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
-  return token ? children : <Navigate to="/login" replace />
+  return token ? <ProfileProvider>{children}</ProfileProvider> : <Navigate to="/login" replace />
 }
 
 function AdminRoute({ children }) {
   const token = localStorage.getItem('token')
   if (!token) return <Navigate to="/login" replace />
-  return localStorage.getItem('role') === 'ADMIN' ? children : <Navigate to="/dashboard" replace />
+  return localStorage.getItem('role') === 'ADMIN' ? <ProfileProvider>{children}</ProfileProvider> : <Navigate to="/dashboard" replace />
+}
+
+function RootRoute() {
+  const token = localStorage.getItem('token')
+  return token ? <Navigate to="/dashboard" replace /> : <Landing />
 }
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/oauth-callback" element={<OAuthCallback />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route

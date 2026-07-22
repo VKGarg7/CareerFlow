@@ -5,8 +5,9 @@ import com.careerflow.admin.dto.PlatformStatsResponse;
 import com.careerflow.application.ApplicationRepository;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
-import com.careerflow.common.SortHelper;
 import com.careerflow.company.CompanyRepository;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.ResourceNotFoundException;
@@ -16,12 +17,12 @@ import com.careerflow.user.Role;
 import com.careerflow.user.User;
 import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -72,12 +73,12 @@ public class AdminService {
                 .build();
     }
 
-    public List<AdminUserResponse> getAllUsers(String search, String sortBy, String order) {
-        Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
-        List<User> results = (search != null && !search.isBlank())
-                ? userRepository.search(search.trim(), sort)
-                : userRepository.findAll(sort);
-        return results.stream().map(this::toResponse).toList();
+    public PageResponse<AdminUserResponse> getAllUsers(String search, String sortBy, String order, int page, int size) {
+        Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
+        Page<User> results = (search != null && !search.isBlank())
+                ? userRepository.search(search.trim(), pageable)
+                : userRepository.findAllBy(pageable);
+        return PageResponse.of(results.map(this::toResponse));
     }
 
     @Transactional

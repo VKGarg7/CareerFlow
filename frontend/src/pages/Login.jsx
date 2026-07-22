@@ -1,30 +1,30 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { login } from '../api/auth'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { login, oauthLoginUrl } from '../api/auth'
+import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
+import {
+  AuthCard, AuthField, AuthInputIcon, AuthErrorBanner, AuthSubmitButton,
+  EyeIcon, AuthFormSide, AuthDecoTile, MailIcon, LockIcon, AuthCheckbox, AuthDivider,
+  AuthSocialRow, AuthTrustFooter, AuthDemoBanner,
+} from '../components/AuthFormKit'
+import { authInputIconCls } from '../components/authStyles'
 
-const EyeIcon = ({ open }) =>
-  open ? (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-    </svg>
-  ) : (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-  )
+const DEMO_EMAIL = import.meta.env.VITE_DEMO_EMAIL || ''
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD || ''
 
 const FEATURES = [
-  { icon: '🏢', text: "Track every company you're targeting" },
-  { icon: '📋', text: 'Manage all your job applications' },
-  { icon: '🤝', text: 'Build your recruiter network' },
-  { icon: '📊', text: 'Dashboard insights at a glance' },
+  { icon: '🏢', title: 'Track every company', text: 'Stay organized with your target companies' },
+  { icon: '💼', title: 'Manage applications', text: 'Track every application and its progress' },
+  { icon: '🤝', title: 'Build your network', text: 'Keep all your recruiters in one place' },
+  { icon: '📊', title: 'Get insights', text: 'Powerful analytics to improve your search' },
 ]
 
 export default function Login() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [form, setForm] = useState({ email: '', password: '' })
-  const [error, setError] = useState('')
+  const [remember, setRemember] = useState(true)
+  const [error, setError] = useState(searchParams.get('error') || '')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -47,118 +47,89 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left branding panel */}
-      <div className="hidden lg:flex flex-col w-[420px] shrink-0 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 p-10 text-white relative overflow-hidden">
-        {/* Decorative circles */}
-        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white opacity-5" />
-        <div className="absolute bottom-10 -left-20 w-72 h-72 rounded-full bg-white opacity-5" />
-        <div className="absolute top-1/2 right-0 w-40 h-40 rounded-full bg-indigo-500 opacity-20" />
+    <div className="flex h-screen overflow-hidden bg-[#05060B]">
+      <AuthPanel
+        eyebrow="Welcome back"
+        width="w-[380px]"
+        title={<>Your job search,<br /><span className="text-[#A78BFA]">organized.</span></>}
+        subtitle="Everything you need to land your next role — all in one place."
+        items={FEATURES}
+        illustration
+      />
 
-        {/* Brand */}
-        <div className="flex items-center gap-3 mb-auto">
-          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-            <span className="text-white text-sm font-black">CF</span>
-          </div>
-          <div>
-            <p className="font-bold text-lg leading-tight">CareerFlow</p>
-            <p className="text-blue-200 text-xs">Job Search Tracker</p>
-          </div>
-        </div>
+      <AuthFormSide>
+        <AuthBrand mobile />
 
-        {/* Hero text */}
-        <div className="my-8">
-          <h2 className="text-3xl font-bold leading-snug mb-3">
-            Your job search,<br />organized.
-          </h2>
-          <p className="text-blue-200 text-sm leading-relaxed">
-            Everything you need to land your next role — all in one place.
-          </p>
-        </div>
+        <div className="relative">
+          <AuthDecoTile label="This week" value="3 interviews booked" sub="Across 2 companies" className="-right-12 -top-8 -rotate-2" />
 
-        {/* Feature list */}
-        <ul className="space-y-3 mb-auto">
-          {FEATURES.map(({ icon, text }) => (
-            <li key={text} className="flex items-center gap-3 text-sm text-blue-100">
-              <span className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center text-base shrink-0">
-                {icon}
-              </span>
-              {text}
-            </li>
-          ))}
-        </ul>
-      </div>
+          <AuthCard compact>
+            <h1 className="mb-1 font-display text-xl font-bold text-white">Welcome back</h1>
+            <p className="mb-4 text-sm text-white/45">Sign in to your CareerFlow account</p>
 
-      {/* Right form panel */}
-      <div className="flex-1 flex items-center justify-center bg-gray-50 px-6 py-12">
-        <div className="w-full max-w-sm">
-          {/* Mobile brand */}
-          <div className="lg:hidden flex items-center gap-2 mb-8 justify-center">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
-              <span className="text-white text-xs font-black">CF</span>
-            </div>
-            <span className="font-bold text-gray-900">CareerFlow</span>
-          </div>
+            <AuthErrorBanner>{error}</AuthErrorBanner>
+            <AuthDemoBanner
+              email={DEMO_EMAIL}
+              password={DEMO_PASSWORD}
+              onFill={() => setForm({ email: DEMO_EMAIL, password: DEMO_PASSWORD })}
+            />
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <h1 className="text-xl font-bold text-gray-900 mb-1">Welcome back</h1>
-            <p className="text-sm text-gray-500 mb-6">Sign in to your CareerFlow account</p>
-
-            {error && (
-              <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">
-                {error}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                  Email
-                </label>
-                <input
-                  type="email" name="email" value={form.email} onChange={handleChange} required
-                  placeholder="you@example.com"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
-                />
-              </div>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <AuthField label="Email address">
+                <div className="relative">
+                  <AuthInputIcon><MailIcon /></AuthInputIcon>
+                  <input
+                    type="email" name="email" value={form.email} onChange={handleChange} required
+                    placeholder="you@example.com"
+                    className={authInputIconCls(false)}
+                  />
+                </div>
+              </AuthField>
 
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Password
-                  </label>
-                  <Link to="/forgot-password" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-white/40">Password</label>
+                  <Link to="/forgot-password" className="text-xs font-medium text-[#8184F5] hover:text-[#A78BFA]">
                     Forgot password?
                   </Link>
                 </div>
                 <div className="relative">
+                  <AuthInputIcon><LockIcon /></AuthInputIcon>
                   <input
                     type={showPassword ? 'text' : 'password'} name="password"
                     value={form.password} onChange={handleChange} required placeholder="••••••••"
-                    className="w-full px-4 py-2.5 pr-10 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition"
+                    className={authInputIconCls(false) + ' pr-10'}
                   />
                   <button type="button" tabIndex={-1} onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
                     <EyeIcon open={showPassword} />
                   </button>
                 </div>
               </div>
 
-              <button type="submit" disabled={loading}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition shadow-sm mt-1">
-                {loading ? 'Signing in…' : 'Sign in'}
-              </button>
+              <AuthCheckbox checked={remember} onChange={(e) => setRemember(e.target.checked)}>
+                Remember me
+              </AuthCheckbox>
+
+              <AuthSubmitButton loading={loading} loadingText="Signing in…" arrow>Sign in</AuthSubmitButton>
             </form>
 
-            <p className="mt-6 text-center text-sm text-gray-500">
+            <AuthDivider>Or continue with</AuthDivider>
+            <AuthSocialRow
+              providers={['google', 'linkedin', 'github']}
+              onSelect={(provider) => { window.location.href = oauthLoginUrl(provider) }}
+            />
+
+            <p className="mt-4 text-center text-sm text-white/45">
               Don't have an account?{' '}
-              <Link to="/signup" className="text-blue-600 font-semibold hover:text-blue-700">
+              <Link to="/signup" className="font-semibold text-[#8184F5] hover:text-[#A78BFA]">
                 Sign up
               </Link>
             </p>
-          </div>
+          </AuthCard>
+          <AuthTrustFooter />
         </div>
-      </div>
+      </AuthFormSide>
     </div>
   )
 }

@@ -1,10 +1,14 @@
 package com.careerflow.company;
 
 import com.careerflow.application.ApplicationService;
+import com.careerflow.followup.FollowUpService;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
-import com.careerflow.common.SortHelper;
+import com.careerflow.common.StatusCountsResponse;
+import com.careerflow.company.dto.CompanyActivitySummary;
 import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
 import com.careerflow.company.dto.CompanyUpdateRequest;
@@ -14,10 +18,11 @@ import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @SuppressWarnings("null")
@@ -33,6 +38,8 @@ public class CompanyService {
     private final AuditLogService auditLogService;
     @Lazy
     private final ApplicationService applicationService;
+    @Lazy
+    private final FollowUpService followUpService;
 
     public CompanyResponse addCompany(CompanyRequest request) {
         User user = securityUtils.getCurrentUser();
@@ -53,24 +60,77 @@ public class CompanyService {
         return toResponse(company);
     }
 
-    public List<CompanyResponse> getMyCompanies(Long id, String search, CompanyStatus status, String sortBy, String order) {
+    public PageResponse<CompanyResponse> getMyCompanies(
+            Long id, String search, CompanyStatus status, String sortBy, String order, int page, int size) {
         User user = securityUtils.getCurrentUser();
         if (id != null) {
-            return List.of(toResponse(findOwned(id, user.getId())));
+            CompanyResponse single = toResponse(findOwned(id, user.getId()));
+            return PageResponse.single(single);
         }
-        Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
+        Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
         boolean hasSearch = search != null && !search.isBlank();
-        List<Company> results;
+        Page<Company> results;
         if (status != null && hasSearch) {
-            results = companyRepository.findAllByUserIdAndStatusAndNameContainingIgnoreCase(user.getId(), status, search.trim(), sort);
+            results = companyRepository.findAllByUserIdAndStatusAndNameContainingIgnoreCase(user.getId(), status, search.trim(), pageable);
         } else if (status != null) {
-            results = companyRepository.findAllByUserIdAndStatus(user.getId(), status, sort);
+            results = companyRepository.findAllByUserIdAndStatus(user.getId(), status, pageable);
         } else if (hasSearch) {
-            results = companyRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), sort);
+            results = companyRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), pageable);
         } else {
-            results = companyRepository.findAllByUserId(user.getId(), sort);
+            results = companyRepository.findAllByUserId(user.getId(), pageable);
         }
-        return results.stream().map(this::toResponse).toList();
+        return PageResponse.of(results.map(this::toResponse));
+    }
+
+    public StatusCountsResponse getMyCompanyStats() {
+        User user = securityUtils.getCurrentUser();
+        return StatusCountsResponse.fromGroupedCounts(companyRepository.countByStatusGroupedForUser(user.getId()));
+    }
+
+    public Map<Long, Long> getMyApplicationCountsByCompany() {
+        return applicationService.getMyApplicationCountsByCompany();
+    }
+
+    public Map<String, java.util.List<Long>> getCreationTrend(int days) {
+        User user = securityUtils.getCurrentUser();
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.util.List<java.time.LocalDate> dayKeys = new java.util.ArrayList<>();
+        for (int i = days - 1; i >= 0; i--) dayKeys.add(today.minusDays(i));
+
+        java.time.LocalDateTime since = dayKeys.get(0).atStartOfDay();
+        java.util.List<CompanyRepository.DailyStatusCount> rows =
+                companyRepository.countByDayAndStatusGroupedForUser(user.getId(), since);
+
+        Map<String, java.util.List<Long>> result = new java.util.LinkedHashMap<>();
+        for (CompanyStatus status : CompanyStatus.values()) {
+            Map<java.time.LocalDate, Long> perDay = new java.util.HashMap<>();
+            for (CompanyRepository.DailyStatusCount row : rows) {
+                if (row.getStatus() != status) continue;
+                perDay.put(row.getDay().toLocalDate(), row.getTotal());
+            }
+            long running = companyRepository.countByUserIdAndStatusAndCreatedAtBefore(user.getId(), status, since);
+            java.util.List<Long> series = new java.util.ArrayList<>();
+            for (java.time.LocalDate day : dayKeys) {
+                running += perDay.getOrDefault(day, 0L);
+                series.add(running);
+            }
+            result.put(status.name(), series);
+        }
+        return result;
+    }
+
+    public Map<Long, CompanyActivitySummary> getMyActivitySummary() {
+        Map<Long, java.time.LocalDate> lastActivity = applicationService.getMyLastActivityByCompany();
+        Map<Long, java.time.LocalDate> nextFollowUp = followUpService.getMyNextFollowUpByCompany();
+
+        Map<Long, CompanyActivitySummary> result = new java.util.HashMap<>();
+        java.util.Set<Long> companyIds = new java.util.HashSet<>();
+        companyIds.addAll(lastActivity.keySet());
+        companyIds.addAll(nextFollowUp.keySet());
+        for (Long companyId : companyIds) {
+            result.put(companyId, new CompanyActivitySummary(lastActivity.get(companyId), nextFollowUp.get(companyId)));
+        }
+        return result;
     }
 
     public CompanyResponse updateCompany(Long id, CompanyUpdateRequest request) {

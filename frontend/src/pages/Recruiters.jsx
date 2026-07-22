@@ -1,29 +1,44 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Alert, CircularProgress } from '@mui/material'
+import PageSpinner from '../components/PageSpinner'
+import PageAlert from '../components/PageAlert'
 import {
-  Add, Search, KeyboardArrowDown, LinkedIn, Email, Phone,
-  Close, Send, Check, Clear, EditNote,
+  Search, KeyboardArrowDown, LinkedIn, Email, Phone,
+  Close, Send, Check, Clear, EditNote, FilterListRounded,
+  VisibilityOutlined, EditOutlined, DeleteOutlineRounded,
+  FormatBoldRounded, FormatItalicRounded, FormatListBulletedRounded,
+  AttachFileRounded, InsertEmoticonOutlined, CalendarTodayOutlined,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
+import Pagination from '../components/Pagination'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
-import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
-import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecruiter } from '../api/recruiter'
-import PageHeader from '../components/PageHeader'
+import { ConfirmDeleteModal } from '../components/ModalShell'
+import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecruiter, getRecruiterStats, getRecruiterSources } from '../api/recruiter'
 import EmptyState from '../components/EmptyState'
-import SharedStatusBadge from '../components/StatusBadge'
 import InlineStatusChanger from '../components/InlineStatusChanger'
-import { EntityCard, EntityDirectoryCard } from '../components/EntityCard'
-import { initials, fmt } from '../utils/followup'
+import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
+import { initials, fmt, fmtDate } from '../utils/followup'
+import useSearchShortcut from '../hooks/useSearchShortcut'
+import useAddQueryParam from '../hooks/useAddQueryParam'
+import useTransientMessage from '../hooks/useTransientMessage'
+import usePagedList from '../hooks/usePagedList'
+import useFetchOnce from '../hooks/useFetchOnce'
+import { DrawerShell, DrawerHeader, CloseIconButton } from '../components/DrawerShell'
+import { fieldInputCls, FieldErrorText, FieldLabel, FormFooterButtons } from '../components/formKit'
+import EntityListRow from '../components/EntityListRow'
+import FilterSelect from '../components/FilterSelect'
+import HeaderAddButton from '../components/HeaderAddButton'
+import useCrudModals from '../hooks/useCrudModals'
+import useFilterState from '../hooks/useFilterState'
 
-// ─── Config ───────────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
-  NEW:               { label: 'New',               badge: 'bg-gray-100 text-gray-600',   border: 'border-l-gray-300',   dot: 'bg-gray-400'   },
-  REACHED_OUT:       { label: 'Reached Out',       badge: 'bg-blue-100 text-blue-700',   border: 'border-l-blue-400',   dot: 'bg-blue-500'   },
-  RESPONDED:         { label: 'Responded',         badge: 'bg-amber-100 text-amber-700', border: 'border-l-amber-400',  dot: 'bg-amber-500'  },
-  MEETING_SCHEDULED: { label: 'Meeting Scheduled', badge: 'bg-purple-100 text-purple-700', border: 'border-l-purple-400', dot: 'bg-purple-500' },
-  ACTIVELY_HELPING:  { label: 'Actively Helping',  badge: 'bg-green-100 text-green-700', border: 'border-l-green-400',  dot: 'bg-green-500'  },
-  CLOSED:            { label: 'Closed',            badge: 'bg-red-100 text-red-700',     border: 'border-l-red-400',    dot: 'bg-red-400'    },
+  NEW:               { label: 'New',               badge: 'bg-white/[0.06] text-white/60',           border: 'border-l-white/10',    dot: 'bg-white/40',     hex: '#8B8FA3' },
+  REACHED_OUT:       { label: 'Reached Out',       badge: 'bg-app-accent/10 text-app-accent-soft',   border: 'border-l-app-accent',  dot: 'bg-app-accent',   hex: '#5B5FEF' },
+  RESPONDED:         { label: 'Responded',         badge: 'bg-app-warning/10 text-app-warning',      border: 'border-l-app-warning', dot: 'bg-app-warning',  hex: '#F59E0B' },
+  MEETING_SCHEDULED: { label: 'Meeting Scheduled', badge: 'bg-app-accent2/10 text-app-accent-soft',  border: 'border-l-app-accent2', dot: 'bg-app-accent2',  hex: '#8B5CF6' },
+  ACTIVELY_HELPING:  { label: 'Actively Helping',  badge: 'bg-app-success/10 text-app-success',      border: 'border-l-app-success', dot: 'bg-app-success',  hex: '#22C55E' },
+  CLOSED:            { label: 'Closed',            badge: 'bg-app-danger/10 text-app-danger',        border: 'border-l-app-danger',  dot: 'bg-app-danger',   hex: '#F43F5E' },
 }
 
 const SOURCE_LABELS = {
@@ -49,13 +64,6 @@ const EMPTY_FORM = {
 
 const NOTE_MAX = 1000
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.NEW
-  return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
-}
-
-// ─── Inline Status Changer ────────────────────────────────────────────────────
 function RecruiterStatusChanger({ recruiter, onStatusChanged }) {
   return (
     <InlineStatusChanger
@@ -68,345 +76,178 @@ function RecruiterStatusChanger({ recruiter, onStatusChanged }) {
   )
 }
 
-// ─── Recruiter Card ───────────────────────────────────────────────────────────
-function RecruiterCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusChanged }) {
-  const noteCount = recruiter.noteCount ?? 0
+function RecruiterListRow({ recruiter, drawerOpen, onView, onEdit, onDelete, onNotes, onStatusChanged }) {
   const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
+  const noteCount = recruiter.noteCount ?? 0
 
   return (
-    <EntityCard
+    <EntityListRow
       onClick={() => onView(recruiter)}
-      accentColor={cfg.border}
+      accentBorder={cfg.border}
       avatarColor={cfg.dot}
-      avatarText={initials(recruiter.name)}
-      titleSlot={
-        <>
-          <div className="flex items-center flex-wrap gap-2 mb-0.5">
-            <h3 className="text-base font-bold text-gray-800">{recruiter.name}</h3>
-            <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />
-          </div>
-          {(recruiter.jobTitle || recruiter.company) && (
-            <p className="text-sm text-gray-500 mb-2">
-              {recruiter.jobTitle && <span className="font-medium text-gray-600">{recruiter.jobTitle}</span>}
-              {recruiter.jobTitle && recruiter.company && <span className="text-gray-400"> @ </span>}
-              {recruiter.company && <span>{recruiter.company}</span>}
-            </p>
-          )}
-        </>
-      }
-      chips={
-        <>
-          {recruiter.email && (
-            <a href={`mailto:${recruiter.email}`} onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition">
-              <Email sx={{ fontSize: 12 }} />{recruiter.email}
-            </a>
-          )}
-          {recruiter.phone && (
-            <a href={`tel:${recruiter.phone}`} onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-gray-50 text-gray-600 rounded-full hover:bg-gray-100 transition">
-              <Phone sx={{ fontSize: 12 }} />{recruiter.phone}
-            </a>
-          )}
-          {recruiter.linkedIn && (
-            <a href={recruiter.linkedIn} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition">
-              <LinkedIn sx={{ fontSize: 12 }} />LinkedIn
-            </a>
-          )}
-          {recruiter.source && (
-            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-              via {SOURCE_LABELS[recruiter.source] || recruiter.source}
-            </span>
-          )}
-          {recruiter.lastContactedAt && (
-            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-purple-50 text-purple-600 rounded-full">
-              Last contact: {new Date(recruiter.lastContactedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-            </span>
-          )}
-        </>
-      }
-      note={recruiter.notes}
-      actionsSlot={
-        <div className="flex flex-col gap-2">
-          <button onClick={() => onNotes(recruiter)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all
-              border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600">
-            <EditNote sx={{ fontSize: 15 }} />
-            Notes
-            {noteCount > 0 && (
-              <span className="bg-blue-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
-                {noteCount}
-              </span>
-            )}
-          </button>
-          <div className="flex gap-1.5">
-            <button onClick={() => onEdit(recruiter)}
-              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-700 hover:text-white hover:border-gray-700 transition-all">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z"/>
-                <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z"/>
-              </svg>
-              Edit
-            </button>
-            <button onClick={() => onDelete(recruiter)}
-              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd"/>
-              </svg>
-              Delete
-            </button>
-          </div>
-        </div>
-      }
-    />
+      name={recruiter.name}
+      subtitle={recruiter.jobTitle}
+      statusSlot={<RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />}
+      email={recruiter.email}
+      linkedIn={recruiter.linkedIn}
+      menuItems={[
+        { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(recruiter) },
+        { key: 'notes', label: `Notes${noteCount > 0 ? ` (${noteCount})` : ''}`, icon: <EditNote sx={{ fontSize: 16 }} />, onClick: () => onNotes(recruiter) },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(recruiter) },
+        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(recruiter), tone: 'danger' },
+      ]}
+    >
+      <div className={`w-36 min-w-0 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'md:block'}`}>
+        <p className="text-sm text-white/70 truncate">{recruiter.company || '—'}</p>
+      </div>
+
+      <div className={`w-28 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'lg:block'}`}>
+        <p className="text-[11px] text-white/35">Source</p>
+        <p className="text-sm font-medium text-white/70 truncate mt-0.5">
+          {recruiter.source ? (SOURCE_LABELS[recruiter.source] || recruiter.source) : '—'}
+        </p>
+      </div>
+
+      <div className={`w-28 shrink-0 hidden ${drawerOpen ? '2xl:block' : 'xl:block'}`}>
+        <p className="text-[11px] text-white/35">Last Contact</p>
+        <p className="text-sm font-medium text-white/70 mt-0.5">
+          {recruiter.lastContactedAt ? fmtDate(recruiter.lastContactedAt) : '—'}
+        </p>
+      </div>
+
+      <div className={`w-20 shrink-0 hidden ${drawerOpen ? '2xl:block' : 'lg:block'}`}>
+        <p className="text-[11px] text-white/35">Notes</p>
+        <p className="flex items-center gap-1 text-sm font-semibold text-white/80 mt-0.5">
+          {noteCount > 0 && <EditNote sx={{ fontSize: 13 }} className="text-app-accent-soft" />}
+          {noteCount}
+        </p>
+      </div>
+
+    </EntityListRow>
   )
 }
 
-// ─── Directory Card (compact grid view) ──────────────────────────────────────
-function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes, onStatusChanged }) {
+function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
   const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
   const noteCount = recruiter.noteCount ?? 0
+  const sourceLabel = recruiter.source ? (SOURCE_LABELS[recruiter.source] || recruiter.source) : null
 
   return (
     <EntityDirectoryCard
       onClick={() => onView(recruiter)}
-      borderTopColor={borderColor(recruiter.status)}
+      statusBarColor={cfg.dot}
       avatarColor={cfg.dot}
       avatarText={initials(recruiter.name)}
       titleSlot={
         <>
-          <p className="text-sm font-bold text-gray-800 truncate leading-tight">{recruiter.name}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold text-white/90 truncate leading-tight">{recruiter.name}</p>
+            <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.badge}`}>
+              {cfg.label}
+            </span>
+          </div>
           {(recruiter.jobTitle || recruiter.company) && (
-            <p className="text-xs text-gray-500 truncate mt-0.5">
+            <p className="text-xs text-white/50 truncate mt-0.5">
               {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
             </p>
           )}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5" onClick={(e) => e.stopPropagation()}>
-            <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />
-            {noteCount > 0 && (
-              <span className="text-[11px] text-blue-500 font-medium shrink-0">
-                {noteCount} note{noteCount > 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
         </>
       }
+      actionsSlot={
+        <CardMenu items={[
+          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(recruiter) },
+        ]} />
+      }
       chips={
-        <>
+        <div className="flex flex-col gap-2 w-full">
           {recruiter.email && (
-            <a href={`mailto:${recruiter.email}`} title={recruiter.email}
-              className="p-1.5 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
-              <Email sx={{ fontSize: 13 }} />
+            <a href={`mailto:${recruiter.email}`}
+              className="flex items-center gap-2 text-[13px] text-app-accent-soft hover:underline min-w-0">
+              <Email sx={{ fontSize: 15 }} className="shrink-0" />
+              <span className="truncate">{recruiter.email}</span>
             </a>
           )}
           {recruiter.phone && (
-            <a href={`tel:${recruiter.phone}`} title={recruiter.phone}
-              className="p-1.5 rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 transition">
-              <Phone sx={{ fontSize: 13 }} />
+            <a href={`tel:${recruiter.phone}`}
+              className="flex items-center gap-2 text-[13px] text-white/70 hover:text-white min-w-0">
+              <Phone sx={{ fontSize: 15 }} className="shrink-0 text-white/40" />
+              <span className="truncate">{recruiter.phone}</span>
             </a>
           )}
           {recruiter.linkedIn && (
-            <a href={recruiter.linkedIn} target="_blank" rel="noreferrer" title="LinkedIn"
-              className="p-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition">
-              <LinkedIn sx={{ fontSize: 13 }} />
+            <a href={recruiter.linkedIn} target="_blank" rel="noreferrer"
+              className="flex items-center gap-2 text-[13px] text-app-accent-soft hover:underline min-w-0">
+              <LinkedIn sx={{ fontSize: 15 }} className="shrink-0" />
+              <span className="truncate">View Profile</span>
+              {sourceLabel && <span className="text-white/30 shrink-0">via {sourceLabel}</span>}
             </a>
           )}
           {recruiter.lastContactedAt && (
-            <span className="text-[11px] text-gray-400 ml-auto shrink-0">
-              {new Date(recruiter.lastContactedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-            </span>
+            <p className="flex items-center gap-2 text-[13px] text-white/40">
+              <CalendarTodayOutlined sx={{ fontSize: 13 }} className="shrink-0" />
+              Last contact: {fmtDate(recruiter.lastContactedAt)}
+            </p>
           )}
-        </>
+        </div>
       }
-      note={recruiter.notes}
       actions={[
-        { key: 'notes', label: `Notes${noteCount > 0 ? ` (${noteCount})` : ''}`, icon: <EditNote sx={{ fontSize: 13 }} />, onClick: () => onNotes(recruiter), tone: 'info' },
-        { key: 'edit', label: 'Edit', icon: '✏️', onClick: () => onEdit(recruiter) },
-        { key: 'delete', label: 'Delete', icon: '🗑️', onClick: () => onDelete(recruiter), tone: 'danger' },
+        { key: 'notes', label: `Notes${noteCount > 0 ? ` (${noteCount})` : ''}`, icon: <EditNote sx={{ fontSize: 14 }} />, onClick: () => onNotes(recruiter), tone: 'info' },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 14 }} />, onClick: () => onEdit(recruiter) },
+        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 14 }} />, onClick: () => onDelete(recruiter), tone: 'danger' },
       ]}
     />
   )
 }
 
-function borderColor(status) {
-  const map = {
-    NEW: '#9ca3af', REACHED_OUT: '#60a5fa', RESPONDED: '#fbbf24',
-    MEETING_SCHEDULED: '#a78bfa', ACTIVELY_HELPING: '#4ade80', CLOSED: '#f87171',
+function ComposerToolbar({ textareaRef, value, onChange }) {
+  const wrapSelection = (before, after = before) => {
+    const el = textareaRef.current
+    if (!el) return
+    const { selectionStart: s, selectionEnd: e } = el
+    const selected = value.slice(s, e) || 'text'
+    const next = value.slice(0, s) + before + selected + after + value.slice(e)
+    onChange(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(s + before.length, s + before.length + selected.length)
+    })
   }
-  return map[status] || map.NEW
-}
 
-// ─── Detail Modal ─────────────────────────────────────────────────────────────
-function DetailModal({ open, recruiterId, onClose, onEdit, onNotes, onDelete, onStatusChanged }) {
-  const [recruiter, setRecruiter] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const insertBullet = () => {
+    const el = textareaRef.current
+    if (!el) return
+    const { selectionStart: s } = el
+    const lineStart = value.lastIndexOf('\n', s - 1) + 1
+    const next = value.slice(0, lineStart) + '- ' + value.slice(lineStart)
+    onChange(next)
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(s + 2, s + 2) })
+  }
 
-  useEffect(() => {
-    if (!open || !recruiterId) return
-    setLoading(true)
-    setError('')
-    setRecruiter(null)
-    getRecruiter(recruiterId)
-      .then((res) => setRecruiter(res.data[0] ?? null))
-      .catch(() => setError('Failed to load recruiter details.'))
-      .finally(() => setLoading(false))
-  }, [open, recruiterId])
-
-  if (!open) return null
-
-  const cfg = recruiter ? (STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW) : STATUS_CONFIG.NEW
-
-  const Row = ({ label, value }) =>
-    value ? (
-      <div className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-32 shrink-0 pt-0.5">{label}</span>
-        <span className="text-sm text-gray-700 flex-1 break-words">{value}</span>
-      </div>
-    ) : null
+  const btnCls = 'flex items-center justify-center w-7 h-7 rounded-md text-white/40 hover:text-white/80 hover:bg-white/[0.08] transition'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
-
-        {/* Header */}
-        <div className={`rounded-t-2xl px-6 pt-6 pb-5 border-b border-gray-100`}>
-          {loading ? (
-            <div className="flex justify-center py-4"><CircularProgress size={24} /></div>
-          ) : error ? (
-            <p className="text-sm text-red-500">{error}</p>
-          ) : recruiter ? (
-            <div className="flex items-start gap-4">
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold shrink-0 ${cfg.dot}`}>
-                {initials(recruiter.name)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-xl font-bold text-gray-800 leading-tight">{recruiter.name}</h2>
-                {(recruiter.jobTitle || recruiter.company) && (
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
-                  </p>
-                )}
-                <div className="mt-2">
-                  <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={(updated) => { setRecruiter(updated); onStatusChanged?.(updated) }} />
-                </div>
-              </div>
-              <button onClick={onClose}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition shrink-0">
-                <Close sx={{ fontSize: 18 }} />
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        {/* Body */}
-        {recruiter && !loading && (
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-
-            {/* Contact info */}
-            <div className="mb-4">
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Contact</p>
-              <Row label="Email"
-                value={recruiter.email && (
-                  <a href={`mailto:${recruiter.email}`}
-                    className="text-blue-600 hover:underline flex items-center gap-1">
-                    <Email sx={{ fontSize: 14 }} />{recruiter.email}
-                  </a>
-                )}
-              />
-              <Row label="Phone"
-                value={recruiter.phone && (
-                  <a href={`tel:${recruiter.phone}`}
-                    className="text-gray-700 hover:text-blue-600 flex items-center gap-1">
-                    <Phone sx={{ fontSize: 14 }} />{recruiter.phone}
-                  </a>
-                )}
-              />
-              <Row label="LinkedIn"
-                value={recruiter.linkedIn && (
-                  <a href={recruiter.linkedIn} target="_blank" rel="noreferrer"
-                    className="text-blue-600 hover:underline flex items-center gap-1">
-                    <LinkedIn sx={{ fontSize: 14 }} />View Profile
-                  </a>
-                )}
-              />
-            </div>
-
-            {/* Details */}
-            <div className="mb-4">
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Details</p>
-              <Row label="Source" value={recruiter.source ? SOURCE_LABELS[recruiter.source] || recruiter.source : null} />
-              <Row label="Last Contacted" value={
-                recruiter.lastContactedAt
-                  ? new Date(recruiter.lastContactedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-                  : null
-              } />
-              <Row label="Added On" value={
-                recruiter.createdAt
-                  ? new Date(recruiter.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-                  : null
-              } />
-              <Row label="Last Updated" value={
-                recruiter.updatedAt
-                  ? fmt(recruiter.updatedAt)
-                  : null
-              } />
-            </div>
-
-            {/* General notes */}
-            {recruiter.notes && (
-              <div className="mb-4">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">General Notes</p>
-                <div className="bg-gray-50 rounded-xl px-4 py-3">
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{recruiter.notes}</p>
-                </div>
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* Footer actions */}
-        {recruiter && !loading && (
-          <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
-            <button
-              onClick={() => { onClose(); onNotes(recruiter) }}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600 transition">
-              <EditNote sx={{ fontSize: 16 }} />Notes
-              {recruiter.noteCount > 0 && (
-                <span className="bg-blue-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {recruiter.noteCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => { onClose(); onEdit(recruiter) }}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-700 transition">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z"/>
-                <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z"/>
-              </svg>
-              Edit
-            </button>
-            <button
-              onClick={() => { onClose(); onDelete(recruiter) }}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-red-500 bg-white border border-red-200 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition ml-auto">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z" clipRule="evenodd"/>
-              </svg>
-              Delete
-            </button>
-          </div>
-        )}
-      </div>
+    <div className="flex items-center gap-0.5">
+      <button type="button" title="Bold" onClick={() => wrapSelection('**')} className={btnCls}>
+        <FormatBoldRounded sx={{ fontSize: 16 }} />
+      </button>
+      <button type="button" title="Italic" onClick={() => wrapSelection('_')} className={btnCls}>
+        <FormatItalicRounded sx={{ fontSize: 16 }} />
+      </button>
+      <button type="button" title="Bullet list" onClick={insertBullet} className={btnCls}>
+        <FormatListBulletedRounded sx={{ fontSize: 16 }} />
+      </button>
+      <button type="button" title="Attach file (coming soon)" disabled className={`${btnCls} opacity-40 cursor-not-allowed`}>
+        <AttachFileRounded sx={{ fontSize: 16 }} />
+      </button>
+      <button type="button" title="Emoji (coming soon)" disabled className={`${btnCls} opacity-40 cursor-not-allowed`}>
+        <InsertEmoticonOutlined sx={{ fontSize: 16 }} />
+      </button>
     </div>
   )
 }
 
-// ─── Notes Modal ──────────────────────────────────────────────────────────────
-function NotesModal({ open, recruiter, onClose, onNotesChanged }) {
-  const [notes, setNotes] = useState([])
+function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete, onStatusChanged, onNotesChanged }) {
+  const [recruiter, setRecruiter] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -418,44 +259,48 @@ function NotesModal({ open, recruiter, onClose, onNotesChanged }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const bottomRef = useRef(null)
   const textareaRef = useRef(null)
+  const notesSectionRef = useRef(null)
 
-  const loadNotes = useCallback(async () => {
-    if (!recruiter) return
+  useEffect(() => {
+    if (!open || !recruiterId) return
     setLoading(true)
     setError('')
-    try {
-      const res = await getRecruiter(recruiter.id)
-      setNotes(res.data[0]?.interactionNotes ?? [])
-    } catch {
-      setError('Failed to load notes.')
-    } finally {
-      setLoading(false)
-    }
-  }, [recruiter])
+    setRecruiter(null)
+    setDraft('')
+    setAddError('')
+    setEditing({})
+    setDeleteConfirm(null)
+    getRecruiter(recruiterId)
+      .then((res) => setRecruiter(res.data[0] ?? null))
+      .catch(() => setError('Failed to load recruiter details.'))
+      .finally(() => setLoading(false))
+  }, [open, recruiterId])
 
   useEffect(() => {
-    if (open && recruiter) {
-      setDraft('')
-      setAddError('')
-      setEditing({})
-      setDeleteConfirm(null)
-      loadNotes()
-    }
-  }, [open, recruiter, loadNotes])
+    if (!open || !focusNotes || loading || !recruiter) return
+    notesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    textareaRef.current?.focus()
+  }, [open, focusNotes, loading, recruiter])
 
-  useEffect(() => {
-    if (notes.length > 0) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [notes])
+  if (!open) return null
 
-  if (!open || !recruiter) return null
+  const cfg = recruiter ? (STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW) : STATUS_CONFIG.NEW
+  const notes = recruiter?.interactionNotes ?? []
+
+  const Row = ({ label, value }) =>
+    value ? (
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">{label}</p>
+        <p className="text-sm text-white/85 break-words">{value}</p>
+      </div>
+    ) : null
 
   const patchAndSync = async (payload) => {
     const res = await updateRecruiter(recruiter.id, payload)
     const updated = res.data
-    setNotes(updated.interactionNotes ?? [])
-    onNotesChanged(recruiter.id, updated.noteCount)
+    setRecruiter(updated)
+    onNotesChanged?.(recruiter.id, updated.noteCount)
     return updated
   }
 
@@ -509,177 +354,229 @@ function NotesModal({ open, recruiter, onClose, onNotesChanged }) {
     }
   }
 
-  const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[88vh]">
+    <DrawerShell>
 
-        {/* Header */}
-        <div className="flex items-center gap-3 px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${cfg.dot}`}>
-            {initials(recruiter.name)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-base font-bold text-gray-800 leading-tight">{recruiter.name}</h2>
-            <p className="text-xs text-gray-400 truncate">
-              {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ') || 'Interaction log'}
-            </p>
-          </div>
-          <button onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
-            <Close sx={{ fontSize: 18 }} />
-          </button>
-        </div>
-
-        {/* Notes timeline */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
-          {error && <div className="p-3 rounded-xl bg-red-50 text-red-600 text-sm">{error}</div>}
-
-          {loading ? (
-            <div className="flex justify-center py-12"><CircularProgress size={28} /></div>
-          ) : notes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center mb-3">
-                <EditNote sx={{ fontSize: 28, color: '#3b82f6' }} />
-              </div>
-              <p className="text-sm font-semibold text-gray-700 mb-1">No interaction notes yet</p>
-              <p className="text-xs text-gray-400">Start logging your interactions below.</p>
+      <div className="px-5 pt-5 pb-4 border-b border-white/[0.06] shrink-0">
+        {loading ? (
+          <div className="flex justify-center py-4"><CircularProgress size={24} /></div>
+        ) : error ? (
+          <p className="text-sm text-app-danger">{error}</p>
+        ) : recruiter ? (
+          <div className="flex items-start gap-3">
+            <div className={`relative w-11 h-11 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight ${cfg.dot}`}>
+              {initials(recruiter.name)}
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-app-success border-2 border-app-surface" />
             </div>
-          ) : (
-            notes.map((note) => {
-              const isEditing = !!editing[note.id]
-              const isConfirmDelete = deleteConfirm === note.id
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-bold text-white leading-tight truncate">{recruiter.name}</h2>
+                <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.badge}`}>
+                  {cfg.label}
+                </span>
+              </div>
+              {(recruiter.jobTitle || recruiter.company) && (
+                <p className="text-sm text-white/50 mt-0.5 truncate">
+                  {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
+                </p>
+              )}
+            </div>
+            <CloseIconButton onClose={onClose} className="shrink-0" />
+          </div>
+        ) : null}
+      </div>
 
-              return (
-                <div key={note.id} className="group relative">
-                  {isEditing ? (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
-                      <textarea
-                        rows={3}
-                        value={editing[note.id].text}
-                        onChange={(e) => setEditing((p) => ({ ...p, [note.id]: { ...p[note.id], text: e.target.value } }))}
-                        className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
-                        autoFocus
-                      />
-                      <div className="flex items-center justify-between">
-                        <span className={`text-xs ${editing[note.id].text.length > NOTE_MAX ? 'text-red-500' : 'text-gray-400'}`}>
-                          {editing[note.id].text.length}/{NOTE_MAX}
-                          {editing[note.id].error && <span className="ml-2 text-red-500">{editing[note.id].error}</span>}
-                        </span>
-                        <div className="flex gap-2">
-                          <button onClick={() => saveEdit(note.id)} disabled={editing[note.id].saving}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-60">
-                            {editing[note.id].saving ? <CircularProgress size={10} color="inherit" /> : <Check sx={{ fontSize: 13 }} />}
-                            Save
-                          </button>
-                          <button onClick={() => cancelEdit(note.id)}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition">
-                            <Clear sx={{ fontSize: 13 }} />Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : isConfirmDelete ? (
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                      <p className="text-xs font-semibold text-red-700 mb-1">Delete this note?</p>
-                      <p className="text-xs text-gray-500 line-clamp-2 mb-3 italic">"{note.content}"</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => handleDelete(note.id)} disabled={deleting}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition disabled:opacity-60">
-                          {deleting && <CircularProgress size={10} color="inherit" />}Yes, Delete
-                        </button>
-                        <button onClick={() => setDeleteConfirm(null)}
-                          className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition">
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex gap-3">
-                      {/* Timeline dot */}
-                      <div className="flex flex-col items-center shrink-0 pt-1">
-                        <div className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
-                        <div className="w-px flex-1 bg-gray-100 mt-1" />
-                      </div>
+      {recruiter && !loading && (
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 no-scrollbar">
 
-                      {/* Bubble */}
-                      <div className="flex-1 min-w-0 mb-2">
-                        <div className="bg-gray-50 hover:bg-gray-100 rounded-xl px-4 py-3 transition-colors">
-                          <p className="text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed">
-                            {note.content}
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between mt-1 px-1">
-                          <span className="text-[11px] text-gray-400">
-                            {fmt(note.createdAt)}
-                            {note.edited && <span className="ml-1.5 text-gray-400 italic">(edited)</span>}
-                          </span>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => startEdit(note)}
-                              className="flex items-center gap-0.5 px-2 py-1 text-[11px] font-medium text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition">
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                                <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z" />
-                                <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9a.75.75 0 0 1 1.5 0v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z" />
-                              </svg>
-                              Edit
-                            </button>
-                            <button onClick={() => { setDeleteConfirm(note.id); cancelEdit(note.id) }}
-                              className="flex items-center gap-0.5 px-2 py-1 text-[11px] font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition">
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                                <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
-                              </svg>
-                              Delete
-                            </button>
-                          </div>
+          <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={(updated) => { setRecruiter(updated); onStatusChanged?.(updated) }} />
+
+          <div>
+            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Contact</p>
+            <div className="space-y-2">
+              <Row label="Email"
+                value={recruiter.email && (
+                  <a href={`mailto:${recruiter.email}`}
+                    className="text-app-accent-soft hover:underline flex items-center gap-1.5 truncate">
+                    <Email sx={{ fontSize: 14 }} className="shrink-0" /><span className="truncate">{recruiter.email}</span>
+                  </a>
+                )}
+              />
+              <Row label="Phone"
+                value={recruiter.phone && (
+                  <a href={`tel:${recruiter.phone}`}
+                    className="text-white/80 hover:text-app-accent-soft flex items-center gap-1.5">
+                    <Phone sx={{ fontSize: 14 }} className="shrink-0" />{recruiter.phone}
+                  </a>
+                )}
+              />
+              <Row label="LinkedIn"
+                value={recruiter.linkedIn && (
+                  <a href={recruiter.linkedIn} target="_blank" rel="noreferrer"
+                    className="text-app-accent-soft hover:underline flex items-center gap-1.5">
+                    <LinkedIn sx={{ fontSize: 14 }} className="shrink-0" />View Profile
+                  </a>
+                )}
+              />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Details</p>
+            <div className="space-y-2">
+              <Row label="Source" value={recruiter.source ? (SOURCE_LABELS[recruiter.source] || recruiter.source) : null} />
+              <Row label="Added on" value={recruiter.createdAt ? fmtDate(recruiter.createdAt) : null} />
+              <Row label="Last contacted" value={recruiter.lastContactedAt ? fmtDate(recruiter.lastContactedAt) : null} />
+              <Row label="Last updated" value={recruiter.updatedAt ? fmt(recruiter.updatedAt) : null} />
+            </div>
+          </div>
+
+          <div ref={notesSectionRef}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Notes</p>
+              {notes.length > 0 && (
+                <span className="text-[11px] font-semibold text-app-accent-soft">
+                  View all notes ({notes.length})
+                </span>
+              )}
+            </div>
+
+            {addError && <p className="text-xs text-app-danger mb-2">{addError}</p>}
+
+            {notes.length > 0 && (
+              <div className="relative mb-3">
+                {notes.length > 1 && (
+                  <div className="absolute left-[4px] top-[6px] bottom-[6px] w-px bg-white/[0.08]" />
+                )}
+                <div className="space-y-3">
+                  {[...notes].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((note) => {
+                    const isEditing = !!editing[note.id]
+                    const isConfirmDelete = deleteConfirm === note.id
+                    return (
+                      <div key={note.id} className="group relative flex gap-3 pl-0.5">
+                        <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${cfg.dot}`} />
+                        <div className="min-w-0 flex-1">
+                          {isEditing ? (
+                            <div className="bg-app-accent/10 border border-app-accent/20 rounded-xl p-3 space-y-2">
+                              <textarea
+                                rows={3}
+                                value={editing[note.id].text}
+                                onChange={(e) => setEditing((p) => ({ ...p, [note.id]: { ...p[note.id], text: e.target.value } }))}
+                                className="w-full px-3 py-2 border border-app-accent/30 rounded-lg text-sm text-white/85 focus:outline-none focus:ring-2 focus:ring-app-accent/40 bg-white/[0.04] resize-none"
+                                autoFocus
+                              />
+                              <div className="flex items-center justify-between">
+                                <span className={`text-xs ${editing[note.id].text.length > NOTE_MAX ? 'text-app-danger' : 'text-white/40'}`}>
+                                  {editing[note.id].text.length}/{NOTE_MAX}
+                                  {editing[note.id].error && <span className="ml-2 text-app-danger">{editing[note.id].error}</span>}
+                                </span>
+                                <div className="flex gap-2">
+                                  <button onClick={() => saveEdit(note.id)} disabled={editing[note.id].saving}
+                                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-app-accent rounded-lg hover:brightness-110 transition disabled:opacity-60">
+                                    {editing[note.id].saving ? <CircularProgress size={10} color="inherit" /> : <Check sx={{ fontSize: 13 }} />}
+                                    Save
+                                  </button>
+                                  <button onClick={() => cancelEdit(note.id)}
+                                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white/60 bg-white/[0.03] border border-white/[0.08] rounded-lg hover:bg-white/[0.08] transition">
+                                    <Clear sx={{ fontSize: 13 }} />Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : isConfirmDelete ? (
+                            <div className="bg-app-danger/10 border border-app-danger/20 rounded-xl p-3">
+                              <p className="text-xs font-semibold text-app-danger mb-1">Delete this note?</p>
+                              <p className="text-xs text-white/50 line-clamp-2 mb-2.5 italic">"{note.content}"</p>
+                              <div className="flex gap-2">
+                                <button onClick={() => handleDelete(note.id)} disabled={deleting}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-app-danger rounded-lg hover:brightness-110 transition disabled:opacity-60">
+                                  {deleting && <CircularProgress size={10} color="inherit" />}Yes, Delete
+                                </button>
+                                <button onClick={() => setDeleteConfirm(null)}
+                                  className="px-3 py-1.5 text-xs font-semibold text-white/60 bg-white/[0.03] border border-white/[0.08] rounded-lg hover:bg-white/[0.08] transition">
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="bg-white/[0.03] rounded-xl px-3.5 py-2.5">
+                                <p className="text-sm text-white/80 whitespace-pre-wrap break-words leading-relaxed">{note.content}</p>
+                              </div>
+                              <div className="flex items-center justify-between mt-1 px-0.5">
+                                <span className="text-[11px] text-white/35">
+                                  {fmt(note.createdAt)}{note.edited && <span className="italic"> (edited)</span>}
+                                </span>
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => startEdit(note)}
+                                    className="flex items-center gap-0.5 px-1.5 py-0.5 text-[11px] font-medium text-white/45 hover:text-app-accent-soft hover:bg-app-accent/10 rounded-md transition">
+                                    <EditOutlined sx={{ fontSize: 11 }} />Edit
+                                  </button>
+                                  <button onClick={() => { setDeleteConfirm(note.id); cancelEdit(note.id) }}
+                                    className="flex items-center gap-0.5 px-1.5 py-0.5 text-[11px] font-medium text-white/45 hover:text-app-danger hover:bg-app-danger/10 rounded-md transition">
+                                    <DeleteOutlineRounded sx={{ fontSize: 11 }} />Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )
+                  })}
                 </div>
-              )
-            })
-          )}
-          <div ref={bottomRef} />
-        </div>
+              </div>
+            )}
 
-        {/* Add note */}
-        <div className="px-6 pb-5 pt-4 border-t border-gray-100 shrink-0 bg-gray-50 rounded-b-2xl">
-          {addError && <p className="text-xs text-red-500 mb-2">{addError}</p>}
-          <form onSubmit={handleAdd} className="flex gap-3 items-end">
-            <div className="flex-1">
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] focus-within:border-app-accent/40 focus-within:ring-2 focus-within:ring-app-accent/20 transition">
               <textarea
                 ref={textareaRef}
                 rows={2}
                 value={draft}
                 onChange={(e) => { setDraft(e.target.value); setAddError('') }}
-                placeholder='"Sent referral request on LinkedIn."'
-                className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none transition ${
-                  draft.length > NOTE_MAX ? 'border-red-400' : 'border-gray-200'
-                }`}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAdd(e) } }}
+                placeholder="Add a note or follow-up..."
+                className="w-full px-3.5 pt-3 pb-1 bg-transparent text-sm text-white/85 focus:outline-none resize-none placeholder:text-white/25"
               />
-              <div className="flex justify-between mt-1 px-1">
-                <p className="text-[11px] text-gray-400">Enter to submit · Shift+Enter for new line</p>
-                <p className={`text-[11px] ${draft.length > NOTE_MAX ? 'text-red-500' : 'text-gray-400'}`}>
+              <div className="flex items-center justify-end px-3 pb-1">
+                <span className={`text-[11px] ${draft.length > NOTE_MAX ? 'text-app-danger' : 'text-white/30'}`}>
                   {draft.length}/{NOTE_MAX}
-                </p>
+                </span>
+              </div>
+              <div className="flex items-center justify-between px-2 pb-2 pt-1 border-t border-white/[0.06]">
+                <ComposerToolbar textareaRef={textareaRef} value={draft} onChange={setDraft} />
+                <button type="button" onClick={handleAdd} disabled={adding || !draft.trim()}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-app-accent rounded-lg hover:brightness-110 transition disabled:opacity-50 shrink-0 shadow-glow shadow-app-accent/30">
+                  {adding ? <CircularProgress size={12} color="inherit" /> : <Send sx={{ fontSize: 14 }} />}
+                  Add Note
+                </button>
               </div>
             </div>
-            <button type="submit" disabled={adding || !draft.trim()}
-              className="mb-5 px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-sm">
-              {adding ? <CircularProgress size={14} color="inherit" /> : <Send sx={{ fontSize: 16 }} />}
-              Add
-            </button>
-          </form>
+            <p className="text-[11px] text-white/30 mt-1.5">Press Shift + Enter for new line</p>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      {recruiter && !loading && (
+        <div className="flex gap-3 px-5 py-3.5 border-t border-white/[0.06] bg-white/[0.02] shrink-0">
+          <button
+            onClick={() => { onClose(); onEdit(recruiter) }}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white/70 bg-white/[0.03] border border-white/[0.08] rounded-xl hover:bg-white/[0.10] hover:text-white transition">
+            <EditOutlined sx={{ fontSize: 16 }} />
+            Edit
+          </button>
+          <button
+            onClick={() => { onClose(); onDelete(recruiter) }}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-app-danger bg-white/[0.03] border border-app-danger/20 rounded-xl hover:bg-app-danger hover:text-white hover:border-app-danger transition ml-auto">
+            <DeleteOutlineRounded sx={{ fontSize: 16 }} />
+            Delete
+          </button>
+        </div>
+      )}
+    </DrawerShell>
   )
 }
 
-// ─── Add / Edit Recruiter Modal ───────────────────────────────────────────────
-function AddEditModal({ open, recruiter, onClose, onSaved }) {
+function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -702,6 +599,7 @@ function AddEditModal({ open, recruiter, onClose, onSaved }) {
   if (!open) return null
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  const setVal = (key) => (val) => setForm((f) => ({ ...f, [key]: val }))
 
   const validate = () => {
     const errs = {}
@@ -738,113 +636,98 @@ function AddEditModal({ open, recruiter, onClose, onSaved }) {
     }
   }
 
-  const inputCls = (field) =>
-    `w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition ${
-      fieldErrors[field] ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-    }`
-  const FieldError = ({ field }) =>
-    fieldErrors[field] ? <p className="text-xs text-red-500 mt-1">{fieldErrors[field]}</p> : null
+  const inputCls = (field) => fieldInputCls(!!fieldErrors[field])
+  const FieldError = ({ field }) => <FieldErrorText error={fieldErrors[field]} />
 
   return (
-    <ModalShell
-      open={open} onClose={onClose}
-      title={recruiter ? 'Edit Recruiter Contact' : 'Add Recruiter Contact'}
-      subtitle={recruiter ? 'Update contact information' : 'Add a new recruiter to your network'}
-    >
-      <div className="px-6 py-5">
-        {error && <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+    <DrawerShell>
+      <DrawerHeader onClose={onClose} title={recruiter ? 'Edit Recruiter Contact' : 'Add Recruiter Contact'} subtitle={recruiter ? 'Update contact information' : 'Add a new recruiter to your network'} />
+      <div className="px-6 py-5 overflow-y-auto flex-1 no-scrollbar">
+        {error && <div className="mb-4 p-3 rounded-xl bg-app-danger/10 border border-app-danger/20 text-app-danger text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-              Full Name <span className="text-red-500">*</span>
-            </label>
+            <FieldLabel>
+              Full Name <span className="text-app-danger">*</span>
+            </FieldLabel>
             <input type="text" value={form.name} onChange={set('name')}
               placeholder="e.g. Priya Sharma" className={inputCls('name')} />
             <FieldError field="name" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Job Title</label>
+              <FieldLabel>Job Title</FieldLabel>
               <input type="text" value={form.jobTitle} onChange={set('jobTitle')}
                 placeholder="Technical Recruiter" className={inputCls('jobTitle')} />
               <FieldError field="jobTitle" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Company</label>
+              <FieldLabel>Company</FieldLabel>
               <input type="text" value={form.company} onChange={set('company')}
                 placeholder="e.g. Google" className={inputCls('company')} />
               <FieldError field="company" />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Email</label>
+            <FieldLabel>Email</FieldLabel>
             <input type="email" value={form.email} onChange={set('email')}
               placeholder="priya@google.com" className={inputCls('email')} />
             <FieldError field="email" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Phone</label>
+              <FieldLabel>Phone</FieldLabel>
               <input type="tel" value={form.phone} onChange={set('phone')}
                 placeholder="+91 98765 43210" className={inputCls('phone')} />
               <FieldError field="phone" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">LinkedIn URL</label>
+              <FieldLabel>LinkedIn URL</FieldLabel>
               <input type="url" value={form.linkedIn} onChange={set('linkedIn')}
                 placeholder="https://linkedin.com/in/..." className={inputCls('linkedIn')} />
               <FieldError field="linkedIn" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</label>
-              <select value={form.status} onChange={set('status')} className={inputCls('status')}>
-                {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
+              <FieldLabel>Status</FieldLabel>
+              <FilterSelect
+                value={form.status}
+                onChange={setVal('status')}
+                options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
+                hideAll
+                className="w-full"
+              />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Source</label>
-              <select value={form.source} onChange={set('source')} className={inputCls('source')}>
-                <option value="">— Select —</option>
-                {Object.entries(SOURCE_LABELS).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
+              <FieldLabel>Source</FieldLabel>
+              <FilterSelect
+                value={form.source}
+                onChange={setVal('source')}
+                allLabel="— Select —"
+                options={Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))}
+                className="w-full"
+              />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Last Contacted</label>
+            <FieldLabel>Last Contacted</FieldLabel>
             <input type="date" value={form.lastContactedAt} onChange={set('lastContactedAt')}
               max={new Date().toISOString().split('T')[0]} className={inputCls('lastContactedAt')} />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">General Notes</label>
+            <FieldLabel>General Notes</FieldLabel>
             <textarea value={form.notes} onChange={set('notes')} rows={3}
               placeholder="Background info, referrals, context..."
               className={`${inputCls('notes')} resize-none`} />
-            <p className="text-xs text-gray-400 mt-1 text-right">{form.notes.length}/2000</p>
+            <p className="text-xs text-white/35 mt-1 text-right">{form.notes.length}/2000</p>
           </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm">
-              {saving && <CircularProgress size={14} color="inherit" />}
-              {recruiter ? 'Save Changes' : 'Add Recruiter'}
-            </button>
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
-              Cancel
-            </button>
-          </div>
+          <FormFooterButtons saving={saving} onCancel={onClose} saveLabel={recruiter ? 'Save Changes' : 'Add Recruiter'} saveFirst heightCls="py-2.5" />
         </form>
       </div>
-    </ModalShell>
+    </DrawerShell>
   )
 }
 
-// ─── Delete Recruiter Modal ───────────────────────────────────────────────────
 function DeleteModal({ open, recruiter, onClose, onDeleted }) {
   return (
     <ConfirmDeleteModal
@@ -854,216 +737,230 @@ function DeleteModal({ open, recruiter, onClose, onDeleted }) {
       title="Delete Recruiter Contact"
       message={
         <>
-          Remove <span className="font-semibold text-gray-700">{recruiter?.name}</span> and all interaction notes?
-          <span className="block text-xs text-red-500 mt-1">This action cannot be undone.</span>
+          Remove <span className="font-semibold text-white/80">{recruiter?.name}</span> and all interaction notes?
+          <span className="block text-xs text-app-danger mt-1">This action cannot be undone.</span>
         </>
       }
     />
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Recruiters() {
-  const [recruiters, setRecruiters] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [success, setSuccess] = useTransientMessage()
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('')
   const [sortBy, setSortBy] = useState('createdAt')
   const [order, setOrder] = useState('desc')
-
   const [viewMode, setViewMode] = useState('list') // 'list' | 'directory'
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const searchInputRef = useRef(null)
 
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
-  const [notesTarget, setNotesTarget] = useState(null)
   const [viewTarget, setViewTarget] = useState(null)
+  const [viewFocusNotes, setViewFocusNotes] = useState(false)
 
-  const fetchRecruiters = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await getRecruiters({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order })
-      setRecruiters(res.data)
-    } catch {
-      setError('Failed to load recruiter contacts.')
-    } finally {
-      setLoading(false)
-    }
-  }, [search, statusFilter, sortBy, order])
+  const {
+    items: recruiters, setItems: setRecruiters, loading, error, setError,
+    setPage, size, setSize, refetch: fetchRecruiters,
+  } = usePagedList(
+    useCallback(
+      (page, size) => getRecruiters({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
+      [search, statusFilter, sortBy, order]
+    ),
+    'Failed to load recruiter contacts.'
+  )
 
-  useEffect(() => { fetchRecruiters() }, [fetchRecruiters])
+  const { data: allRecruiters, setData: setAllRecruiters, refetch: fetchAllRecruiters } = useFetchOnce(
+    useCallback(() => getRecruiters({ sortBy, order, size: 1000 }), [sortBy, order]), []
+  )
+  const { data: stats, refetch: fetchStats } = useFetchOnce(getRecruiterStats)
+  const { data: sourceOptions, refetch: fetchSourceOptions } = useFetchOnce(getRecruiterSources, [])
 
-  const openAdd  = () => { setEditTarget(null); setModalOpen(true) }
-  const openEdit = (r) => { setEditTarget(r); setModalOpen(true) }
+  useSearchShortcut(searchInputRef)
 
-  const handleSaved = () => {
-    setModalOpen(false)
-    setSuccess(editTarget ? 'Recruiter contact updated.' : 'Recruiter contact added.')
-    fetchRecruiters()
-    setTimeout(() => setSuccess(''), 3000)
-  }
+  const filteredRecruiters = useMemo(
+    () => sourceFilter ? recruiters.filter((r) => r.source === sourceFilter) : recruiters,
+    [recruiters, sourceFilter]
+  )
 
-  const handleDeleted = () => {
-    setDeleteTarget(null)
-    setSuccess('Recruiter contact removed.')
-    fetchRecruiters()
-    setTimeout(() => setSuccess(''), 3000)
-  }
+  const {
+    modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
+    handleSaved, handleDeleted,
+  } = useCrudModals('Recruiter contact', setSuccess, [fetchRecruiters, fetchAllRecruiters, fetchStats, fetchSourceOptions])
+
+  const openAdd   = () => { setViewTarget(null); setEditTarget(null); setModalOpen(true) }
+  const openEdit  = (r) => { setViewTarget(null); setEditTarget(r); setModalOpen(true) }
+  const openView  = (r) => { setModalOpen(false); setViewFocusNotes(false); setViewTarget(r.id) }
+  const openNotes = (r) => { setModalOpen(false); setViewFocusNotes(true); setViewTarget(r.id) }
+
+  useAddQueryParam(openAdd)
 
   const handleNotesChanged = (recruiterId, newCount) => {
     setRecruiters((prev) => prev.map((r) => r.id === recruiterId ? { ...r, noteCount: newCount } : r))
+    setAllRecruiters((prev) => prev.map((r) => r.id === recruiterId ? { ...r, noteCount: newCount } : r))
   }
-
-  const isFiltered = search.trim() || statusFilter
-
-
-  // For directory: group alphabetically
-  const grouped = recruiters.reduce((acc, r) => {
-    const letter = r.name[0]?.toUpperCase() || '#'
-    if (!acc[letter]) acc[letter] = []
-    acc[letter].push(r)
-    return acc
-  }, {})
-  const sortedLetters = Object.keys(grouped).sort()
 
   const handleStatusChanged = (updated) => {
     setRecruiters(prev => prev.map(r => r.id === updated.id ? updated : r))
+    setAllRecruiters(prev => prev.map(r => r.id === updated.id ? updated : r))
+    fetchStats()
   }
 
+  const { activeFilterCount, isFiltered, clearAllFilters } = useFilterState(search, setSearch, [
+    [statusFilter, setStatusFilter],
+    [sourceFilter, setSourceFilter],
+  ])
+
+  const drawerOpen = modalOpen || viewTarget !== null
+
   const cardProps = {
-    onView: (rec) => setViewTarget(rec.id),
+    onView: openView,
     onEdit: openEdit,
     onDelete: setDeleteTarget,
-    onNotes: setNotesTarget,
+    onNotes: openNotes,
     onStatusChanged: handleStatusChanged,
+    drawerOpen,
   }
 
   return (
-    <Layout>
-      <PageHeader
-        title="Recruiter Directory"
-        subtitle="Your complete recruiter network at a glance"
-        icon="🤝"
-        gradient="from-indigo-500 to-violet-600"
-        action={
-          <button onClick={openAdd}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl hover:shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5 transition-all shadow-sm">
-            <Add fontSize="small" />Add Recruiter
-          </button>
-        }
-      />
+    <Layout
+      drawerOpen={drawerOpen}
+      headerAction={<HeaderAddButton label="Add Recruiter" onClick={openAdd} drawerOpen={drawerOpen} />}
+    >
+      <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
+      <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
+      <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
-      {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
-      {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
-
-      {/* Status summary bar */}
-      {!loading && recruiters.length > 0 && (
-        <StatusSummaryBar
-          items={recruiters}
-          statusConfig={STATUS_CONFIG}
-          activeFilter={statusFilter}
-          onFilter={setStatusFilter}
-        />
+      {!loading && stats && stats.total > 0 && (
+        <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card px-5 py-4 mb-6 [&>div]:mb-0">
+          <StatusSummaryBar
+            items={allRecruiters}
+            counts={stats.byStatus}
+            total={stats.total}
+            statusConfig={STATUS_CONFIG}
+            activeFilter={statusFilter}
+            onFilter={setStatusFilter}
+          />
+        </div>
       )}
 
-      {/* Filters + view toggle */}
-      <div className="flex flex-col gap-3 mb-6">
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none flex">
-            <Search fontSize="small" />
-          </span>
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, company, or email..."
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition" />
-        </div>
-
+      <div className="flex flex-col gap-4 mb-8">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[9rem]">
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-              <option value="">All Statuses</option>
-              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                <option key={val} value={val}>{label}</option>
-              ))}
-            </select>
-            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-              <KeyboardArrowDown fontSize="small" />
+          <div className="relative flex-1 min-w-[14rem]">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none flex">
+              <Search fontSize="small" />
+            </span>
+            <input ref={searchInputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, company, or email..."
+              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-white/25" />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-white/30 pointer-events-none">
+              ⌘K
             </span>
           </div>
 
-          <div className="relative flex-1 min-w-[9rem]">
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-              className="w-full appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-              <KeyboardArrowDown fontSize="small" />
-            </span>
-          </div>
-
-          <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
-            className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition bg-white whitespace-nowrap">
-            {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+          <button onClick={() => setFiltersOpen((o) => !o)}
+            className={`h-11 px-4 flex items-center gap-2 border rounded-xl text-sm font-medium transition whitespace-nowrap ${
+              filtersOpen || activeFilterCount > 0
+                ? 'border-app-accent/40 bg-app-accent/10 text-app-accent-soft'
+                : 'border-white/[0.06] bg-white/[0.03] text-white/60 hover:bg-white/[0.05] hover:border-white/[0.12]'
+            }`}>
+            <FilterListRounded fontSize="small" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-app-accent text-white text-[11px] font-bold leading-none">
+                {activeFilterCount}
+              </span>
+            )}
+            <KeyboardArrowDown fontSize="small" className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          <ViewToggle value={viewMode} onChange={setViewMode} />
+          {isFiltered && (
+            <button onClick={clearAllFilters}
+              className="text-sm font-medium text-app-accent-soft hover:text-white transition whitespace-nowrap">
+              Clear All
+            </button>
+          )}
+
+          <div className="ml-auto">
+            <ViewToggle value={viewMode} onChange={setViewMode} />
+          </div>
         </div>
+
+        {filtersOpen && (
+          <div className="flex flex-wrap items-center gap-3">
+            <FilterSelect value={statusFilter} onChange={setStatusFilter} allLabel="All Statuses" className="flex-1 min-w-[9rem]"
+              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))} />
+
+            <FilterSelect value={sourceFilter} onChange={setSourceFilter} allLabel="All Sources" className="flex-1 min-w-[9rem]"
+              options={sourceOptions.map((s) => ({ value: s, label: SOURCE_LABELS[s] || s }))} />
+
+            <FilterSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} hideAll className="flex-1 min-w-[9rem]" />
+
+            <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+              className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-white/60 hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap">
+              {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Content */}
       {loading ? (
-        <div className="flex justify-center py-16"><CircularProgress /></div>
-      ) : recruiters.length === 0 ? (
+        <PageSpinner />
+      ) : filteredRecruiters.length === 0 ? (
         <EmptyState
           icon="🤝"
           title={isFiltered ? 'No recruiters match your filters' : 'No recruiter contacts yet'}
           description={isFiltered ? 'Try adjusting your search or filter.' : 'Start building your recruiter network.'}
           action={!isFiltered && (
             <button onClick={openAdd}
-              className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+              className="px-6 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition shadow-glow shadow-app-accent/40">
               Add your first recruiter
             </button>
           )}
         />
       ) : viewMode === 'list' ? (
-        <div className="space-y-3">
-          <p className="text-xs text-gray-400 font-medium">
-            {recruiters.length} {recruiters.length === 1 ? 'recruiter' : 'recruiters'}
-          </p>
-          {recruiters.map((r) => (
-            <RecruiterCard key={r.id} recruiter={r} {...cardProps} />
-          ))}
+        <div>
+          <h2 className="text-[18px] font-semibold text-white mb-4">
+            {filteredRecruiters.length} {filteredRecruiters.length === 1 ? 'Recruiter' : 'Recruiters'}
+          </h2>
+          <div className="space-y-3">
+            {filteredRecruiters.map((r) => (
+              <RecruiterListRow key={r.id} recruiter={r} {...cardProps} />
+            ))}
+          </div>
+          <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
+            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       ) : (
         <div>
-          <p className="text-xs text-gray-400 font-medium mb-4">
-            {recruiters.length} {recruiters.length === 1 ? 'recruiter' : 'recruiters'}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {recruiters.map((r) => (
+          <h2 className="text-[18px] font-semibold text-white mb-4">
+            {filteredRecruiters.length} {filteredRecruiters.length === 1 ? 'Recruiter' : 'Recruiters'}
+          </h2>
+          <div className={`grid grid-cols-1 gap-3 ${drawerOpen ? 'lg:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-3'}`}>
+            {filteredRecruiters.map((r) => (
               <DirectoryCard key={r.id} recruiter={r} {...cardProps} />
             ))}
           </div>
+          <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
+            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       )}
+      </div>
 
-      <AddEditModal open={modalOpen} recruiter={editTarget}
+      <AddEditDrawer open={modalOpen} recruiter={editTarget}
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
       <DeleteModal open={!!deleteTarget} recruiter={deleteTarget}
         onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />
-      <NotesModal open={!!notesTarget} recruiter={notesTarget}
-        onClose={() => setNotesTarget(null)} onNotesChanged={handleNotesChanged} />
-      <DetailModal
+      <DetailDrawer
         open={!!viewTarget}
         recruiterId={viewTarget}
+        focusNotes={viewFocusNotes}
         onClose={() => setViewTarget(null)}
         onEdit={(r) => { setEditTarget(r); setModalOpen(true) }}
-        onNotes={(r) => setNotesTarget(r)}
         onDelete={(r) => setDeleteTarget(r)}
         onStatusChanged={handleStatusChanged}
+        onNotesChanged={handleNotesChanged}
       />
     </Layout>
   )

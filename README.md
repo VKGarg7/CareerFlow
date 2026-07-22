@@ -4,6 +4,8 @@
 
 **A full-stack job search command center** — track companies, applications, interviews, recruiters, referrals, and follow-ups in one clean dashboard.
 
+[![CI](https://github.com/VKGarg7/CareerFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/VKGarg7/CareerFlow/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-415%20passing-brightgreen)](#-testing)
 [![Java](https://img.shields.io/badge/Java-17-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
@@ -12,7 +14,11 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#)
 
-[Features](#-features) • [Tech Stack](#-tech-stack) • [Getting Started](#-getting-started) • [API Docs](#-api-overview) • [Deployment](#-deployment)
+[Features](#-features) • [Tech Stack](#-tech-stack) • [Getting Started](#-getting-started) • [Testing](#-testing) • [API Docs](#-api-overview) • [Deployment](#-deployment)
+
+🌐 **[Live App](https://YOUR-VERCEL-URL.vercel.app)** · 📘 **[Live API Docs (Swagger)](https://careerflow-backend-ravi.onrender.com/swagger-ui/index.html)**
+
+> ℹ️ The backend runs on Render's free tier — the first request after a period of inactivity may take ~30s while the instance wakes up.
 
 </div>
 
@@ -28,7 +34,7 @@ CareerFlow is a personal career management tool built for job seekers who want t
 
 | | |
 |---|---|
-| 🔐 **Authentication** | Secure JWT-based login/signup with password reset via email |
+| 🔐 **Authentication** | JWT login/signup + Google, GitHub & LinkedIn OAuth2 social sign-in, BCrypt hashing, token blacklisting on logout, password reset via email |
 | 📊 **Dashboard** | At-a-glance summary of your job search progress |
 | 🏢 **Company Tracking** | Full pipeline: `Targeting → Applied → Interviewing → Offer / Rejected` |
 | 📝 **Application Management** | Detailed statuses (`OA Scheduled`, `Interview Cleared`, `Offer Received`) & source (`LinkedIn`, `Referral`, `Naukri`) |
@@ -53,9 +59,11 @@ CareerFlow is a personal career management tool built for job seekers who want t
 | **Frontend** | React 19 · Vite · Tailwind CSS · Material-UI |
 | **Backend** | Spring Boot 3.3 · Java 17 |
 | **Database** | PostgreSQL |
-| **Auth** | JWT (jjwt 0.12.6) · BCrypt |
+| **Auth** | JWT (jjwt 0.12.6) · OAuth2 (Google / GitHub / LinkedIn) · BCrypt |
 | **API Docs** | Swagger / SpringDoc OpenAPI |
 | **HTTP Client** | Axios |
+| **Testing** | JUnit 5 · Mockito · AssertJ (backend) · Vitest · React Testing Library (frontend) |
+| **CI/CD** | GitHub Actions (build + full test suite on every push/PR) |
 | **Build Tools** | Maven (backend) · npm (frontend) |
 
 </div>
@@ -79,16 +87,20 @@ CareerFlow/
 │       ├── document/                 # File upload/download
 │       ├── admin/                    # Admin dashboard & user management
 │       ├── audit/                    # Audit logging
-│       ├── config/                   # Security, JWT, CORS, Swagger, file storage
+│       ├── config/                   # Security, JWT, OAuth2, CORS, Swagger, file storage
 │       ├── common/                   # Base entities, soft delete, utilities
 │       └── exception/                # Global error handling
+│   └── src/test/java/com/careerflow/ # 211 JUnit 5 + Mockito tests mirroring the main packages
 │
 └── frontend/                         # React + Vite application
     └── src/
         ├── pages/                    # Login, Dashboard, Companies, Applications, Interviews, Recruiters, Referrals, FollowUps, Profile, Admin, Activity
         ├── components/               # Shared UI components (Layout, StatusBadge, etc.)
         ├── api/                      # Axios API client modules
+        ├── hooks/                    # Custom hooks (pagination, filters, modals, shortcuts)
+        ├── context/                  # ProfileContext (global profile state)
         └── utils/                    # Shared frontend utilities
+                                      # *.test.js(x) files sit next to the code they test (204 Vitest tests)
 ```
 
 ---
@@ -130,6 +142,24 @@ npm run dev
 
 ---
 
+## 🧪 Testing
+
+**415 automated tests** run on every push and pull request via GitHub Actions.
+
+| Suite | Count | Stack | Command |
+|---|---|---|---|
+| **Backend** | 211 tests · 33 classes | JUnit 5 · Mockito · AssertJ · in-memory H2 | `cd backend && ./mvnw test` |
+| **Frontend** | 204 tests · 29 files | Vitest · React Testing Library · jsdom | `cd frontend && npm test` |
+
+**What's covered:**
+
+- **Backend** — every service (business rules, ownership checks, status-transition matrices), every controller (`@WebMvcTest` HTTP slices: routing, validation, status codes), plus JWT utilities, OAuth2 handlers, file storage, pagination helpers, and the global exception handler. Tests run against in-memory H2 — no database setup needed.
+- **Frontend** — all utility modules and custom hooks, the API client layer (every endpoint wrapper), auth page flows (login, signup, password reset/change, OAuth callback), interactive components, and mount smoke tests for every page.
+
+Run a single backend test class with `./mvnw test -Dtest=CompanyServiceTest`, or frontend watch mode with `npm run test:watch`.
+
+---
+
 ## 🔧 Environment Variables
 
 <details>
@@ -146,6 +176,9 @@ npm run dev
 | `app.frontend-url` | Base URL of the frontend, used in password-reset email links |
 | `app.cors.allowed-origins` | Comma-separated list of origins allowed to call the API |
 | `app.upload-dir` | Directory where uploaded documents are stored |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth2 credentials for social sign-in |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth2 credentials for social sign-in |
+| `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` | LinkedIn OAuth2 credentials for social sign-in |
 
 See `application.properties.example` for a full template.
 

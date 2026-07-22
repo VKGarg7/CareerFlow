@@ -10,7 +10,10 @@ import org.hibernate.annotations.SQLRestriction;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "referral_requests")
+@Table(name = "referral_requests", indexes = {
+        @Index(name = "idx_referral_requests_user_deleted", columnList = "user_id, deleted_at"),
+        @Index(name = "idx_referral_requests_status", columnList = "status")
+})
 @SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter

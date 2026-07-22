@@ -1,13 +1,13 @@
 package com.careerflow.recruiter;
 
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.StatusCountsResponse;
 import com.careerflow.recruiter.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/recruiters")
@@ -23,13 +23,25 @@ public class RecruiterContactController {
     }
 
     @GetMapping
-    public ResponseEntity<List<RecruiterContactResponse>> getMyRecruiters(
+    public ResponseEntity<PageResponse<RecruiterContactResponse>> getMyRecruiters(
             @RequestParam(required = false) Long id,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String order) {
-        return ResponseEntity.ok(recruiterService.getMyRecruiters(id, search, status, sortBy, order));
+            @RequestParam(defaultValue = "desc") String order,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(recruiterService.getMyRecruiters(id, search, status, sortBy, order, page, size));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<StatusCountsResponse> getMyRecruiterStats() {
+        return ResponseEntity.ok(recruiterService.getMyRecruiterStats());
+    }
+
+    @GetMapping("/sources")
+    public ResponseEntity<java.util.List<RecruiterSource>> getMySources() {
+        return ResponseEntity.ok(recruiterService.getMySources());
     }
 
     @PatchMapping("/{id}")

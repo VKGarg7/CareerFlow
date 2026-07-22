@@ -2,11 +2,18 @@ package com.careerflow.application;
 
 import com.careerflow.application.dto.ApplicationRequest;
 import com.careerflow.application.dto.ApplicationResponse;
+import com.careerflow.application.dto.ApplicationStatsResponse;
 import com.careerflow.application.dto.ApplicationUpdateRequest;
+import com.careerflow.application.dto.DailyTrendItem;
+import com.careerflow.application.dto.MonthlyTrendItem;
+import com.careerflow.application.dto.SourceAnalysisItem;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.common.MapCollectors;
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
-import com.careerflow.common.SortHelper;
+import com.careerflow.common.StatusCountsResponse;
 import com.careerflow.company.Company;
 import com.careerflow.company.CompanyRepository;
 import com.careerflow.config.FileStorageService;
@@ -20,7 +27,8 @@ import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -76,25 +84,136 @@ public class ApplicationService {
         return toResponse(application);
     }
 
-    public List<ApplicationResponse> getMyApplications(
-            Long companyId, ApplicationStatus status, String sortBy, String order) {
+    public PageResponse<ApplicationResponse> getMyApplications(
+            Long companyId, ApplicationStatus status, String sortBy, String order, int page, int size) {
         User user = securityUtils.getCurrentUser();
-        Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
+        Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
 
-        List<JobApplication> results;
+        Page<JobApplication> results;
         if (companyId != null && status != null) {
-            results = applicationRepository.findAllByUserIdAndCompanyIdAndStatus(user.getId(), companyId, status, sort);
+            results = applicationRepository.findAllByUserIdAndCompanyIdAndStatus(user.getId(), companyId, status, pageable);
         } else if (companyId != null) {
-            results = applicationRepository.findAllByUserIdAndCompanyId(user.getId(), companyId, sort);
+            results = applicationRepository.findAllByUserIdAndCompanyId(user.getId(), companyId, pageable);
         } else if (status != null) {
-            results = applicationRepository.findAllByUserIdAndStatus(user.getId(), status, sort);
+            results = applicationRepository.findAllByUserIdAndStatus(user.getId(), status, pageable);
         } else {
-            results = applicationRepository.findAllByUserId(user.getId(), sort);
+            results = applicationRepository.findAllByUserId(user.getId(), pageable);
         }
 
-        Map<Long, LocalDate> nearestFollowUps = buildNearestFollowUpMap(results);
-        Map<Long, LocalDate> upcomingFollowUps = buildUpcomingFollowUpMap(results);
-        return results.stream().map(a -> toResponse(a, nearestFollowUps.get(a.getId()), upcomingFollowUps.get(a.getId()))).toList();
+        List<JobApplication> content = results.getContent();
+        Map<Long, LocalDate> nearestFollowUps = buildNearestFollowUpMap(content);
+        Map<Long, LocalDate> upcomingFollowUps = buildUpcomingFollowUpMap(content);
+        return PageResponse.of(results.map(a -> toResponse(a, nearestFollowUps.get(a.getId()), upcomingFollowUps.get(a.getId()))));
+    }
+
+    public ApplicationStatsResponse getMyApplicationStats() {
+        User user = securityUtils.getCurrentUser();
+        StatusCountsResponse base =
+                StatusCountsResponse.fromGroupedCounts(applicationRepository.countByStatusGroupedForUser(user.getId()));
+
+        LocalDate now = LocalDate.now();
+        LocalDate prev = now.minusMonths(1);
+        Map<String, Long> countsByMonth = MapCollectors.toMap(
+                applicationRepository.countByMonthGroupedForUser(user.getId(), prev.withDayOfMonth(1)),
+                ApplicationService::yearMonthKey, ApplicationRepository.MonthlyCount::getTotal);
+
+        return ApplicationStatsResponse.builder()
+                .total(base.getTotal())
+                .byStatus(base.getByStatus())
+                .createdThisMonth(countsByMonth.getOrDefault(yearMonthKey(now), 0L))
+                .createdLastMonth(countsByMonth.getOrDefault(yearMonthKey(prev), 0L))
+                .build();
+    }
+
+    public List<String> getMyRoles() {
+        User user = securityUtils.getCurrentUser();
+        return applicationRepository.findDistinctRolesForUser(user.getId());
+    }
+
+    public Map<Long, Long> getMyApplicationCountsByCompany() {
+        User user = securityUtils.getCurrentUser();
+        return MapCollectors.toMap(applicationRepository.countByCompanyGroupedForUser(user.getId()),
+                ApplicationRepository.CompanyCount::getCompanyId, ApplicationRepository.CompanyCount::getTotal);
+    }
+
+    public Map<Long, LocalDate> getMyLastActivityByCompany() {
+        User user = securityUtils.getCurrentUser();
+        return MapCollectors.toMap(applicationRepository.lastActivityByCompanyGroupedForUser(user.getId()),
+                ApplicationRepository.CompanyLastActivity::getCompanyId, ApplicationRepository.CompanyLastActivity::getLastActivity);
+    }
+
+    public List<MonthlyTrendItem> getMyMonthlyTrend() {
+        User user = securityUtils.getCurrentUser();
+        LocalDate since = LocalDate.now().withDayOfMonth(1).minusMonths(11);
+        Map<String, Long> countsByKey = MapCollectors.toMap(
+                applicationRepository.countByMonthGroupedForUser(user.getId(), since),
+                ApplicationService::yearMonthKey, ApplicationRepository.MonthlyCount::getTotal);
+
+        List<MonthlyTrendItem> result = new java.util.ArrayList<>();
+        LocalDate cursor = since;
+        for (int i = 0; i < 12; i++) {
+            result.add(MonthlyTrendItem.builder()
+                    .year(cursor.getYear())
+                    .month(cursor.getMonthValue())
+                    .count(countsByKey.getOrDefault(yearMonthKey(cursor), 0L))
+                    .build());
+            cursor = cursor.plusMonths(1);
+        }
+        return result;
+    }
+
+    private static String yearMonthKey(LocalDate date) {
+        return date.getYear() + "-" + date.getMonthValue();
+    }
+
+    private static String yearMonthKey(ApplicationRepository.MonthlyCount row) {
+        return row.getYear() + "-" + row.getMonth();
+    }
+
+    public List<DailyTrendItem> getMyWeeklyTrend(int days) {
+        User user = securityUtils.getCurrentUser();
+        int safeDays = days <= 0 ? 14 : Math.min(days, 90);
+        LocalDate since = LocalDate.now().minusDays(safeDays - 1L);
+        Map<LocalDate, Long> countsByDay = MapCollectors.toMap(
+                applicationRepository.countByDayGroupedForUser(user.getId(), since),
+                ApplicationRepository.DailyCount::getDay, ApplicationRepository.DailyCount::getTotal);
+
+        List<DailyTrendItem> result = new java.util.ArrayList<>();
+        LocalDate cursor = since;
+        LocalDate today = LocalDate.now();
+        while (!cursor.isAfter(today)) {
+            result.add(DailyTrendItem.builder()
+                    .date(cursor)
+                    .count(countsByDay.getOrDefault(cursor, 0L))
+                    .build());
+            cursor = cursor.plusDays(1);
+        }
+        return result;
+    }
+
+    public List<ApplicationResponse> getMyUpcomingDeadlines(int withinDays) {
+        User user = securityUtils.getCurrentUser();
+        LocalDate today = LocalDate.now();
+        LocalDate until = today.plusDays(Math.max(withinDays, 0));
+        List<JobApplication> apps = applicationRepository
+                .findAllByUserIdAndDeadlineBetweenOrderByDeadlineAsc(user.getId(), today, until);
+        Map<Long, LocalDate> nearestFollowUps = buildNearestFollowUpMap(apps);
+        Map<Long, LocalDate> upcomingFollowUps = buildUpcomingFollowUpMap(apps);
+        return apps.stream()
+                .map(a -> toResponse(a, nearestFollowUps.get(a.getId()), upcomingFollowUps.get(a.getId())))
+                .toList();
+    }
+
+    public List<SourceAnalysisItem> getMySourceAnalysis() {
+        User user = securityUtils.getCurrentUser();
+        return applicationRepository.countBySourceGroupedForUser(user.getId()).stream()
+                .map(row -> SourceAnalysisItem.builder()
+                        .source(row.getSource())
+                        .total(row.getTotal())
+                        .interviews(row.getInterviews())
+                        .offers(row.getOffers())
+                        .build())
+                .toList();
     }
 
     public ApplicationResponse updateApplication(Long id, ApplicationUpdateRequest request) {

@@ -21,7 +21,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                     Role role = user.getRole() != null ? user.getRole() : Role.USER;
                     return org.springframework.security.core.userdetails.User
                             .withUsername(user.getEmail())
-                            .password(user.getPassword())
+                            .password(user.getPassword() != null ? user.getPassword() : "{bcrypt}!")
                             .disabled(!user.isActive())
                             .authorities("ROLE_" + role.name())
                             .build();

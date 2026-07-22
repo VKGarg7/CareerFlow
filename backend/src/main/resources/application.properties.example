@@ -34,6 +34,37 @@ app.cors.allowed-origins=http://localhost:5173
 jwt.secret=your_hex_encoded_256bit_secret
 jwt.expiration-ms=86400000
 
+# OAuth2 - Google (https://console.cloud.google.com/apis/credentials)
+spring.security.oauth2.client.registration.google.client-id=${GOOGLE_CLIENT_ID:}
+spring.security.oauth2.client.registration.google.client-secret=${GOOGLE_CLIENT_SECRET:}
+spring.security.oauth2.client.registration.google.scope=email,profile
+spring.security.oauth2.client.registration.google.redirect-uri={baseUrl}/login/oauth2/code/{registrationId}
+
+# OAuth2 - GitHub (https://github.com/settings/developers)
+spring.security.oauth2.client.registration.github.client-id=${GITHUB_CLIENT_ID:}
+spring.security.oauth2.client.registration.github.client-secret=${GITHUB_CLIENT_SECRET:}
+spring.security.oauth2.client.registration.github.scope=read:user,user:email
+spring.security.oauth2.client.registration.github.redirect-uri={baseUrl}/login/oauth2/code/{registrationId}
+
+# OAuth2 - LinkedIn (https://www.linkedin.com/developers/apps, product: "Sign In with LinkedIn using OpenID Connect")
+spring.security.oauth2.client.registration.linkedin.client-id=${LINKEDIN_CLIENT_ID:}
+spring.security.oauth2.client.registration.linkedin.client-secret=${LINKEDIN_CLIENT_SECRET:}
+spring.security.oauth2.client.registration.linkedin.scope=openid,profile,email
+spring.security.oauth2.client.registration.linkedin.authorization-grant-type=authorization_code
+spring.security.oauth2.client.registration.linkedin.redirect-uri={baseUrl}/login/oauth2/code/{registrationId}
+spring.security.oauth2.client.provider.linkedin.authorization-uri=https://www.linkedin.com/oauth/v2/authorization
+spring.security.oauth2.client.provider.linkedin.token-uri=https://www.linkedin.com/oauth/v2/accessToken
+spring.security.oauth2.client.provider.linkedin.user-info-uri=https://api.linkedin.com/v2/userinfo
+spring.security.oauth2.client.provider.linkedin.jwk-set-uri=https://www.linkedin.com/oauth/openid/jwks
+spring.security.oauth2.client.provider.linkedin.user-name-attribute=sub
+
 # Actuator
 management.endpoints.web.exposure.include=health,info
 management.endpoint.health.show-details=always
+management.health.mail.enabled=false
+
+# Demo account auto-reset (leave blank to disable). If set, re-seeds this
+# account's companies/applications/interviews/recruiters/referrals nightly
+# from db/demo_seed_data.sql so a publicly shared demo login stays fresh.
+demo.user.email= demo@careerflow.app
+demo.reset.cron=0 * * * * *
