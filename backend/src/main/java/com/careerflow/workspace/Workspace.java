@@ -6,13 +6,18 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.util.List;
 
 @Entity
-@Table(name = "workspaces")
+@Table(name = "workspaces", indexes = {
+        @Index(name = "idx_workspaces_user_deleted", columnList = "user_id, deleted_at"),
+        @Index(name = "idx_workspaces_status", columnList = "status")
+})
+@SQLRestriction("deleted_at IS NULL")
 @Getter @Setter @NoArgsConstructor @SuperBuilder
 public class Workspace extends SoftDeleteEntity {
 
@@ -54,4 +59,8 @@ public class Workspace extends SoftDeleteEntity {
     @Column(nullable = false)
     @Builder.Default
     private WorkspaceStatus status = WorkspaceStatus.ACTIVE;
+
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
+    @Builder.Default
+    private Boolean isDefault = false;
 }

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ProfileProvider } from './context/ProfileContext'
+import { WorkspaceProvider } from './context/WorkspaceContext'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -37,6 +38,7 @@ function RootRoute() {
 export default function App() {
   return (
     <BrowserRouter>
+      <WorkspaceProvider>
       <Routes>
         <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<Login />} />
@@ -133,6 +135,7 @@ export default function App() {
           }
         />
       </Routes>
+      </WorkspaceProvider>
     </BrowserRouter>
   )
 }

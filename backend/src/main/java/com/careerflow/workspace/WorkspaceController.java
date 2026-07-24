@@ -1,5 +1,6 @@
 package com.careerflow.workspace;
 
+import com.careerflow.common.PageResponse;
 import com.careerflow.workspace.dto.WorkspaceRequest;
 import com.careerflow.workspace.dto.WorkspaceResponse;
 import com.careerflow.workspace.dto.WorkspaceUpdateRequest;
@@ -8,8 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/workspaces")
@@ -24,12 +23,15 @@ public class WorkspaceController {
     }
 
     @GetMapping
-    public ResponseEntity<List<WorkspaceResponse>> getMyWorkspaces(
+    public ResponseEntity<PageResponse<WorkspaceResponse>> getMyWorkspaces(
             @RequestParam(required = false) Long id,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) WorkspaceStatus status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String order) {
-        return ResponseEntity.ok(workspaceService.getMyWorkspaces(id, search, sortBy, order));
+            @RequestParam(defaultValue = "desc") String order,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(workspaceService.getMyWorkspaces(id, search, status, sortBy, order, page, size));
     }
 
     @PatchMapping("/{id}")

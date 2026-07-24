@@ -51,9 +51,10 @@ class FollowUpControllerTest extends ControllerTestSupport {
         request.setFollowUpDate(LocalDate.now().plusDays(3));
 
         FollowUpResponse response = FollowUpResponse.builder().id(1L).applicationId(50L).build();
-        when(followUpService.createFollowUp(eq(50L), any(FollowUpRequest.class))).thenReturn(response);
+        when(followUpService.createFollowUp(eq(50L), any(FollowUpRequest.class), anyLong())).thenReturn(response);
 
         mockMvc.perform(post("/api/applications/{applicationId}/follow-ups", 50L)
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -65,10 +66,11 @@ class FollowUpControllerTest extends ControllerTestSupport {
         FollowUpRequest request = new FollowUpRequest();
         request.setFollowUpDate(LocalDate.now().plusDays(3));
 
-        when(followUpService.createFollowUp(eq(50L), any(FollowUpRequest.class)))
+        when(followUpService.createFollowUp(eq(50L), any(FollowUpRequest.class), anyLong()))
                 .thenThrow(new ResourceNotFoundException("Application not found"));
 
         mockMvc.perform(post("/api/applications/{applicationId}/follow-ups", 50L)
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound());
@@ -76,11 +78,11 @@ class FollowUpControllerTest extends ControllerTestSupport {
 
     @Test
     void getCounts_returns200() throws Exception {
-        when(followUpService.getFollowUpCounts()).thenReturn(
+        when(followUpService.getFollowUpCounts(anyLong())).thenReturn(
                 com.careerflow.followup.dto.FollowUpCountsResponse.builder()
                         .overdue(1).dueToday(2).upcoming(3).completed(4).build());
 
-        mockMvc.perform(get("/api/follow-ups/counts"))
+        mockMvc.perform(get("/api/follow-ups/counts").param("workspaceId", "99"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.overdue").value(1));
     }

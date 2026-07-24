@@ -1,28 +1,43 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { Alert, CircularProgress } from '@mui/material'
-import { Add, Search, KeyboardArrowDown } from '@mui/icons-material'
+import React, { useState, useCallback, useMemo } from 'react'
+import PageSpinner from '../components/PageSpinner'
+import PageAlert from '../components/PageAlert'
+import {
+  Search, KeyboardArrowDown, CalendarTodayOutlined, PlaceOutlined,
+  EditOutlined, DeleteOutlineRounded, VisibilityOutlined, FolderOutlined,
+  FilterListRounded,
+} from '@mui/icons-material'
 import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
-import StatusSummaryBar from '../components/StatusSummaryBar'
-import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
+import Pagination from '../components/Pagination'
+import StatTilesBar from '../components/StatTilesBar'
+import { ConfirmDeleteModal } from '../components/ModalShell'
 import { getWorkspaces, addWorkspace, updateWorkspace, deleteWorkspace } from '../api/workspace'
-import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import SharedStatusBadge from '../components/StatusBadge'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import WorkspaceDetailModal from '../components/WorkspaceDetailModal'
-import { EntityCard, EntityDirectoryCard } from '../components/EntityCard'
-import { initials, fmtDate } from '../utils/followup'
+import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
+import { fmtDate } from '../utils/followup'
+import FilterSelect from '../components/FilterSelect'
+import useSearchShortcut from '../hooks/useSearchShortcut'
+import useAddQueryParam from '../hooks/useAddQueryParam'
+import useTransientMessage from '../hooks/useTransientMessage'
+import usePagedList from '../hooks/usePagedList'
+import { DrawerShell } from '../components/DrawerShell'
+import { FormFooterButtons } from '../components/formKit'
+import { CloseGlyphIcon } from '../components/CloseGlyphIcon'
+import HeaderAddButton from '../components/HeaderAddButton'
+import useCrudModals from '../hooks/useCrudModals'
+import useFilterState from '../hooks/useFilterState'
 
 const STATUS_CONFIG = {
-  ACTIVE:    { label: 'Active',    badge: 'bg-green-100 text-green-700',  border: 'border-l-green-400',  dot: 'bg-green-500'  },
-  PAUSED:    { label: 'Paused',    badge: 'bg-amber-100 text-amber-700',  border: 'border-l-amber-400',  dot: 'bg-amber-500'  },
-  COMPLETED: { label: 'Completed', badge: 'bg-blue-100 text-blue-700',    border: 'border-l-blue-400',   dot: 'bg-blue-500'   },
-  ARCHIVED:  { label: 'Archived',  badge: 'bg-gray-100 text-gray-600',    border: 'border-l-gray-400',   dot: 'bg-gray-400'   },
+  ACTIVE:    { label: 'Active',    badge: 'bg-app-success/10 text-app-success',     border: 'border-l-app-success',  dot: 'bg-app-success',  hex: '#22C55E' },
+  PAUSED:    { label: 'Paused',    badge: 'bg-app-warning/10 text-app-warning',     border: 'border-l-app-warning',  dot: 'bg-app-warning',  hex: '#F59E0B' },
+  COMPLETED: { label: 'Completed', badge: 'bg-app-accent/10 text-app-accent-soft', border: 'border-l-app-accent',   dot: 'bg-app-accent',   hex: '#5B5FEF' },
+  ARCHIVED:  { label: 'Archived',  badge: 'bg-white/[0.06] text-white/50',          border: 'border-l-white/20',     dot: 'bg-white/30',     hex: '#9CA3AF' },
 }
 
 const WORK_MODE_OPTIONS = [
-  { value: '', label: 'Not specified' },
   { value: 'ONSITE', label: 'Onsite' },
   { value: 'REMOTE', label: 'Remote' },
   { value: 'HYBRID', label: 'Hybrid' },
@@ -89,13 +104,11 @@ function toPayload(form) {
   }
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.ACTIVE
   return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
-// ─── Inline Status Changer ────────────────────────────────────────────────────
 function WorkspaceStatusChanger({ workspace, onStatusChanged }) {
   return (
     <InlineStatusChanger
@@ -108,126 +121,135 @@ function WorkspaceStatusChanger({ workspace, onStatusChanged }) {
   )
 }
 
-// ─── Workspace List Card ──────────────────────────────────────────────────────
-function WorkspaceCard({ workspace, onEdit, onDelete, onView, onStatusChanged }) {
+const dotHex = (status) => (STATUS_CONFIG[status] || STATUS_CONFIG.ACTIVE).hex
+
+function WorkspaceListRow({ workspace, onEdit, onDelete, onView, onStatusChanged, order, onToggleOrder, compact }) {
   const cfg = STATUS_CONFIG[workspace.status] || STATUS_CONFIG.ACTIVE
   const roles = workspace.targetRoles || []
   const locations = workspace.preferredLocations || []
+
   return (
-    <EntityCard
-      onClick={() => onView(workspace.id)}
-      accentColor={cfg.border}
-      avatarColor={cfg.dot}
-      avatarText={initials(workspace.name)}
-      titleSlot={
-        <>
-          <h3 className="text-base font-bold text-gray-800 truncate mb-1.5">{workspace.name}</h3>
-          <WorkspaceStatusChanger workspace={workspace} onStatusChanged={onStatusChanged} />
-        </>
-      }
-      chips={
-        <>
-          {roles.slice(0, 3).map((r) => (
-            <span key={r} className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-              🎯 {r}
-            </span>
-          ))}
-          {locations.slice(0, 2).map((l) => (
-            <span key={l} className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-full">
-              📍 {l}
-            </span>
-          ))}
-          {workspace.workMode && (
-            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full">
-              {workspace.workMode}
-            </span>
-          )}
-          {roles.length === 0 && locations.length === 0 && !workspace.workMode && workspace.createdAt && (
-            <span className="inline-flex items-center text-xs px-2.5 py-1 bg-gray-50 text-gray-400 rounded-full">
-              Created {fmtDate(workspace.createdAt)}
-            </span>
-          )}
-        </>
-      }
-      note={workspace.description}
-      actions={[
-        { label: 'Edit', icon: 'edit', onClick: () => onEdit(workspace) },
-        { label: 'Delete', icon: 'delete', onClick: () => onDelete(workspace), tone: 'danger' },
-      ]}
-    />
+    <div onClick={() => onView(workspace.id)}
+      className={`group relative flex items-center gap-2 sm:gap-4 min-w-0 rounded-card border border-white/[0.06] border-l-4 ${cfg.border} bg-app-surface shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.1] hover:shadow-card-hover cursor-pointer px-3 sm:px-5 py-3.5`}>
+
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight" style={{ backgroundColor: dotHex(workspace.status) }}>
+        <FolderOutlined sx={{ fontSize: 18 }} />
+      </div>
+
+      <div className={`min-w-0 shrink-0 ${compact ? 'w-24' : 'w-28 sm:w-44'}`}>
+        <p className="text-sm font-bold text-white/90 truncate">{workspace.name}</p>
+        {roles.length > 0 && <p className="text-xs text-white/40 truncate mt-0.5">{roles.join(', ')}</p>}
+      </div>
+
+      <div className={`shrink-0 min-w-0 w-[6.5rem] ${compact ? 'ml-auto' : 'sm:w-28'}`} onClick={(e) => e.stopPropagation()}>
+        <WorkspaceStatusChanger workspace={workspace} onStatusChanged={onStatusChanged} />
+      </div>
+
+      <div className={`min-w-[6rem] max-w-[10rem] flex-1 shrink basis-0 ${compact ? 'hidden' : 'hidden md:block'}`}>
+        {locations.length > 0 && (
+          <p className="flex items-center gap-1 text-xs text-white/50 truncate">
+            <PlaceOutlined sx={{ fontSize: 13 }} className="text-app-danger shrink-0" />
+            <span className="truncate">{locations.join(', ')}</span>
+          </p>
+        )}
+        {workspace.workMode && (
+          <p className="text-xs text-app-accent-soft truncate mt-0.5">{workspace.workMode}</p>
+        )}
+      </div>
+
+      <div className={`w-20 shrink-0 ${compact ? 'hidden' : 'hidden lg:block'}`}>
+        <p className="text-[11px] text-white/35">Applications Goal</p>
+        <p className="text-sm font-semibold text-white/80 mt-0.5">{workspace.goalApplicationsTarget ?? '—'}</p>
+      </div>
+
+      <div className={`w-24 shrink-0 ${compact ? 'hidden' : 'hidden xl:block'}`}>
+        <p className="text-[11px] text-white/35">Search Started</p>
+        <p className="text-sm font-medium text-white/70 mt-0.5">{workspace.searchStartDate ? fmtDate(workspace.searchStartDate) : '—'}</p>
+      </div>
+
+      <div className="ml-auto flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+        {onToggleOrder && (
+          <button onClick={onToggleOrder} title={order === 'desc' ? 'Sort ascending' : 'Sort descending'}
+            className={`items-center justify-center w-9 h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white hover:bg-white/[0.08] transition ${compact ? 'hidden' : 'hidden sm:flex'}`}>
+            <CalendarTodayOutlined sx={{ fontSize: 15 }} />
+          </button>
+        )}
+        <CardMenu items={[
+          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(workspace.id) },
+          { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(workspace) },
+          { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(workspace), tone: 'danger' },
+        ]} />
+      </div>
+    </div>
   )
 }
 
-// ─── Workspace Directory Card (compact grid) ──────────────────────────────────
 function WorkspaceDirectoryCard({ workspace, onEdit, onDelete, onView, onStatusChanged }) {
   const roles = workspace.targetRoles || []
+  const locations = workspace.preferredLocations || []
   return (
     <EntityDirectoryCard
       onClick={() => onView(workspace.id)}
       borderTopColor={dotHex(workspace.status)}
-      avatarColor={STATUS_CONFIG[workspace.status]?.dot || STATUS_CONFIG.ACTIVE.dot}
-      avatarText={initials(workspace.name)}
+      avatarSlot={
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0 shadow-inner-highlight" style={{ backgroundColor: dotHex(workspace.status) }}>
+          <FolderOutlined sx={{ fontSize: 20 }} />
+        </div>
+      }
       titleSlot={
         <>
-          <p className="text-sm font-bold text-gray-800 truncate">{workspace.name}</p>
+          <p className="text-[15px] font-bold text-white/90 truncate leading-snug">{workspace.name}</p>
           {roles.length > 0 && (
-            <p className="text-xs text-gray-400 truncate">🎯 {roles.join(', ')}</p>
+            <p className="text-[13px] text-white/40 truncate mt-0.5">{roles.join(', ')}</p>
           )}
-          <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
             <WorkspaceStatusChanger workspace={workspace} onStatusChanged={onStatusChanged} />
           </div>
         </>
       }
       chips={
         <>
-          {(workspace.preferredLocations || []).slice(0, 2).map((l) => (
-            <span key={l} className="text-[11px] text-gray-400">📍 {l}</span>
-          ))}
+          {locations.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-[13px] text-white/50 min-w-0 shrink truncate">
+              <PlaceOutlined sx={{ fontSize: 15 }} className="text-app-danger shrink-0" />
+              <span className="truncate">{locations.join(', ')}</span>
+            </span>
+          )}
           {workspace.workMode && (
-            <span className="text-[11px] text-indigo-500">{workspace.workMode}</span>
+            <span className="inline-flex items-center text-[13px] text-app-accent-soft shrink-0">{workspace.workMode}</span>
           )}
         </>
       }
       note={workspace.description}
-      actions={[
-        { label: 'Edit', icon: <EditGlyph />, onClick: () => onEdit(workspace) },
-        { label: 'Delete', icon: <DeleteGlyph />, onClick: () => onDelete(workspace), tone: 'danger' },
-      ]}
+      actionsSlot={
+        <CardMenu items={[
+          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(workspace.id) },
+          { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(workspace) },
+          { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(workspace), tone: 'danger' },
+        ]} />
+      }
+      footer={
+        <div className="grid grid-cols-2">
+          <div className="px-3 py-3 text-center">
+            <p className="font-display text-base font-bold text-white leading-none">{workspace.goalApplicationsTarget ?? '—'}</p>
+            <p className="text-[11px] text-white/35 mt-1.5">Applications Goal</p>
+          </div>
+          <div className="px-3 py-3 text-center border-l border-white/[0.06]">
+            <p className="text-xs font-semibold text-white/70">{workspace.searchStartDate ? fmtDate(workspace.searchStartDate) : '—'}</p>
+            <p className="text-[11px] text-white/35 mt-1.5">Search Started</p>
+          </div>
+        </div>
+      }
     />
   )
 }
 
-function EditGlyph() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-      <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z" />
-      <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9a.75.75 0 0 1 1.5 0v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z" />
-    </svg>
-  )
-}
-
-function DeleteGlyph() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-      <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
-    </svg>
-  )
-}
-
-function dotHex(status) {
-  const map = {
-    ACTIVE: '#22c55e', PAUSED: '#f59e0b', COMPLETED: '#3b82f6', ARCHIVED: '#9ca3af',
-  }
-  return map[status] || map.ACTIVE
-}
-
-// ─── Add / Edit Modal ────────────────────────────────────────────────────────
 function AddEditModal({ open, workspace, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (open) {
       setForm(toFormState(workspace))
       setError('')
@@ -261,24 +283,39 @@ function AddEditModal({ open, workspace, onClose, onSaved }) {
     }
   }
 
-  const inputCls = 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition'
-  const labelCls = 'block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5'
+  const inputCls = 'w-full h-11 px-4 border border-white/[0.06] rounded-xl text-sm text-app-text bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-app-text-muted/80'
+  const labelCls = 'block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5'
+
+  if (!open) return null
 
   return (
-    <ModalShell
-      open={open} onClose={onClose}
-      title={workspace ? 'Edit Workspace' : 'Create Workspace'}
-      subtitle={workspace ? 'Update your job search workspace' : 'Set up a new job search workspace'}
-      maxWidth="max-w-xl"
-    >
-      <div className="px-6 py-5">
-        {error && <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+    <DrawerShell>
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.06] shrink-0">
+        <h2 className="text-base font-bold text-white">{workspace ? 'Edit Workspace' : 'Create Workspace'}</h2>
+        <button onClick={onClose}
+          className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition">
+          <CloseGlyphIcon className="w-[18px] h-[18px]" />
+        </button>
+      </div>
+      <div className="px-5 py-4 overflow-y-auto flex-1 no-scrollbar">
+        {error && <div className="mb-4 p-3 rounded-xl bg-app-danger/10 border border-app-danger/20 text-app-danger text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelCls}>
-              Workspace Name <span className="text-red-500">*</span>
+              Workspace Name <span className="text-app-danger">*</span>
             </label>
             <input type="text" value={form.name} onChange={set('name')} placeholder="e.g. Backend SDE 2026" className={inputCls} />
+          </div>
+
+          <div>
+            <label className={labelCls}>Status</label>
+            <FilterSelect
+              value={form.status}
+              onChange={(val) => setForm((f) => ({ ...f, status: val }))}
+              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
+              hideAll
+              className="w-full"
+            />
           </div>
 
           <div>
@@ -287,7 +324,7 @@ function AddEditModal({ open, workspace, onClose, onSaved }) {
               placeholder="What's the strategy or goal for this workspace?" className={`${inputCls} resize-none`} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Target Roles</label>
               <input type="text" value={form.targetRoles} onChange={set('targetRoles')}
@@ -299,9 +336,9 @@ function AddEditModal({ open, workspace, onClose, onSaved }) {
                 placeholder="Bangalore, Remote" className={inputCls} />
             </div>
           </div>
-          <p className="text-[11px] text-gray-400 -mt-2">Separate multiple values with commas.</p>
+          <p className="text-[11px] text-white/30 -mt-2">Separate multiple values with commas.</p>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Compensation Min</label>
               <input type="number" value={form.compensationMin} onChange={set('compensationMin')}
@@ -314,12 +351,16 @@ function AddEditModal({ open, workspace, onClose, onSaved }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Work Mode</label>
-              <select value={form.workMode} onChange={set('workMode')} className={inputCls}>
-                {WORK_MODE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <FilterSelect
+                value={form.workMode}
+                onChange={(val) => setForm((f) => ({ ...f, workMode: val }))}
+                allLabel="Not specified"
+                options={WORK_MODE_OPTIONS}
+                className="w-full"
+              />
             </div>
             <div>
               <label className={labelCls}>Search Start Date</label>
@@ -334,8 +375,8 @@ function AddEditModal({ open, workspace, onClose, onSaved }) {
                 <label key={o.value}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer select-none transition ${
                     form.jobTypes.includes(o.value)
-                      ? 'bg-blue-50 border-blue-300 text-blue-700'
-                      : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                      ? 'bg-app-accent/10 border-app-accent/40 text-app-accent-soft'
+                      : 'bg-white/[0.03] border-white/[0.08] text-white/50 hover:border-white/[0.16]'
                   }`}>
                   <input type="checkbox" className="hidden" checked={form.jobTypes.includes(o.value)}
                     onChange={() => toggleJobType(o.value)} />
@@ -348,48 +389,22 @@ function AddEditModal({ open, workspace, onClose, onSaved }) {
           <div>
             <label className={labelCls}>Goal Metrics</label>
             <div className="grid grid-cols-3 gap-3">
-              <div>
-                <input type="number" min="0" value={form.goalApplicationsTarget} onChange={set('goalApplicationsTarget')}
-                  placeholder="Applications" className={inputCls} />
-              </div>
-              <div>
-                <input type="number" min="0" value={form.goalInterviewsTarget} onChange={set('goalInterviewsTarget')}
-                  placeholder="Interviews" className={inputCls} />
-              </div>
-              <div>
-                <input type="number" min="0" value={form.goalOffersTarget} onChange={set('goalOffersTarget')}
-                  placeholder="Offers" className={inputCls} />
-              </div>
+              <input type="number" min="0" value={form.goalApplicationsTarget} onChange={set('goalApplicationsTarget')}
+                placeholder="Applications" className={inputCls} />
+              <input type="number" min="0" value={form.goalInterviewsTarget} onChange={set('goalInterviewsTarget')}
+                placeholder="Interviews" className={inputCls} />
+              <input type="number" min="0" value={form.goalOffersTarget} onChange={set('goalOffersTarget')}
+                placeholder="Offers" className={inputCls} />
             </div>
           </div>
 
-          <div>
-            <label className={labelCls}>Status</label>
-            <select value={form.status} onChange={set('status')} className={inputCls}>
-              {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-                <option key={val} value={val}>{label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm">
-              {saving && <CircularProgress size={14} color="inherit" />}
-              {workspace ? 'Save Changes' : 'Create Workspace'}
-            </button>
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
-              Cancel
-            </button>
-          </div>
+          <FormFooterButtons saving={saving} onCancel={onClose} saveLabel={workspace ? 'Save Changes' : 'Create Workspace'} />
         </form>
       </div>
-    </ModalShell>
+    </DrawerShell>
   )
 }
 
-// ─── Delete Modal ─────────────────────────────────────────────────────────────
 function DeleteModal({ open, workspace, onClose, onDeleted }) {
   const handleDelete = async () => {
     await deleteWorkspace(workspace.id)
@@ -404,173 +419,204 @@ function DeleteModal({ open, workspace, onClose, onDeleted }) {
       title="Delete Workspace"
       message={
         <>
-          Remove <span className="font-semibold text-gray-700">{workspace?.name}</span> and all of its settings?
-          <span className="block text-xs text-red-500 mt-1">This action cannot be undone.</span>
+          Remove <span className="font-semibold text-white/80">{workspace?.name}</span> and all of its settings?
+          <span className="block text-xs text-app-danger mt-1">This action cannot be undone.</span>
         </>
       }
     />
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Workspaces() {
-  const [workspaces, setWorkspaces] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [success, setSuccess] = useTransientMessage()
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [workModeFilter, setWorkModeFilter] = useState('')
   const [sortBy, setSortBy] = useState('createdAt')
   const [order, setOrder] = useState('desc')
   const [viewMode, setViewMode] = useState('list')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const searchInputRef = React.useRef(null)
 
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
+  const {
+    items: workspaces, setItems: setWorkspaces, loading, error, setError,
+    page, setPage, size, setSize, refetch: fetchWorkspaces,
+  } = usePagedList(
+    useCallback(
+      (page, size) => getWorkspaces({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
+      [search, statusFilter, sortBy, order]
+    ),
+    'Failed to load workspaces.'
+  )
+
+  const {
+    modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
+    handleSaved, handleDeleted,
+  } = useCrudModals('Workspace', setSuccess, [fetchWorkspaces])
   const [viewId, setViewId] = useState(null)
 
-  const fetchWorkspaces = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await getWorkspaces({ search: search.trim() || undefined, sortBy, order })
-      setWorkspaces(res.data)
-    } catch {
-      setError('Failed to load workspaces.')
-    } finally {
-      setLoading(false)
-    }
-  }, [search, sortBy, order])
+  useSearchShortcut(searchInputRef)
 
-  useEffect(() => { fetchWorkspaces() }, [fetchWorkspaces])
+  const filteredWorkspaces = useMemo(() => {
+    return workspaces.filter((w) => {
+      if (workModeFilter && w.workMode !== workModeFilter) return false
+      return true
+    })
+  }, [workspaces, workModeFilter])
 
-  const openAdd  = () => { setEditTarget(null); setModalOpen(true) }
-  const openEdit = (w) => { setEditTarget(w); setModalOpen(true) }
+  const openAdd  = () => { setViewId(null); setEditTarget(null); setModalOpen(true) }
+  const openEdit = (w) => { setViewId(null); setEditTarget(w); setModalOpen(true) }
 
-  const handleSaved = () => {
-    setModalOpen(false)
-    setSuccess(editTarget ? 'Workspace updated.' : 'Workspace created.')
-    fetchWorkspaces()
-    setTimeout(() => setSuccess(''), 3000)
-  }
-
-  const handleDeleted = () => {
-    setDeleteTarget(null)
-    setSuccess('Workspace removed.')
-    fetchWorkspaces()
-    setTimeout(() => setSuccess(''), 3000)
-  }
+  useAddQueryParam(openAdd)
 
   const handleStatusChanged = (updated) => {
     setWorkspaces(prev => prev.map(w => w.id === updated.id ? updated : w))
   }
 
-  const filtered = statusFilter ? workspaces.filter((w) => w.status === statusFilter) : workspaces
-  const isFiltered = search.trim() || statusFilter
-  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onView: setViewId, onStatusChanged: handleStatusChanged }
+  const { activeFilterCount, isFiltered, clearAllFilters } = useFilterState(search, setSearch, [
+    [statusFilter, setStatusFilter],
+    [workModeFilter, setWorkModeFilter],
+  ])
+
+  const openView = (id) => { setModalOpen(false); setViewId(id) }
+  const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onView: openView, onStatusChanged: handleStatusChanged }
+  const drawerOpen = modalOpen || viewId !== null
 
   return (
-    <Layout>
-      <PageHeader
-        title="Workspaces"
-        subtitle="Organize your job search into focused strategies and hiring cycles"
-        icon="🗂️"
-        gradient="from-indigo-500 to-purple-600"
-        action={
-          <button onClick={openAdd}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl hover:shadow-lg hover:shadow-blue-200 hover:-translate-y-0.5 transition-all shadow-sm">
-            <Add fontSize="small" />New Workspace
-          </button>
-        }
-      />
+    <Layout
+      drawerOpen={drawerOpen}
+      headerAction={<HeaderAddButton label="Add Workspace" onClick={openAdd} drawerOpen={drawerOpen} />}
+    >
+      <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
+      <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
+      <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
-      {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
-      {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
-
-      {/* Status summary bar */}
       {!loading && workspaces.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 mb-6 [&>div]:mb-0">
-          <StatusSummaryBar
+        <div className="mb-8">
+          <StatTilesBar
             items={workspaces}
             statusConfig={STATUS_CONFIG}
             activeFilter={statusFilter}
             onFilter={setStatusFilter}
+            totalLabel="Total Workspaces"
+            totalIcon={<FolderOutlined sx={{ fontSize: 18 }} />}
+            compact={drawerOpen}
           />
         </div>
       )}
 
-      {/* Filters + view toggle */}
-      <div className="flex flex-col gap-3 mb-6">
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none flex">
-            <Search fontSize="small" />
-          </span>
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search workspaces..."
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition" />
-        </div>
-
+      <div className="flex flex-col gap-4 mb-8">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[9rem]">
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-              className="w-full appearance-none pl-4 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-300 transition cursor-pointer">
-              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-              <KeyboardArrowDown fontSize="small" />
+          <div className="relative flex-1 min-w-[14rem]">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted pointer-events-none flex">
+              <Search fontSize="small" />
+            </span>
+            <input ref={searchInputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search workspaces..."
+              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-app-text bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-app-text-muted/80" />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-app-text-muted pointer-events-none">
+              ⌘K
             </span>
           </div>
 
-          <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
-            className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition bg-white whitespace-nowrap">
-            {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+          <button onClick={() => setFiltersOpen((o) => !o)}
+            className={`h-11 px-4 flex items-center gap-2 border rounded-xl text-sm font-medium transition whitespace-nowrap ${
+              filtersOpen || activeFilterCount > 0
+                ? 'border-app-accent/40 bg-app-accent/10 text-app-accent-soft'
+                : 'border-white/[0.06] bg-white/[0.03] text-app-text-soft hover:bg-white/[0.05] hover:border-white/[0.12]'
+            }`}>
+            <FilterListRounded fontSize="small" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-app-accent text-white text-[11px] font-bold leading-none">
+                {activeFilterCount}
+              </span>
+            )}
+            <KeyboardArrowDown fontSize="small" className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          <ViewToggle value={viewMode} onChange={setViewMode} />
+          {isFiltered && (
+            <button onClick={clearAllFilters}
+              className="text-sm font-medium text-app-accent-soft hover:text-white transition whitespace-nowrap">
+              Clear All
+            </button>
+          )}
+
+          <div className="ml-auto">
+            <ViewToggle value={viewMode} onChange={setViewMode} />
+          </div>
         </div>
+
+        {filtersOpen && (
+          <div className="flex flex-wrap items-center gap-3">
+            <FilterSelect value={statusFilter} onChange={setStatusFilter} allLabel="All Statuses" className="flex-1 min-w-[7rem]"
+              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))} />
+            <FilterSelect value={workModeFilter} onChange={setWorkModeFilter} allLabel="All Work Modes" className="flex-1 min-w-[7rem]"
+              options={WORK_MODE_OPTIONS} />
+
+            <FilterSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} hideAll className="flex-1 min-w-[7rem]" />
+
+            <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+              className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-app-text-soft hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap">
+              {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Content */}
       {loading ? (
-        <div className="flex justify-center py-16"><CircularProgress /></div>
-      ) : filtered.length === 0 ? (
+        <PageSpinner />
+      ) : filteredWorkspaces.length === 0 ? (
         <EmptyState
           icon="🗂️"
           title={isFiltered ? 'No workspaces match your filters' : 'No workspaces yet'}
           description={isFiltered ? 'Try adjusting your search or filter.' : 'Create a workspace to start organizing your job search.'}
           action={!isFiltered && (
             <button onClick={openAdd}
-              className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+              className="px-6 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition shadow-glow shadow-app-accent/40">
               Create your first workspace
             </button>
           )}
         />
       ) : viewMode === 'list' ? (
-        <div className="space-y-3">
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
-            {filtered.length} {filtered.length === 1 ? 'Workspace' : 'Workspaces'}
+        <div>
+          <h2 className="text-[18px] font-semibold text-app-text mb-4">
+            {filteredWorkspaces.length} {filteredWorkspaces.length === 1 ? 'Workspace' : 'Workspaces'}
           </h2>
-          {filtered.map((w) => <WorkspaceCard key={w.id} workspace={w} {...cardProps} />)}
+          <div className="space-y-3">
+            {filteredWorkspaces.map((w) => (
+              <WorkspaceListRow key={w.id} workspace={w} {...cardProps}
+                order={order} onToggleOrder={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))} compact={drawerOpen} />
+            ))}
+          </div>
+          <Pagination page={workspaces.page} totalPages={workspaces.totalPages}
+            totalElements={workspaces.totalElements} size={workspaces.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       ) : (
         <div>
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
-            {filtered.length} {filtered.length === 1 ? 'Workspace' : 'Workspaces'}
+          <h2 className="text-[18px] font-semibold text-app-text mb-4">
+            {filteredWorkspaces.length} {filteredWorkspaces.length === 1 ? 'Workspace' : 'Workspaces'}
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtered.map((w) => (
+          <div className={`grid gap-6 ${drawerOpen ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
+            {filteredWorkspaces.map((w) => (
               <WorkspaceDirectoryCard key={w.id} workspace={w} {...cardProps} />
             ))}
           </div>
+          <Pagination page={workspaces.page} totalPages={workspaces.totalPages}
+            totalElements={workspaces.totalElements} size={workspaces.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       )}
+      </div>
 
       <AddEditModal open={modalOpen} workspace={editTarget}
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
       <DeleteModal open={!!deleteTarget} workspace={deleteTarget}
         onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />
       <WorkspaceDetailModal open={viewId !== null} workspaceId={viewId}
-        onClose={() => setViewId(null)} onStatusChanged={handleStatusChanged} />
+        onClose={() => setViewId(null)} onStatusChanged={handleStatusChanged}
+        onEdit={(w) => { setViewId(null); openEdit(w) }}
+        onDelete={(w) => { setViewId(null); setDeleteTarget(w) }} />
     </Layout>
   )
 }

@@ -6,6 +6,7 @@ import com.careerflow.common.PageResponse;
 import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.StatusCountsResponse;
+import com.careerflow.common.WorkspaceAccessUtils;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
@@ -15,6 +16,7 @@ import com.careerflow.referral.dto.ReferralResponse;
 import com.careerflow.referral.dto.ReferralStatusHistoryResponse;
 import com.careerflow.referral.dto.ReferralUpdateRequest;
 import com.careerflow.user.User;
+import com.careerflow.workspace.Workspace;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,19 +39,22 @@ public class ReferralRequestService {
 
     private final ReferralRequestRepository referralRepository;
     private final ReferralStatusHistoryRepository historyRepository;
+    private final WorkspaceAccessUtils workspaceAccessUtils;
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
 
 
     @Transactional
-    public ReferralResponse create(ReferralRequestDto req) {
+    public ReferralResponse create(ReferralRequestDto req, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        checkDuplicate(user.getId(), req.getReferrerEmail(), req.getTargetRole(), null);
+        checkDuplicate(workspaceId, req.getReferrerEmail(), req.getTargetRole(), null);
+        Workspace workspace = workspaceAccessUtils.getOwnedWorkspace(workspaceId, user.getId());
 
         ReferralStatus initialStatus = req.getStatus() != null ? req.getStatus() : ReferralStatus.DRAFT;
 
         ReferralRequest referral = ReferralRequest.builder()
                 .user(user)
+                .workspace(workspace)
                 .referrerName(req.getReferrerName().trim())
                 .referrerEmail(normalizeEmail(req.getReferrerEmail()))
                 .referrerLinkedIn(blank(req.getReferrerLinkedIn()))
@@ -74,7 +79,7 @@ public class ReferralRequestService {
     }
 
     public PageResponse<ReferralResponse> getMyReferrals(
-            String search, String status, String sortBy, String order, int page, int size) {
+            String search, String status, String sortBy, String order, int page, int size, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
 
@@ -83,34 +88,34 @@ public class ReferralRequestService {
 
         Page<ReferralRequest> results;
         if (hasSearch && statusFilter != null) {
-            results = referralRepository.searchByUserIdAndStatus(user.getId(), statusFilter, search.trim(), pageable);
+            results = referralRepository.searchByUserIdAndStatus(user.getId(), workspaceId, statusFilter, search.trim(), pageable);
         } else if (hasSearch) {
-            results = referralRepository.searchByUserId(user.getId(), search.trim(), pageable);
+            results = referralRepository.searchByUserId(user.getId(), workspaceId, search.trim(), pageable);
         } else if (statusFilter != null) {
-            results = referralRepository.findAllByUserIdAndStatus(user.getId(), statusFilter, pageable);
+            results = referralRepository.findAllByUserIdAndWorkspaceIdAndStatus(user.getId(), workspaceId, statusFilter, pageable);
         } else {
-            results = referralRepository.findAllByUserId(user.getId(), pageable);
+            results = referralRepository.findAllByUserIdAndWorkspaceId(user.getId(), workspaceId, pageable);
         }
 
         return PageResponse.of(results.map(r -> toResponse(r, null)));
     }
 
-    public StatusCountsResponse getMyReferralStats() {
+    public StatusCountsResponse getMyReferralStats(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        return StatusCountsResponse.fromGroupedCounts(referralRepository.countByStatusGroupedForUser(user.getId()));
+        return StatusCountsResponse.fromGroupedCounts(referralRepository.countByStatusGroupedForUser(user.getId(), workspaceId));
     }
 
     @Transactional
-    public ReferralResponse update(Long id, ReferralUpdateRequest req) {
+    public ReferralResponse update(Long id, ReferralUpdateRequest req, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        ReferralRequest referral = findOwned(id, user.getId());
+        ReferralRequest referral = findOwned(id, user.getId(), workspaceId);
 
         if (req.getReferrerName() != null && !req.getReferrerName().isBlank())
             referral.setReferrerName(req.getReferrerName().trim());
 
         if (req.getReferrerEmail() != null) {
             String newEmail = normalizeEmail(req.getReferrerEmail());
-            checkDuplicate(user.getId(), newEmail, referral.getTargetRole(), id);
+            checkDuplicate(workspaceId, newEmail, referral.getTargetRole(), id);
             referral.setReferrerEmail(newEmail);
         }
 
@@ -125,7 +130,7 @@ public class ReferralRequestService {
 
         if (req.getTargetRole() != null && !req.getTargetRole().isBlank()) {
             String newRole = req.getTargetRole().trim();
-            checkDuplicate(user.getId(), referral.getReferrerEmail(), newRole, id);
+            checkDuplicate(workspaceId, referral.getReferrerEmail(), newRole, id);
             referral.setTargetRole(newRole);
         }
 
@@ -164,22 +169,22 @@ public class ReferralRequestService {
         return toResponse(referral, history);
     }
 
-    public ReferralResponse getById(Long id) {
+    public ReferralResponse getById(Long id, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        ReferralRequest referral = findOwned(id, user.getId());
+        ReferralRequest referral = findOwned(id, user.getId(), workspaceId);
         return toResponse(referral, fetchHistory(id, user.getId()));
     }
 
-    public void delete(Long id) {
+    public void delete(Long id, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        ReferralRequest referral = findOwned(id, user.getId());
+        ReferralRequest referral = findOwned(id, user.getId(), workspaceId);
         referral.softDelete();
         referralRepository.save(referral);
         auditLogService.log(user, AuditAction.REFERRAL_DELETED, "Deleted referral for " + describe(referral));
     }
 
     @Transactional
-    public List<ReferralStatusHistoryResponse> manageNote(Long referralId, ReferralNoteActionRequest req) {
+    public List<ReferralStatusHistoryResponse> manageNote(Long referralId, ReferralNoteActionRequest req, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         String action = req.getAction().toUpperCase();
 
@@ -187,7 +192,7 @@ public class ReferralRequestService {
             case "ADD" -> {
                 if (req.getNote() == null || req.getNote().isBlank())
                     throw new BadRequestException("Note must not be blank for ADD action");
-                ReferralRequest referral = findOwned(referralId, user.getId());
+                ReferralRequest referral = findOwned(referralId, user.getId(), workspaceId);
                 historyRepository.save(ReferralStatusHistory.builder()
                         .referral(referral)
                         .user(user)
@@ -244,8 +249,8 @@ public class ReferralRequestService {
                 .stream().map(this::toHistoryResponse).toList();
     }
 
-    private ReferralRequest findOwned(Long id, Long userId) {
-        return referralRepository.findByIdAndUserId(id, userId)
+    private ReferralRequest findOwned(Long id, Long userId, Long workspaceId) {
+        return referralRepository.findByIdAndUserIdAndWorkspaceId(id, userId, workspaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Referral request not found"));
     }
 
@@ -253,11 +258,11 @@ public class ReferralRequestService {
         return referral.getTargetRole() + " via " + referral.getReferrerName();
     }
 
-    private void checkDuplicate(Long userId, String email, String role, Long excludeId) {
+    private void checkDuplicate(Long workspaceId, String email, String role, Long excludeId) {
         if (email == null || email.isBlank() || role == null || role.isBlank()) return;
         boolean exists = excludeId == null
-                ? referralRepository.existsByUserIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(userId, email, role)
-                : referralRepository.existsByUserIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCaseAndIdNot(userId, email, role, excludeId);
+                ? referralRepository.existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(workspaceId, email, role)
+                : referralRepository.existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCaseAndIdNot(workspaceId, email, role, excludeId);
         if (exists)
             throw new DuplicateResourceException(
                     "A referral request for role '" + role + "' from '" + email + "' already exists");

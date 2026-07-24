@@ -20,14 +20,17 @@ public class InterviewController {
     @PostMapping("/api/applications/{applicationId}/interviews")
     public ResponseEntity<InterviewResponse> create(
             @PathVariable Long applicationId,
-            @Valid @RequestBody InterviewRequest request) {
+            @Valid @RequestBody InterviewRequest request,
+            @RequestParam Long workspaceId) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(interviewService.create(applicationId, request));
+                .body(interviewService.create(applicationId, request, workspaceId));
     }
 
     @GetMapping("/api/applications/{applicationId}/interviews")
-    public ResponseEntity<List<InterviewResponse>> getForApplication(@PathVariable Long applicationId) {
-        return ResponseEntity.ok(interviewService.getForApplication(applicationId));
+    public ResponseEntity<List<InterviewResponse>> getForApplication(
+            @PathVariable Long applicationId,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(interviewService.getForApplication(applicationId, workspaceId));
     }
 
     @PatchMapping("/api/interviews/{id}")

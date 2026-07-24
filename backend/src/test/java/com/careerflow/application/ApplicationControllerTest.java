@@ -54,9 +54,10 @@ class ApplicationControllerTest extends ControllerTestSupport {
 
         ApplicationResponse response = ApplicationResponse.builder().id(1L).companyId(100L).role("Backend Engineer")
                 .status(ApplicationStatus.APPLIED).build();
-        when(applicationService.addApplication(any(ApplicationRequest.class))).thenReturn(response);
+        when(applicationService.addApplication(any(ApplicationRequest.class), anyLong())).thenReturn(response);
 
         mockMvc.perform(post("/api/applications")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -69,10 +70,11 @@ class ApplicationControllerTest extends ControllerTestSupport {
         request.setCompanyId(999L);
         request.setRole("Backend Engineer");
 
-        when(applicationService.addApplication(any(ApplicationRequest.class)))
+        when(applicationService.addApplication(any(ApplicationRequest.class), anyLong()))
                 .thenThrow(new ResourceNotFoundException("Company not found"));
 
         mockMvc.perform(post("/api/applications")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound());
@@ -84,6 +86,7 @@ class ApplicationControllerTest extends ControllerTestSupport {
         request.setCompanyId(100L);
 
         mockMvc.perform(post("/api/applications")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -93,42 +96,43 @@ class ApplicationControllerTest extends ControllerTestSupport {
     void getMyApplications_returns200_withPageResponse() throws Exception {
         PageResponse<ApplicationResponse> page = PageResponse.<ApplicationResponse>builder()
                 .content(java.util.List.of()).page(0).size(10).totalElements(0).totalPages(0).last(true).build();
-        when(applicationService.getMyApplications(any(), any(), any(), any(), anyInt(), anyInt())).thenReturn(page);
+        when(applicationService.getMyApplications(any(), any(), any(), any(), anyInt(), anyInt(), anyLong())).thenReturn(page);
 
-        mockMvc.perform(get("/api/applications"))
+        mockMvc.perform(get("/api/applications").param("workspaceId", "99"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray());
     }
 
     @Test
     void delete_returns204_whenDocumentIdNotProvided() throws Exception {
-        doNothing().when(applicationService).deleteApplication(50L);
+        doNothing().when(applicationService).deleteApplication(50L, 99L);
 
-        mockMvc.perform(delete("/api/applications/{id}", 50L))
+        mockMvc.perform(delete("/api/applications/{id}", 50L).param("workspaceId", "99"))
                 .andExpect(status().isNoContent());
 
-        verify(applicationService).deleteApplication(50L);
-        verify(applicationService, never()).deleteDocument(anyLong(), anyLong());
+        verify(applicationService).deleteApplication(50L, 99L);
+        verify(applicationService, never()).deleteDocument(anyLong(), anyLong(), anyLong());
     }
 
     @Test
     void delete_deletesDocument_whenDocumentIdProvided() throws Exception {
         ApplicationResponse response = ApplicationResponse.builder().id(50L).build();
-        when(applicationService.deleteDocument(50L, 9L)).thenReturn(response);
+        when(applicationService.deleteDocument(50L, 9L, 99L)).thenReturn(response);
 
-        mockMvc.perform(delete("/api/applications/{id}", 50L).param("documentId", "9"))
+        mockMvc.perform(delete("/api/applications/{id}", 50L).param("documentId", "9").param("workspaceId", "99"))
                 .andExpect(status().isOk());
 
-        verify(applicationService).deleteDocument(50L, 9L);
-        verify(applicationService, never()).deleteApplication(anyLong());
+        verify(applicationService).deleteDocument(50L, 9L, 99L);
+        verify(applicationService, never()).deleteApplication(anyLong(), anyLong());
     }
 
     @Test
     void updateApplication_returns400_whenExpectedSalaryUpdateFails() throws Exception {
-        when(applicationService.updateApplication(eq(50L), any()))
+        when(applicationService.updateApplication(eq(50L), any(), anyLong()))
                 .thenThrow(new BadRequestException("Only PDF, DOC, and DOCX files are supported"));
 
         mockMvc.perform(patch("/api/applications/{id}", 50L)
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());

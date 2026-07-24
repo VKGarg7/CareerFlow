@@ -2,8 +2,10 @@ package com.careerflow.workspace;
 
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.common.PageResponse;
+import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
-import com.careerflow.common.SortHelper;
+import com.careerflow.exception.ConflictException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.user.User;
@@ -11,10 +13,10 @@ import com.careerflow.workspace.dto.WorkspaceRequest;
 import com.careerflow.workspace.dto.WorkspaceResponse;
 import com.careerflow.workspace.dto.WorkspaceUpdateRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.Set;
 
 @SuppressWarnings("null")
@@ -54,17 +56,26 @@ public class WorkspaceService {
         return toResponse(workspace);
     }
 
-    public List<WorkspaceResponse> getMyWorkspaces(Long id, String search, String sortBy, String order) {
+    public PageResponse<WorkspaceResponse> getMyWorkspaces(
+            Long id, String search, WorkspaceStatus status, String sortBy, String order, int page, int size) {
         User user = securityUtils.getCurrentUser();
         if (id != null) {
-            return List.of(toResponse(findOwned(id, user.getId())));
+            WorkspaceResponse single = toResponse(findOwned(id, user.getId()));
+            return PageResponse.single(single);
         }
-        Sort sort = SortHelper.build(sortBy, order, SORTABLE_FIELDS);
+        Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
         boolean hasSearch = search != null && !search.isBlank();
-        List<Workspace> results = hasSearch
-                ? workspaceRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), sort)
-                : workspaceRepository.findAllByUserId(user.getId(), sort);
-        return results.stream().map(this::toResponse).toList();
+        Page<Workspace> results;
+        if (status != null && hasSearch) {
+            results = workspaceRepository.findAllByUserIdAndStatusAndNameContainingIgnoreCase(user.getId(), status, search.trim(), pageable);
+        } else if (status != null) {
+            results = workspaceRepository.findAllByUserIdAndStatus(user.getId(), status, pageable);
+        } else if (hasSearch) {
+            results = workspaceRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), pageable);
+        } else {
+            results = workspaceRepository.findAllByUserId(user.getId(), pageable);
+        }
+        return PageResponse.of(results.map(this::toResponse));
     }
 
     public WorkspaceResponse updateWorkspace(Long id, WorkspaceUpdateRequest request) {
@@ -97,6 +108,8 @@ public class WorkspaceService {
     public void deleteWorkspace(Long id) {
         User user = securityUtils.getCurrentUser();
         Workspace workspace = findOwned(id, user.getId());
+        if (Boolean.TRUE.equals(workspace.getIsDefault()))
+            throw new ConflictException("The default workspace cannot be deleted.");
         workspace.softDelete();
         workspaceRepository.save(workspace);
         auditLogService.log(user, AuditAction.WORKSPACE_DELETED, "Deleted workspace " + workspace.getName());
@@ -123,6 +136,7 @@ public class WorkspaceService {
                 .goalInterviewsTarget(workspace.getGoalInterviewsTarget())
                 .goalOffersTarget(workspace.getGoalOffersTarget())
                 .status(workspace.getStatus())
+                .isDefault(workspace.getIsDefault())
                 .createdAt(workspace.getCreatedAt())
                 .updatedAt(workspace.getUpdatedAt())
                 .build();

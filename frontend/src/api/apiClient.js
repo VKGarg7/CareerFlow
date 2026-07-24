@@ -2,9 +2,20 @@ import axios from 'axios'
 
 const apiClient = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api' })
 
+// Endpoints scoped by the active workspace (CF-PRO-001). Every request whose
+// path starts with one of these prefixes automatically gets `?workspaceId=`
+// injected from localStorage — add any new workspace-scoped endpoint's
+// prefix here, or its requests will silently go through unscoped.
+const WORKSPACE_SCOPED_PREFIXES = ['/companies', '/applications', '/recruiters', '/referrals', '/follow-ups', '/interviews']
+
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
+
+  const workspaceId = localStorage.getItem('cf_active_workspace')
+  if (workspaceId && WORKSPACE_SCOPED_PREFIXES.some((p) => config.url?.startsWith(p))) {
+    config.params = { ...config.params, workspaceId }
+  }
   return config
 })
 

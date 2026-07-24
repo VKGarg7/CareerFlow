@@ -27,6 +27,7 @@ public class WorkspaceResponse {
     private Integer goalInterviewsTarget;
     private Integer goalOffersTarget;
     private WorkspaceStatus status;
+    private Boolean isDefault;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

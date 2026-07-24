@@ -25,9 +25,9 @@ public class InterviewService {
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
 
-    public InterviewResponse create(Long applicationId, InterviewRequest request) {
+    public InterviewResponse create(Long applicationId, InterviewRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        JobApplication application = findOwnedApplication(applicationId, user.getId());
+        JobApplication application = findOwnedApplication(applicationId, user.getId(), workspaceId);
 
         Interview interview = Interview.builder()
                 .application(application)
@@ -47,9 +47,9 @@ public class InterviewService {
         return toResponse(interview);
     }
 
-    public List<InterviewResponse> getForApplication(Long applicationId) {
+    public List<InterviewResponse> getForApplication(Long applicationId, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        findOwnedApplication(applicationId, user.getId());
+        findOwnedApplication(applicationId, user.getId(), workspaceId);
         return interviewRepository
                 .findAllByUserIdAndApplicationIdOrderByScheduledAtAsc(user.getId(), applicationId)
                 .stream().map(this::toResponse).toList();
@@ -86,8 +86,8 @@ public class InterviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Interview not found"));
     }
 
-    private JobApplication findOwnedApplication(Long applicationId, Long userId) {
-        return applicationRepository.findByIdAndUserId(applicationId, userId)
+    private JobApplication findOwnedApplication(Long applicationId, Long userId, Long workspaceId) {
+        return applicationRepository.findByIdAndUserIdAndWorkspaceId(applicationId, userId, workspaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
     }
 

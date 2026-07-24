@@ -46,6 +46,7 @@ class FollowUpServiceTest {
 
     private User currentUser;
     private JobApplication application;
+    private static final Long WORKSPACE_ID = 99L;
 
     @BeforeEach
     void setUp() {
@@ -62,11 +63,11 @@ class FollowUpServiceTest {
     @Test
     void createFollowUp_throwsResourceNotFoundException_whenApplicationNotOwned() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(applicationRepository.findByIdAndUserId(50L, 1L)).thenReturn(Optional.empty());
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.empty());
 
         FollowUpRequest request = new FollowUpRequest();
 
-        assertThatThrownBy(() -> followUpService.createFollowUp(50L, request))
+        assertThatThrownBy(() -> followUpService.createFollowUp(50L, request, WORKSPACE_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(followUpRepository, never()).save(any());
@@ -75,7 +76,7 @@ class FollowUpServiceTest {
     @Test
     void createFollowUp_savesFollowUp_whenApplicationOwned() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(applicationRepository.findByIdAndUserId(50L, 1L)).thenReturn(Optional.of(application));
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
         when(followUpRepository.save(any(FollowUp.class))).thenAnswer(invocation -> {
             FollowUp followUp = invocation.getArgument(0);
             followUp.setId(9L);
@@ -86,7 +87,7 @@ class FollowUpServiceTest {
         request.setFollowUpDate(LocalDate.now().plusDays(3));
         request.setNote("Ping recruiter");
 
-        FollowUpResponse response = followUpService.createFollowUp(50L, request);
+        FollowUpResponse response = followUpService.createFollowUp(50L, request, WORKSPACE_ID);
 
         assertThat(response.getId()).isEqualTo(9L);
         assertThat(response.getNote()).isEqualTo("Ping recruiter");
@@ -96,27 +97,27 @@ class FollowUpServiceTest {
     void getAllFollowUps_usesBucketQuery_onlyWhenStatusIsPending() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
         Page<FollowUp> emptyPage = new PageImpl<>(List.of());
-        when(followUpRepository.findAllByUserIdAndStatusAndFollowUpDateBefore(eq(1L), eq(FollowUpStatus.PENDING), any(LocalDate.class), any(Pageable.class)))
+        when(followUpRepository.findAllByUserIdAndStatusAndFollowUpDateBefore(eq(1L), eq(WORKSPACE_ID), eq(FollowUpStatus.PENDING), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
         PageResponse<FollowUpResponse> response =
-                followUpService.getAllFollowUps(null, FollowUpStatus.PENDING, FollowUpBucket.OVERDUE, 0, 10);
+                followUpService.getAllFollowUps(null, FollowUpStatus.PENDING, FollowUpBucket.OVERDUE, 0, 10, WORKSPACE_ID);
 
         assertThat(response.getContent()).isEmpty();
-        verify(followUpRepository).findAllByUserIdAndStatusAndFollowUpDateBefore(eq(1L), eq(FollowUpStatus.PENDING), any(LocalDate.class), any(Pageable.class));
+        verify(followUpRepository).findAllByUserIdAndStatusAndFollowUpDateBefore(eq(1L), eq(WORKSPACE_ID), eq(FollowUpStatus.PENDING), any(LocalDate.class), any(Pageable.class));
     }
 
     @Test
     void getAllFollowUps_ignoresBucket_whenStatusIsNotPending() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
         Page<FollowUp> emptyPage = new PageImpl<>(List.of());
-        when(followUpRepository.findAllByUserIdAndStatusOrderByFollowUpDateAsc(eq(1L), eq(FollowUpStatus.DONE), any(Pageable.class)))
+        when(followUpRepository.findAllByUserIdAndStatusOrderByFollowUpDateAsc(eq(1L), eq(WORKSPACE_ID), eq(FollowUpStatus.DONE), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
-        followUpService.getAllFollowUps(null, FollowUpStatus.DONE, FollowUpBucket.OVERDUE, 0, 10);
+        followUpService.getAllFollowUps(null, FollowUpStatus.DONE, FollowUpBucket.OVERDUE, 0, 10, WORKSPACE_ID);
 
-        verify(followUpRepository).findAllByUserIdAndStatusOrderByFollowUpDateAsc(eq(1L), eq(FollowUpStatus.DONE), any(Pageable.class));
-        verify(followUpRepository, never()).findAllByUserIdAndStatusAndFollowUpDateBefore(any(), any(), any(), any());
+        verify(followUpRepository).findAllByUserIdAndStatusOrderByFollowUpDateAsc(eq(1L), eq(WORKSPACE_ID), eq(FollowUpStatus.DONE), any(Pageable.class));
+        verify(followUpRepository, never()).findAllByUserIdAndStatusAndFollowUpDateBefore(any(), any(), any(), any(), any());
     }
 
     @Test

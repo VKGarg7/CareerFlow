@@ -22,14 +22,17 @@ public class FollowUpController {
     @PostMapping("/api/applications/{applicationId}/follow-ups")
     public ResponseEntity<FollowUpResponse> create(
             @PathVariable Long applicationId,
-            @Valid @RequestBody FollowUpRequest request) {
+            @Valid @RequestBody FollowUpRequest request,
+            @RequestParam Long workspaceId) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(followUpService.createFollowUp(applicationId, request));
+                .body(followUpService.createFollowUp(applicationId, request, workspaceId));
     }
 
     @GetMapping("/api/applications/{applicationId}/follow-ups")
-    public ResponseEntity<List<FollowUpResponse>> getForApplication(@PathVariable Long applicationId) {
-        return ResponseEntity.ok(followUpService.getFollowUpsForApplication(applicationId));
+    public ResponseEntity<List<FollowUpResponse>> getForApplication(
+            @PathVariable Long applicationId,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(followUpService.getFollowUpsForApplication(applicationId, workspaceId));
     }
 
     @GetMapping("/api/follow-ups")
@@ -38,19 +41,21 @@ public class FollowUpController {
             @RequestParam(required = false) FollowUpStatus status,
             @RequestParam(required = false) FollowUpBucket bucket,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(followUpService.getAllFollowUps(companyId, status, bucket, page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(followUpService.getAllFollowUps(companyId, status, bucket, page, size, workspaceId));
     }
 
     @GetMapping("/api/follow-ups/counts")
-    public ResponseEntity<FollowUpCountsResponse> getCounts() {
-        return ResponseEntity.ok(followUpService.getFollowUpCounts());
+    public ResponseEntity<FollowUpCountsResponse> getCounts(@RequestParam Long workspaceId) {
+        return ResponseEntity.ok(followUpService.getFollowUpCounts(workspaceId));
     }
 
     @GetMapping("/api/follow-ups/upcoming")
     public ResponseEntity<List<FollowUpResponse>> getUpcoming(
-            @RequestParam(defaultValue = "7") int withinDays) {
-        return ResponseEntity.ok(followUpService.getUpcomingFollowUps(withinDays));
+            @RequestParam(defaultValue = "7") int withinDays,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(followUpService.getUpcomingFollowUps(withinDays, workspaceId));
     }
 
     @PatchMapping("/api/follow-ups/{id}")
