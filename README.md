@@ -1,72 +1,229 @@
 <div align="center">
 
-# 🧭 CareerFlow
+<img src="docs/assets/banner.svg" alt="CareerFlow — job search, run like a pipeline" width="100%" />
 
-**A full-stack job search command center** — track companies, applications, interviews, recruiters, referrals, and follow-ups in one clean dashboard.
+<br><br>
 
-[![CI](https://github.com/VKGarg7/CareerFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/VKGarg7/CareerFlow/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-415%20passing-brightgreen)](#-testing)
-[![Java](https://img.shields.io/badge/Java-17-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#)
+<p>
+  <a href="https://github.com/VKGarg7/CareerFlow/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/VKGarg7/CareerFlow/actions/workflows/ci.yml/badge.svg" /></a>
+  <img alt="Tests" src="https://img.shields.io/badge/tests-415%20passing-2EA043?style=flat-square" />
+  <img alt="Java" src="https://img.shields.io/badge/Java-17-2EA043?style=flat-square&logo=openjdk&logoColor=white" />
+  <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-3.3-2EA043?style=flat-square&logo=springboot&logoColor=white" />
+  <img alt="React" src="https://img.shields.io/badge/React-19-2EA043?style=flat-square&logo=react&logoColor=white" />
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-14+-2EA043?style=flat-square&logo=postgresql&logoColor=white" />
+</p>
 
-[Features](#-features) • [Tech Stack](#-tech-stack) • [Getting Started](#-getting-started) • [Testing](#-testing) • [API Docs](#-api-overview) • [Deployment](#-deployment)
+### 🌐 [**Launch the live app**](https://career-flow-chi.vercel.app/) &nbsp;·&nbsp; 📘 [API docs](https://careerflow-backend-ravi.onrender.com/swagger-ui/index.html)
 
-🌐 **[Live App](https://YOUR-VERCEL-URL.vercel.app)** · 📘 **[Live API Docs (Swagger)](https://careerflow-backend-ravi.onrender.com/swagger-ui/index.html)**
+<sub>Backend sleeps after inactivity on Render's free tier — first request may take ~30s to wake it.</sub>
 
-> ℹ️ The backend runs on Render's free tier — the first request after a period of inactivity may take ~30s while the instance wakes up.
+<br>
+
+[Features](#-features) · [Tech Stack](#-tech-stack) · [Getting Started](#-getting-started) · [Testing](#-testing) · [API](#-api-overview) · [Deployment](#️-deployment)
 
 </div>
+
+<br>
 
 ---
 
 ## 📖 Overview
 
-CareerFlow is a personal career management tool built for job seekers who want to stay organized during their search. Instead of juggling spreadsheets and sticky notes, CareerFlow gives you a centralized dashboard to track every company you're targeting, every application you've submitted, every interview round, and every recruiter or referral contact you've spoken with — with real-time status updates and a clean, intuitive UI.
+Job hunting is a pipeline, not a to-do list — a lead has to move through **targeting → applied → interviewing → offer** before it means anything, and most people track that with a spreadsheet that rots after week two.
+
+CareerFlow treats the search itself like a system: every company is a stage, every application a state machine, every recruiter thread and follow-up a node that either advances or goes stale. One dashboard, real-time status, nothing falls through the cracks.
+
+```mermaid
+flowchart LR
+    A["🎯 Targeting"] -->|apply| B["📝 Applied"]
+    B -->|OA / phone screen| C["🎤 Interviewing"]
+    C -->|final round| D{"Decision"}
+    D -->|"🎉"| E["✅ Offer"]
+    D -->|"—"| F["❌ Rejected"]
+
+    classDef targeting fill:#132420,stroke:#2A4A38,color:#D8E6DF
+    classDef applied fill:#1E2612,stroke:#4A4A2A,color:#E6E2D8
+    classDef interviewing fill:#15271F,stroke:#39D98A,color:#EAF6EF
+    classDef decision fill:#0F1B17,stroke:#2A4A38,color:#9FB8AC
+    classDef offer fill:#123321,stroke:#39D98A,color:#7FE3AC
+    classDef rejected fill:#2A1414,stroke:#5A2A2A,color:#C99
+
+    class A targeting
+    class B applied
+    class C interviewing
+    class D decision
+    class E offer
+    class F rejected
+```
 
 ---
 
 ## ✨ Features
 
+#### The pipeline
+
+<table>
+<tr>
+<td width="25%" valign="top">
+
+**🏢 Company Tracking**
+Full pipeline: `Targeting → Applied → Interviewing → Offer / Rejected`
+
+</td>
+<td width="25%" valign="top">
+
+**📝 Applications**
+Granular statuses (`OA Scheduled`, `Interview Cleared`, `Offer Received`) + source (`LinkedIn`, `Referral`, `Naukri`)
+
+</td>
+<td width="25%" valign="top">
+
+**🎤 Interviews**
+Every round logged with timelines, notes, and outcomes
+
+</td>
+<td width="25%" valign="top">
+
+**⏰ Follow-Ups**
+Nothing pending goes unnoticed
+
+</td>
+</tr>
+</table>
+
+#### The network
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**🤝 Recruiters**
+Track every recruiter conversation and its status
+
+</td>
+<td width="33%" valign="top">
+
+**🔗 Referrals**
+Log referral requests and outcomes
+
+</td>
+<td width="33%" valign="top">
+
+**👤 Profile**
+Education, experience, projects, resume & cover letters
+
+</td>
+</tr>
+</table>
+
+#### Underneath it all
+
 | | |
 |---|---|
-| 🔐 **Authentication** | JWT login/signup + Google, GitHub & LinkedIn OAuth2 social sign-in, BCrypt hashing, token blacklisting on logout, password reset via email |
-| 📊 **Dashboard** | At-a-glance summary of your job search progress |
-| 🏢 **Company Tracking** | Full pipeline: `Targeting → Applied → Interviewing → Offer / Rejected` |
-| 📝 **Application Management** | Detailed statuses (`OA Scheduled`, `Interview Cleared`, `Offer Received`) & source (`LinkedIn`, `Referral`, `Naukri`) |
-| 🎤 **Interview Management** | Interview rounds with timelines, notes, and outcomes |
-| 🤝 **Recruiter Contacts** | Manage recruiter interactions with notes and status tracking |
-| 🔗 **Referrals** | Track referral requests and their outcomes |
-| ⏰ **Follow-Ups** | Keep on top of pending follow-up actions |
-| 👤 **Profile Management** | Education, experience, projects, resume & cover letter uploads |
-| 📁 **Document Storage** | Upload and retrieve resume and cover letter files |
-| 🕓 **Activity Log** | Full audit trail of actions across the platform |
-| 🛠️ **Admin Dashboard** | Role-based access, user management, audit logging, system health monitoring |
-| ♻️ **Soft Deletes** | Nothing is permanently lost; deleted records are safely archived |
+| 🔐 **Auth** | JWT + Google / GitHub / LinkedIn OAuth2, BCrypt hashing, token blacklisting on logout, email-based password reset |
+| 📊 **Dashboard** | At-a-glance summary of your entire search |
+| 📁 **Document Storage** | Upload and retrieve resumes & cover letters |
+| 🕓 **Activity Log** | Full audit trail across the platform |
+| 🛠️ **Admin Dashboard** | Role-based access, user management, system health monitoring |
+| ♻️ **Soft Deletes** | Nothing is permanently lost — everything's recoverable |
 
 ---
 
 ## 🧱 Tech Stack
 
-<div align="center">
+<table>
+<tr>
+<td width="18%"><strong>Frontend</strong></td>
+<td>
 
-| Layer | Technology |
-|:---:|:---|
-| **Frontend** | React 19 · Vite · Tailwind CSS · Material-UI |
-| **Backend** | Spring Boot 3.3 · Java 17 |
-| **Database** | PostgreSQL |
-| **Auth** | JWT (jjwt 0.12.6) · OAuth2 (Google / GitHub / LinkedIn) · BCrypt |
-| **API Docs** | Swagger / SpringDoc OpenAPI |
-| **HTTP Client** | Axios |
-| **Testing** | JUnit 5 · Mockito · AssertJ (backend) · Vitest · React Testing Library (frontend) |
-| **CI/CD** | GitHub Actions (build + full test suite on every push/PR) |
-| **Build Tools** | Maven (backend) · npm (frontend) |
+![React](https://img.shields.io/badge/React_19-15271F?style=flat-square&logo=react&logoColor=61DAFB)
+![Vite](https://img.shields.io/badge/Vite_5-15271F?style=flat-square&logo=vite&logoColor=BD93F9)
+![Tailwind](https://img.shields.io/badge/Tailwind_CSS-15271F?style=flat-square&logo=tailwindcss&logoColor=38BDF8)
+![MUI](https://img.shields.io/badge/Material_UI-15271F?style=flat-square&logo=mui&logoColor=61DAFB)
+![Axios](https://img.shields.io/badge/Axios-15271F?style=flat-square&logo=axios&logoColor=5A29E4)
 
-</div>
+</td>
+</tr>
+<tr>
+<td><strong>Backend</strong></td>
+<td>
+
+![Java](https://img.shields.io/badge/Java_17-15271F?style=flat-square&logo=openjdk&logoColor=ED8B00)
+![Spring](https://img.shields.io/badge/Spring_Boot_3.3-15271F?style=flat-square&logo=springboot&logoColor=6DB33F)
+![JWT](https://img.shields.io/badge/JWT-15271F?style=flat-square&logo=jsonwebtokens&logoColor=D63AFF)
+![OAuth2](https://img.shields.io/badge/OAuth2-15271F?style=flat-square&logo=auth0&logoColor=EB5424)
+![Swagger](https://img.shields.io/badge/OpenAPI-15271F?style=flat-square&logo=swagger&logoColor=85EA2D)
+
+</td>
+</tr>
+<tr>
+<td><strong>Data</strong></td>
+<td>
+
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL_14+-15271F?style=flat-square&logo=postgresql&logoColor=4169E1)
+
+</td>
+</tr>
+<tr>
+<td><strong>Testing</strong></td>
+<td>
+
+![JUnit5](https://img.shields.io/badge/JUnit_5-15271F?style=flat-square&logo=junit5&logoColor=25A162)
+![Mockito](https://img.shields.io/badge/Mockito-15271F?style=flat-square&logo=mockito&logoColor=C5D93E)
+![Vitest](https://img.shields.io/badge/Vitest-15271F?style=flat-square&logo=vitest&logoColor=6E9F18)
+![RTL](https://img.shields.io/badge/Testing_Library-15271F?style=flat-square&logo=testinglibrary&logoColor=E33332)
+
+</td>
+</tr>
+<tr>
+<td><strong>Tooling</strong></td>
+<td>
+
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-15271F?style=flat-square&logo=githubactions&logoColor=2088FF)
+![Maven](https://img.shields.io/badge/Maven-15271F?style=flat-square&logo=apachemaven&logoColor=C71A36)
+![npm](https://img.shields.io/badge/npm-15271F?style=flat-square&logo=npm&logoColor=CB3837)
+
+</td>
+</tr>
+</table>
+
+<details>
+<summary><strong>How the pieces fit together</strong></summary>
+<br>
+
+```mermaid
+flowchart TB
+    subgraph client["🖥️ Client"]
+        UI["React 19 + Vite\nTailwind · MUI"]
+    end
+
+    subgraph api["☕ API — Spring Boot 3.3"]
+        SEC["Security Filter Chain\nJWT · OAuth2"]
+        CTRL["REST Controllers"]
+        SVC["Services\nbusiness rules, ownership"]
+    end
+
+    subgraph ext["🔑 Social Login"]
+        GOOG["Google"]
+        GH["GitHub"]
+        LI["LinkedIn"]
+    end
+
+    DB[("🐘 PostgreSQL")]
+    MAIL["✉️ SMTP\npassword reset"]
+
+    UI -- "Axios / REST + JWT" --> SEC
+    SEC --> CTRL --> SVC --> DB
+    SEC -. "OAuth2 handshake" .-> GOOG & GH & LI
+    SVC -. "reset link" .-> MAIL
+
+    classDef box fill:#132420,stroke:#2A4A38,color:#D8E6DF
+    classDef hot fill:#123321,stroke:#39D98A,color:#7FE3AC
+    class UI,CTRL,SVC,SEC,MAIL box
+    class DB hot
+```
+
+</details>
 
 ---
 
@@ -230,6 +387,10 @@ Issues and pull requests are welcome. Please open an issue to discuss significan
 
 <div align="center">
 
-Made with ☕ and late-night debugging.
+<br>
+
+**Made with ☕ and late-night debugging.**
+
+<sub>If CareerFlow helped you land the offer, a ⭐ on the repo goes a long way.</sub>
 
 </div>
