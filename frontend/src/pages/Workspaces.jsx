@@ -2,18 +2,17 @@ import React, { useState, useCallback, useMemo } from 'react'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
-  Search, KeyboardArrowDown, CalendarTodayOutlined, PlaceOutlined,
+  Search, CalendarTodayOutlined, PlaceOutlined,
   EditOutlined, DeleteOutlineRounded, VisibilityOutlined, FolderOutlined,
-  FilterListRounded,
+  AutoAwesomeRounded,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
 import Pagination from '../components/Pagination'
-import StatTilesBar from '../components/StatTilesBar'
+import WorkspaceStatCards from '../components/WorkspaceStatCards'
 import { ConfirmDeleteModal } from '../components/ModalShell'
 import { getWorkspaces, addWorkspace, updateWorkspace, deleteWorkspace } from '../api/workspace'
 import EmptyState from '../components/EmptyState'
-import SharedStatusBadge from '../components/StatusBadge'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import WorkspaceDetailModal from '../components/WorkspaceDetailModal'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
@@ -102,11 +101,6 @@ function toPayload(form) {
     goalOffersTarget: numOrNull(form.goalOffersTarget),
     status: form.status,
   }
-}
-
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.ACTIVE
-  return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
 function WorkspaceStatusChanger({ workspace, onStatusChanged }) {
@@ -245,16 +239,9 @@ function WorkspaceDirectoryCard({ workspace, onEdit, onDelete, onView, onStatusC
 }
 
 function AddEditModal({ open, workspace, onClose, onSaved }) {
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [form, setForm] = useState(() => toFormState(workspace))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  React.useEffect(() => {
-    if (open) {
-      setForm(toFormState(workspace))
-      setError('')
-    }
-  }, [open, workspace])
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
@@ -427,6 +414,14 @@ function DeleteModal({ open, workspace, onClose, onDeleted }) {
   )
 }
 
+const STATUS_TABS = [
+  { value: '',          label: 'All' },
+  { value: 'ACTIVE',    label: 'Active' },
+  { value: 'PAUSED',    label: 'Paused' },
+  { value: 'ARCHIVED',  label: 'Archived' },
+  { value: 'COMPLETED', label: 'Completed' },
+]
+
 export default function Workspaces() {
   const [success, setSuccess] = useTransientMessage()
 
@@ -435,13 +430,12 @@ export default function Workspaces() {
   const [workModeFilter, setWorkModeFilter] = useState('')
   const [sortBy, setSortBy] = useState('createdAt')
   const [order, setOrder] = useState('desc')
-  const [viewMode, setViewMode] = useState('list')
-  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [viewMode, setViewMode] = useState('grid')
   const searchInputRef = React.useRef(null)
 
   const {
     items: workspaces, setItems: setWorkspaces, loading, error, setError,
-    page, setPage, size, setSize, refetch: fetchWorkspaces,
+    setPage, setSize, refetch: fetchWorkspaces,
   } = usePagedList(
     useCallback(
       (page, size) => getWorkspaces({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
@@ -474,7 +468,7 @@ export default function Workspaces() {
     setWorkspaces(prev => prev.map(w => w.id === updated.id ? updated : w))
   }
 
-  const { activeFilterCount, isFiltered, clearAllFilters } = useFilterState(search, setSearch, [
+  const { isFiltered, clearAllFilters } = useFilterState(search, setSearch, [
     [statusFilter, setStatusFilter],
     [workModeFilter, setWorkModeFilter],
   ])
@@ -484,85 +478,82 @@ export default function Workspaces() {
   const drawerOpen = modalOpen || viewId !== null
 
   return (
-    <Layout
-      drawerOpen={drawerOpen}
-      headerAction={<HeaderAddButton label="Add Workspace" onClick={openAdd} drawerOpen={drawerOpen} />}
-    >
+    <Layout drawerOpen={drawerOpen}>
       <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
       <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
       <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
-      {!loading && workspaces.length > 0 && (
-        <div className="mb-8">
-          <StatTilesBar
-            items={workspaces}
-            statusConfig={STATUS_CONFIG}
-            activeFilter={statusFilter}
-            onFilter={setStatusFilter}
-            totalLabel="Total Workspaces"
-            totalIcon={<FolderOutlined sx={{ fontSize: 18 }} />}
-            compact={drawerOpen}
-          />
+      <div className={`flex gap-4 mb-8 ${drawerOpen ? 'flex-col items-stretch' : 'flex-wrap items-center justify-between'}`}>
+        <div>
+          <h1 className="font-display text-[32px] font-bold text-white leading-none flex items-center gap-2 tracking-tight">
+            Workspaces
+            <AutoAwesomeRounded sx={{ fontSize: 22 }} className="text-app-accent-soft" />
+          </h1>
+          <p className="text-sm text-[#8E93A8] mt-2">Organize your career journey, your way</p>
         </div>
-      )}
 
-      <div className="flex flex-col gap-4 mb-8">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[14rem]">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted pointer-events-none flex">
+        <div className={`flex items-center gap-3 ${drawerOpen ? 'flex-wrap' : ''}`}>
+          <div className={`relative max-w-full ${drawerOpen ? 'flex-1 min-w-[200px]' : 'w-[280px]'}`}>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7E819B] pointer-events-none flex">
               <Search fontSize="small" />
             </span>
             <input ref={searchInputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search workspaces..."
-              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-app-text bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-app-text-muted/80" />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-app-text-muted pointer-events-none">
+              className="w-full h-11 pl-11 pr-14 border border-white/[0.08] rounded-xl text-sm text-white bg-[rgba(28,28,50,0.8)] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.16] transition placeholder:text-[#7E819B]" />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-black/30 border border-white/[0.08] text-[10px] font-medium text-white/40 pointer-events-none">
               ⌘K
             </span>
           </div>
 
-          <button onClick={() => setFiltersOpen((o) => !o)}
-            className={`h-11 px-4 flex items-center gap-2 border rounded-xl text-sm font-medium transition whitespace-nowrap ${
-              filtersOpen || activeFilterCount > 0
-                ? 'border-app-accent/40 bg-app-accent/10 text-app-accent-soft'
-                : 'border-white/[0.06] bg-white/[0.03] text-app-text-soft hover:bg-white/[0.05] hover:border-white/[0.12]'
-            }`}>
-            <FilterListRounded fontSize="small" />
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-app-accent text-white text-[11px] font-bold leading-none">
-                {activeFilterCount}
-              </span>
-            )}
-            <KeyboardArrowDown fontSize="small" className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
-          </button>
+          <HeaderAddButton label="Create Workspace" onClick={openAdd} drawerOpen={drawerOpen} />
+        </div>
+      </div>
 
-          {isFiltered && (
-            <button onClick={clearAllFilters}
-              className="text-sm font-medium text-app-accent-soft hover:text-white transition whitespace-nowrap">
-              Clear All
-            </button>
-          )}
+      {!loading && workspaces.length > 0 && (
+        <div className="mb-6">
+          <WorkspaceStatCards
+            items={workspaces}
+            statusConfig={STATUS_CONFIG}
+            activeFilter={statusFilter}
+            onFilter={setStatusFilter}
+          />
+        </div>
+      )}
 
-          <div className="ml-auto">
-            <ViewToggle value={viewMode} onChange={setViewMode} />
-          </div>
+      <div className="flex flex-wrap items-center gap-3 mb-8">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+          {STATUS_TABS.map((tab) => {
+            const count = tab.value === '' ? workspaces.length : (workspaces.filter((w) => w.status === tab.value).length)
+            const isActive = statusFilter === tab.value
+            return (
+              <button key={tab.value} onClick={() => setStatusFilter(tab.value)}
+                className={`h-9 px-4 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+                  isActive ? 'bg-app-accent text-white shadow-glow shadow-app-accent/30' : 'text-white/50 hover:text-white hover:bg-white/[0.05]'
+                }`}>
+                {tab.label} ({count})
+              </button>
+            )
+          })}
         </div>
 
-        {filtersOpen && (
-          <div className="flex flex-wrap items-center gap-3">
-            <FilterSelect value={statusFilter} onChange={setStatusFilter} allLabel="All Statuses" className="flex-1 min-w-[7rem]"
-              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))} />
-            <FilterSelect value={workModeFilter} onChange={setWorkModeFilter} allLabel="All Work Modes" className="flex-1 min-w-[7rem]"
-              options={WORK_MODE_OPTIONS} />
+        <FilterSelect value={workModeFilter} onChange={setWorkModeFilter} allLabel="All Work Modes" className="min-w-[9rem]"
+          options={WORK_MODE_OPTIONS} />
+        <FilterSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} hideAll className="min-w-[9rem]" />
+        <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+          className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-app-text-soft hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap">
+          {order === 'desc' ? '↓ Desc' : '↑ Asc'}
+        </button>
 
-            <FilterSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} hideAll className="flex-1 min-w-[7rem]" />
-
-            <button onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
-              className="h-11 px-4 border border-white/[0.06] rounded-xl text-sm font-medium text-app-text-soft hover:bg-white/[0.05] hover:border-white/[0.12] transition bg-white/[0.03] whitespace-nowrap">
-              {order === 'desc' ? '↓ Desc' : '↑ Asc'}
-            </button>
-          </div>
+        {isFiltered && (
+          <button onClick={clearAllFilters}
+            className="text-sm font-medium text-app-accent-soft hover:text-white transition whitespace-nowrap">
+            Clear All
+          </button>
         )}
+
+        <div className="ml-auto">
+          <ViewToggle value={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
       {loading ? (
@@ -609,7 +600,7 @@ export default function Workspaces() {
       )}
       </div>
 
-      <AddEditModal open={modalOpen} workspace={editTarget}
+      <AddEditModal key={modalOpen ? (editTarget?.id ?? 'new') : 'closed'} open={modalOpen} workspace={editTarget}
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
       <DeleteModal open={!!deleteTarget} workspace={deleteTarget}
         onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />

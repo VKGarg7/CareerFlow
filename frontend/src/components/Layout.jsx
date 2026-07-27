@@ -44,16 +44,18 @@ const QUICK_ACTIONS = [
   { to: '/referrals?add=1',    Icon: HandshakeOutlined,      label: 'New Referral',    key: 'N' },
 ]
 
-function Brand({ onNavigate }) {
+function Brand({ onNavigate, iconOnly = false }) {
   return (
     <Link to="/dashboard" onClick={onNavigate}
       className="group flex items-center gap-2.5 rounded-xl transition-transform active:scale-[0.98]">
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-app-accent to-app-accent2 shadow-[0_2px_12px_-2px_rgba(99,102,241,0.55)] transition-shadow duration-200 group-hover:shadow-[0_4px_18px_-2px_rgba(99,102,241,0.75)]">
         <span className="font-display text-[11px] font-bold tracking-tight text-white">CF</span>
       </div>
-      <div className="leading-tight">
-        <p className="font-display text-[13px] font-semibold text-white">CareerFlow</p>
-      </div>
+      {!iconOnly && (
+        <div className="leading-tight">
+          <p className="font-display text-[13px] font-semibold text-white">CareerFlow</p>
+        </div>
+      )}
     </Link>
   )
 }
@@ -322,18 +324,20 @@ export default function Layout({ children, headerAction, drawerOpen = false }) {
           <button onClick={() => setMobileOpen(true)} className="rounded-lg p-1.5 text-white/50 transition hover:bg-white/[0.08] hover:text-white">
             <Menu fontSize="small" />
           </button>
-          <Brand />
+          <Brand iconOnly />
         </header>
 
-        <header className={`sticky top-0 z-20 hidden h-20 items-center justify-between gap-4 px-8 lg:flex transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
-          <div className="min-w-0">
-            <h1 className="font-display text-[30px] font-bold leading-tight tracking-tight text-app-text truncate">{meta.title}</h1>
-            {meta.sub && <p className="mt-1 text-sm text-app-text-muted truncate">{meta.sub}</p>}
-          </div>
-          <div className={location.pathname === '/dashboard' && headerAction ? 'min-w-0 flex-1 max-w-xl' : 'shrink-0'}>
-            {headerAction || (location.pathname === '/dashboard' && <UserChip />)}
-          </div>
-        </header>
+        {location.pathname !== '/workspaces' && (
+          <header className={`sticky top-0 z-20 hidden h-20 items-center justify-between gap-4 px-8 lg:flex transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
+            <div className="min-w-0">
+              <h1 className="font-display text-[30px] font-bold leading-tight tracking-tight text-app-text truncate">{meta.title}</h1>
+              {meta.sub && <p className="mt-1 text-sm text-app-text-muted truncate">{meta.sub}</p>}
+            </div>
+            <div className={location.pathname === '/dashboard' && headerAction ? 'min-w-0 flex-1 max-w-xl' : 'shrink-0'}>
+              {headerAction || (location.pathname === '/dashboard' && <UserChip />)}
+            </div>
+          </header>
+        )}
 
         <main className="mx-auto w-full max-w-[84rem] flex-1 px-8 pb-10 pt-2">
           {headerAction && <div className="mb-6 flex flex-wrap justify-end gap-2 lg:hidden">{headerAction}</div>}
