@@ -58,6 +58,12 @@ spring.security.oauth2.client.provider.linkedin.user-info-uri=https://api.linked
 spring.security.oauth2.client.provider.linkedin.jwk-set-uri=https://www.linkedin.com/oauth/openid/jwks
 spring.security.oauth2.client.provider.linkedin.user-name-attribute=sub
 
+# Gemini (interview prep chatbot)
+gemini.api-key=${GEMINI_API_KEY:}
+gemini.model=${GEMINI_MODEL:gemini-flash-latest}
+gemini.max-tokens=${GEMINI_MAX_TOKENS:1024}
+chat.rate-limit.max-messages-per-day=${CHAT_RATE_LIMIT_MAX_MESSAGES_PER_DAY:40}
+
 # Actuator
 management.endpoints.web.exposure.include=health,info
 management.endpoint.health.show-details=always
