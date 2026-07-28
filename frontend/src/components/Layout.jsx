@@ -9,6 +9,7 @@ import {
 } from '@mui/icons-material'
 import { useProfile } from '../context/ProfileContext'
 import { profileInitial } from '../utils/followup'
+import ChatWidgetButton from './ChatWidgetButton'
 
 const PAGE_META = {
   '/dashboard':    { title: 'Dashboard',    sub: 'Your job search, at a glance' },
@@ -276,6 +277,8 @@ export default function Layout({ children, headerAction, drawerOpen = false }) {
           {children}
         </main>
       </div>
+
+      <ChatWidgetButton />
     </div>
   )
 }

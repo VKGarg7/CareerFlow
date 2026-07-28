@@ -6,11 +6,12 @@
 
 <p>
   <a href="https://github.com/VKGarg7/CareerFlow/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/VKGarg7/CareerFlow/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="Tests" src="https://img.shields.io/badge/tests-415%20passing-2EA043?style=flat-square" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-462%20passing-2EA043?style=flat-square" />
   <img alt="Java" src="https://img.shields.io/badge/Java-17-2EA043?style=flat-square&logo=openjdk&logoColor=white" />
   <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-3.3-2EA043?style=flat-square&logo=springboot&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-2EA043?style=flat-square&logo=react&logoColor=white" />
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-14+-2EA043?style=flat-square&logo=postgresql&logoColor=white" />
+  <img alt="Gemini" src="https://img.shields.io/badge/Gemini_API-2EA043?style=flat-square&logo=googlegemini&logoColor=white" />
 </p>
 
 ### 🌐 [**Launch the live app**](https://career-flow-chi.vercel.app/) &nbsp;·&nbsp; 📘 [API docs](https://careerflow-backend-ravi.onrender.com/swagger-ui/index.html)
@@ -116,6 +117,19 @@ Education, experience, projects, resume & cover letters
 </tr>
 </table>
 
+#### The AI layer
+
+<table>
+<tr>
+<td width="100%" valign="top">
+
+**🤖 AI Interview Prep Chatbot**
+Gemini-powered assistant grounded in your profile, target application, target company, and past interview notes — mock Q&A, resume/answer feedback, and company-specific prep, in multi-session chat threads with per-user daily rate limiting
+
+</td>
+</tr>
+</table>
+
 #### Underneath it all
 
 | | |
@@ -153,6 +167,14 @@ Education, experience, projects, resume & cover letters
 ![JWT](https://img.shields.io/badge/JWT-15271F?style=flat-square&logo=jsonwebtokens&logoColor=D63AFF)
 ![OAuth2](https://img.shields.io/badge/OAuth2-15271F?style=flat-square&logo=auth0&logoColor=EB5424)
 ![Swagger](https://img.shields.io/badge/OpenAPI-15271F?style=flat-square&logo=swagger&logoColor=85EA2D)
+
+</td>
+</tr>
+<tr>
+<td><strong>AI</strong></td>
+<td>
+
+![Gemini](https://img.shields.io/badge/Google_Gemini_API-15271F?style=flat-square&logo=googlegemini&logoColor=8E75B2)
 
 </td>
 </tr>
@@ -209,6 +231,10 @@ flowchart TB
         LI["LinkedIn"]
     end
 
+    subgraph ai["🤖 AI Chat"]
+        GEMINI["Gemini API\ngenerateContent"]
+    end
+
     DB[("🐘 PostgreSQL")]
     MAIL["✉️ SMTP\npassword reset"]
 
@@ -216,11 +242,12 @@ flowchart TB
     SEC --> CTRL --> SVC --> DB
     SEC -. "OAuth2 handshake" .-> GOOG & GH & LI
     SVC -. "reset link" .-> MAIL
+    SVC -- "system prompt + history" --> GEMINI
 
     classDef box fill:#132420,stroke:#2A4A38,color:#D8E6DF
     classDef hot fill:#123321,stroke:#39D98A,color:#7FE3AC
     class UI,CTRL,SVC,SEC,MAIL box
-    class DB hot
+    class DB,GEMINI hot
 ```
 
 </details>
@@ -241,6 +268,7 @@ CareerFlow/
 │       ├── recruiter/                # Recruiter contact management
 │       ├── referral/                 # Referral tracking
 │       ├── followup/                 # Follow-up reminders
+│       ├── chatbot/                  # AI interview prep chat (Gemini client, sessions, messages)
 │       ├── document/                 # File upload/download
 │       ├── admin/                    # Admin dashboard & user management
 │       ├── audit/                    # Audit logging
@@ -252,7 +280,7 @@ CareerFlow/
 └── frontend/                         # React + Vite application
     └── src/
         ├── pages/                    # Login, Dashboard, Companies, Applications, Interviews, Recruiters, Referrals, FollowUps, Profile, Admin, Activity
-        ├── components/               # Shared UI components (Layout, StatusBadge, etc.)
+        ├── components/               # Shared UI components (Layout, StatusBadge, ChatPanel, etc.)
         ├── api/                      # Axios API client modules
         ├── hooks/                    # Custom hooks (pagination, filters, modals, shortcuts)
         ├── context/                  # ProfileContext (global profile state)
@@ -301,17 +329,17 @@ npm run dev
 
 ## 🧪 Testing
 
-**415 automated tests** run on every push and pull request via GitHub Actions.
+**462 automated tests** run on every push and pull request via GitHub Actions.
 
 | Suite | Count | Stack | Command |
 |---|---|---|---|
-| **Backend** | 211 tests · 33 classes | JUnit 5 · Mockito · AssertJ · in-memory H2 | `cd backend && ./mvnw test` |
-| **Frontend** | 204 tests · 29 files | Vitest · React Testing Library · jsdom | `cd frontend && npm test` |
+| **Backend** | 241 tests · 36 classes | JUnit 5 · Mockito · AssertJ · in-memory H2 | `cd backend && ./mvnw test` |
+| **Frontend** | 221 tests · 32 files | Vitest · React Testing Library · jsdom | `cd frontend && npm test` |
 
 **What's covered:**
 
-- **Backend** — every service (business rules, ownership checks, status-transition matrices), every controller (`@WebMvcTest` HTTP slices: routing, validation, status codes), plus JWT utilities, OAuth2 handlers, file storage, pagination helpers, and the global exception handler. Tests run against in-memory H2 — no database setup needed.
-- **Frontend** — all utility modules and custom hooks, the API client layer (every endpoint wrapper), auth page flows (login, signup, password reset/change, OAuth callback), interactive components, and mount smoke tests for every page.
+- **Backend** — every service (business rules, ownership checks, status-transition matrices), every controller (`@WebMvcTest` HTTP slices: routing, validation, status codes), plus JWT utilities, OAuth2 handlers, file storage, pagination helpers, the Gemini client and AI chat service (prompt construction, rate limiting), and the global exception handler. Tests run against in-memory H2 — no database setup needed.
+- **Frontend** — all utility modules and custom hooks, the API client layer (every endpoint wrapper), auth page flows (login, signup, password reset/change, OAuth callback), interactive components including the AI chat panel, and mount smoke tests for every page.
 
 Run a single backend test class with `./mvnw test -Dtest=CompanyServiceTest`, or frontend watch mode with `npm run test:watch`.
 
@@ -336,6 +364,10 @@ Run a single backend test class with `./mvnw test -Dtest=CompanyServiceTest`, or
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth2 credentials for social sign-in |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth2 credentials for social sign-in |
 | `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` | LinkedIn OAuth2 credentials for social sign-in |
+| `GEMINI_API_KEY` | API key for Google Gemini, used to power the AI interview prep chatbot |
+| `GEMINI_MODEL` | Gemini model id to call (default `gemini-flash-latest`) |
+| `GEMINI_MAX_TOKENS` | Max output tokens per chat reply (default 1024) |
+| `CHAT_RATE_LIMIT_MAX_MESSAGES_PER_DAY` | Max user chat messages allowed per rolling 24h window (default 40) |
 
 See `application.properties.example` for a full template.
 
@@ -364,7 +396,7 @@ Full interactive API documentation is available via Swagger UI once the backend 
 http://localhost:8080/swagger-ui/
 ```
 
-**Key resource groups:** `/api/auth` · `/api/companies` · `/api/applications` · `/api/interviews` · `/api/recruiters` · `/api/referrals` · `/api/followups` · `/api/documents` · `/api/admin`
+**Key resource groups:** `/api/auth` · `/api/companies` · `/api/applications` · `/api/interviews` · `/api/recruiters` · `/api/referrals` · `/api/followups` · `/api/documents` · `/api/chat` · `/api/admin`
 
 ---
 
