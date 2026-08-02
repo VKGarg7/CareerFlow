@@ -360,7 +360,9 @@ Run a single backend test class with `./mvnw test -Dtest=CompanyServiceTest`, or
 | `spring.mail.username` / `.password` | Gmail SMTP credentials for password-reset emails |
 | `app.frontend-url` | Base URL of the frontend, used in password-reset email links |
 | `app.cors.allowed-origins` | Comma-separated list of origins allowed to call the API |
-| `app.upload-dir` | Directory where uploaded documents are stored |
+| `aws.s3.bucket` (`AWS_S3_BUCKET`) | S3 bucket used to store uploaded resumes/cover letters |
+| `aws.region` (`AWS_REGION`) | AWS region of the S3 bucket (default `us-east-1`) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | AWS credentials, read via the SDK's standard credential chain (use an IAM role instead if deployed on AWS infrastructure) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth2 credentials for social sign-in |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth2 credentials for social sign-in |
 | `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` | LinkedIn OAuth2 credentials for social sign-in |

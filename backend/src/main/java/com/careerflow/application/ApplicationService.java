@@ -26,7 +26,6 @@ import com.careerflow.followup.FollowUpRepository;
 import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
@@ -36,8 +35,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.net.MalformedURLException;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -322,21 +319,14 @@ public class ApplicationService {
         Document doc = documentRepository.findById(documentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Document not found"));
 
-        try {
-            Resource resource = new UrlResource(Paths.get(doc.getStoredPath()).toUri());
-            if (!resource.exists() || !resource.isReadable())
-                throw new ResourceNotFoundException("File not found on server");
-
-            String disposition = inline
-                    ? "inline; filename=\"" + doc.getOriginalName() + "\""
-                    : "attachment; filename=\"" + doc.getOriginalName() + "\"";
-            return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(doc.getContentType()))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
-                    .body(resource);
-        } catch (MalformedURLException e) {
-            throw new ResourceNotFoundException("File not found on server");
-        }
+        Resource resource = fileStorageService.loadAsResource(doc.getStoredPath());
+        String disposition = inline
+                ? "inline; filename=\"" + doc.getOriginalName() + "\""
+                : "attachment; filename=\"" + doc.getOriginalName() + "\"";
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(doc.getContentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .body(resource);
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
