@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ProfileProvider } from './context/ProfileContext'
+import { WorkspaceProvider } from './context/WorkspaceContext'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -9,6 +10,7 @@ import ResetPassword from './pages/ResetPassword'
 import ChangePassword from './pages/ChangePassword'
 import Dashboard from './pages/Dashboard'
 import Profile from './pages/Profile'
+import Workspaces from './pages/Workspaces'
 import Companies from './pages/Companies'
 import Applications from './pages/Applications'
 import Recruiters from './pages/Recruiters'
@@ -36,6 +38,7 @@ function RootRoute() {
 export default function App() {
   return (
     <BrowserRouter>
+      <WorkspaceProvider>
       <Routes>
         <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<Login />} />
@@ -56,6 +59,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <Profile />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/workspaces"
+          element={
+            <PrivateRoute>
+              <Workspaces />
             </PrivateRoute>
           }
         />
@@ -124,6 +135,7 @@ export default function App() {
           }
         />
       </Routes>
+      </WorkspaceProvider>
     </BrowserRouter>
   )
 }

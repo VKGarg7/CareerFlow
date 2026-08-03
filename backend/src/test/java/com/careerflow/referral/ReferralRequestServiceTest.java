@@ -2,6 +2,7 @@ package com.careerflow.referral;
 
 import com.careerflow.audit.AuditLogService;
 import com.careerflow.common.SecurityUtils;
+import com.careerflow.common.WorkspaceAccessUtils;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
@@ -10,6 +11,7 @@ import com.careerflow.referral.dto.ReferralRequestDto;
 import com.careerflow.referral.dto.ReferralResponse;
 import com.careerflow.referral.dto.ReferralUpdateRequest;
 import com.careerflow.user.User;
+import com.careerflow.workspace.Workspace;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +40,8 @@ class ReferralRequestServiceTest {
     @Mock
     private ReferralStatusHistoryRepository historyRepository;
     @Mock
+    private WorkspaceAccessUtils workspaceAccessUtils;
+    @Mock
     private SecurityUtils securityUtils;
     @Mock
     private AuditLogService auditLogService;
@@ -46,11 +50,18 @@ class ReferralRequestServiceTest {
     private ReferralRequestService referralRequestService;
 
     private User currentUser;
+    private static final Long WORKSPACE_ID = 99L;
 
     @BeforeEach
     void setUp() {
         currentUser = new User();
         currentUser.setId(1L);
+    }
+
+    private Workspace workspace() {
+        Workspace workspace = new Workspace();
+        workspace.setId(WORKSPACE_ID);
+        return workspace;
     }
 
     private ReferralRequestDto validCreateDto() {
@@ -65,10 +76,10 @@ class ReferralRequestServiceTest {
     @Test
     void create_throwsDuplicateResourceException_whenSameEmailAndRoleAlreadyExists() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(referralRepository.existsByUserIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(
-                1L, "alex@acme.com", "Backend Engineer")).thenReturn(true);
+        when(referralRepository.existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(
+                WORKSPACE_ID, "alex@acme.com", "Backend Engineer")).thenReturn(true);
 
-        assertThatThrownBy(() -> referralRequestService.create(validCreateDto()))
+        assertThatThrownBy(() -> referralRequestService.create(validCreateDto(), WORKSPACE_ID))
                 .isInstanceOf(DuplicateResourceException.class);
 
         verify(referralRepository, never()).save(any());
@@ -77,15 +88,16 @@ class ReferralRequestServiceTest {
     @Test
     void create_savesWithDraftStatus_whenStatusNotProvided() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(referralRepository.existsByUserIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(any(), any(), any()))
+        when(referralRepository.existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(any(), any(), any()))
                 .thenReturn(false);
+        when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
         when(referralRepository.save(any(ReferralRequest.class))).thenAnswer(invocation -> {
             ReferralRequest referral = invocation.getArgument(0);
             referral.setId(11L);
             return referral;
         });
 
-        ReferralResponse response = referralRequestService.create(validCreateDto());
+        ReferralResponse response = referralRequestService.create(validCreateDto(), WORKSPACE_ID);
 
         assertThat(response.getId()).isEqualTo(11L);
         assertThat(response.getStatus()).isEqualTo(ReferralStatus.DRAFT);
@@ -96,7 +108,7 @@ class ReferralRequestServiceTest {
     void getMyReferrals_throwsBadRequestException_whenStatusInvalid() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
 
-        assertThatThrownBy(() -> referralRequestService.getMyReferrals(null, "NOT_A_STATUS", "targetRole", "asc", 0, 10))
+        assertThatThrownBy(() -> referralRequestService.getMyReferrals(null, "NOT_A_STATUS", "targetRole", "asc", 0, 10, WORKSPACE_ID))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("NOT_A_STATUS");
     }
@@ -104,9 +116,9 @@ class ReferralRequestServiceTest {
     @Test
     void update_throwsResourceNotFoundException_whenNotOwned() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(referralRepository.findByIdAndUserId(9L, 1L)).thenReturn(Optional.empty());
+        when(referralRepository.findByIdAndUserIdAndWorkspaceId(9L, 1L, WORKSPACE_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> referralRequestService.update(9L, new ReferralUpdateRequest()))
+        assertThatThrownBy(() -> referralRequestService.update(9L, new ReferralUpdateRequest(), WORKSPACE_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -118,18 +130,18 @@ class ReferralRequestServiceTest {
         referral.setId(9L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(referralRepository.findByIdAndUserId(9L, 1L)).thenReturn(Optional.of(referral));
+        when(referralRepository.findByIdAndUserIdAndWorkspaceId(9L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(referral));
         when(referralRepository.save(any(ReferralRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(historyRepository.findAllByReferralIdAndUserId(eq(9L), eq(1L), any())).thenReturn(List.of());
 
         ReferralUpdateRequest sameStatusRequest = new ReferralUpdateRequest();
         sameStatusRequest.setStatus(ReferralStatus.DRAFT);
-        referralRequestService.update(9L, sameStatusRequest);
+        referralRequestService.update(9L, sameStatusRequest, WORKSPACE_ID);
         verify(historyRepository, never()).save(any());
 
         ReferralUpdateRequest changedStatusRequest = new ReferralUpdateRequest();
         changedStatusRequest.setStatus(ReferralStatus.REQUESTED);
-        referralRequestService.update(9L, changedStatusRequest);
+        referralRequestService.update(9L, changedStatusRequest, WORKSPACE_ID);
         verify(historyRepository, times(1)).save(any(ReferralStatusHistory.class));
     }
 
@@ -151,12 +163,12 @@ class ReferralRequestServiceTest {
         referral.setId(9L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(referralRepository.findByIdAndUserId(9L, 1L)).thenReturn(Optional.of(referral));
+        when(referralRepository.findByIdAndUserIdAndWorkspaceId(9L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(referral));
 
         ReferralUpdateRequest request = new ReferralUpdateRequest();
         request.setStatus(next);
 
-        assertThatThrownBy(() -> referralRequestService.update(9L, request))
+        assertThatThrownBy(() -> referralRequestService.update(9L, request, WORKSPACE_ID))
                 .isInstanceOf(BadRequestException.class);
     }
 
@@ -177,14 +189,14 @@ class ReferralRequestServiceTest {
         referral.setId(9L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(referralRepository.findByIdAndUserId(9L, 1L)).thenReturn(Optional.of(referral));
+        when(referralRepository.findByIdAndUserIdAndWorkspaceId(9L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(referral));
         when(referralRepository.save(any(ReferralRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(historyRepository.findAllByReferralIdAndUserId(eq(9L), eq(1L), any())).thenReturn(List.of());
 
         ReferralUpdateRequest request = new ReferralUpdateRequest();
         request.setStatus(next);
 
-        assertThatCode(() -> referralRequestService.update(9L, request)).doesNotThrowAnyException();
+        assertThatCode(() -> referralRequestService.update(9L, request, WORKSPACE_ID)).doesNotThrowAnyException();
         assertThat(referral.getStatus()).isEqualTo(next);
     }
 
@@ -196,7 +208,7 @@ class ReferralRequestServiceTest {
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
 
-        assertThatThrownBy(() -> referralRequestService.manageNote(9L, request))
+        assertThatThrownBy(() -> referralRequestService.manageNote(9L, request, WORKSPACE_ID))
                 .isInstanceOf(BadRequestException.class);
 
         verify(historyRepository, never()).save(any());
@@ -216,7 +228,7 @@ class ReferralRequestServiceTest {
         request.setNoteId(3L);
         request.setNote("updated note");
 
-        assertThatThrownBy(() -> referralRequestService.manageNote(9L, request))
+        assertThatThrownBy(() -> referralRequestService.manageNote(9L, request, WORKSPACE_ID))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Only user-added notes can be edited");
     }
@@ -230,7 +242,7 @@ class ReferralRequestServiceTest {
         request.setAction("DELETE");
         request.setNoteId(3L);
 
-        assertThatThrownBy(() -> referralRequestService.manageNote(9L, request))
+        assertThatThrownBy(() -> referralRequestService.manageNote(9L, request, WORKSPACE_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -241,7 +253,7 @@ class ReferralRequestServiceTest {
         ReferralNoteActionRequest request = new ReferralNoteActionRequest();
         request.setAction("BOGUS");
 
-        assertThatThrownBy(() -> referralRequestService.manageNote(9L, request))
+        assertThatThrownBy(() -> referralRequestService.manageNote(9L, request, WORKSPACE_ID))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Invalid action");
     }
@@ -254,9 +266,9 @@ class ReferralRequestServiceTest {
         referral.setId(9L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(referralRepository.findByIdAndUserId(9L, 1L)).thenReturn(Optional.of(referral));
+        when(referralRepository.findByIdAndUserIdAndWorkspaceId(9L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(referral));
 
-        referralRequestService.delete(9L);
+        referralRequestService.delete(9L, WORKSPACE_ID);
 
         assertThat(referral.getDeletedAt()).isNotNull();
         verify(referralRepository).save(referral);

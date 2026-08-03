@@ -4,6 +4,7 @@ import com.careerflow.common.SoftDeleteEntity;
 import com.careerflow.company.Company;
 import com.careerflow.document.Document;
 import com.careerflow.user.User;
+import com.careerflow.workspace.Workspace;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -15,7 +16,8 @@ import java.time.LocalDate;
 @Table(name = "job_applications", indexes = {
         @Index(name = "idx_job_applications_user_deleted", columnList = "user_id, deleted_at"),
         @Index(name = "idx_job_applications_company_id", columnList = "company_id"),
-        @Index(name = "idx_job_applications_status", columnList = "status")
+        @Index(name = "idx_job_applications_status", columnList = "status"),
+        @Index(name = "idx_job_applications_workspace", columnList = "workspace_id")
 })
 @SQLRestriction("deleted_at IS NULL")
 @Getter
@@ -27,6 +29,12 @@ public class JobApplication extends SoftDeleteEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    // Nullable for now: backfilled by WorkspaceBackfillRunner on boot, then
+    // tightened to nullable = false once every existing row is confirmed backfilled.
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "workspace_id")
+    private Workspace workspace;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "company_id", nullable = false)

@@ -21,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -48,9 +49,10 @@ class RecruiterContactControllerTest extends ControllerTestSupport {
         request.setName("Jane");
 
         RecruiterContactResponse response = RecruiterContactResponse.builder().id(1L).name("Jane").build();
-        when(recruiterContactService.addRecruiter(any(RecruiterContactRequest.class))).thenReturn(response);
+        when(recruiterContactService.addRecruiter(any(RecruiterContactRequest.class), anyLong())).thenReturn(response);
 
         mockMvc.perform(post("/api/recruiters")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -63,6 +65,7 @@ class RecruiterContactControllerTest extends ControllerTestSupport {
         request.setName("");
 
         mockMvc.perform(post("/api/recruiters")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -74,10 +77,11 @@ class RecruiterContactControllerTest extends ControllerTestSupport {
         request.setName("Jane");
         request.setEmail("jane@corp.com");
 
-        when(recruiterContactService.addRecruiter(any(RecruiterContactRequest.class)))
+        when(recruiterContactService.addRecruiter(any(RecruiterContactRequest.class), anyLong()))
                 .thenThrow(new DuplicateResourceException("A recruiter with email 'jane@corp.com' already exists"));
 
         mockMvc.perform(post("/api/recruiters")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict());
@@ -85,20 +89,20 @@ class RecruiterContactControllerTest extends ControllerTestSupport {
 
     @Test
     void getMyRecruiters_returns400_whenStatusInvalid() throws Exception {
-        when(recruiterContactService.getMyRecruiters(any(), any(), org.mockito.ArgumentMatchers.eq("BOGUS"), any(), any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt()))
+        when(recruiterContactService.getMyRecruiters(any(), any(), org.mockito.ArgumentMatchers.eq("BOGUS"), any(), any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(), anyLong()))
                 .thenThrow(new BadRequestException("Invalid status value: BOGUS"));
 
-        mockMvc.perform(get("/api/recruiters").param("status", "BOGUS"))
+        mockMvc.perform(get("/api/recruiters").param("status", "BOGUS").param("workspaceId", "99"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void deleteRecruiter_returns204_whenSuccessful() throws Exception {
-        doNothing().when(recruiterContactService).deleteRecruiter(9L);
+        doNothing().when(recruiterContactService).deleteRecruiter(9L, 99L);
 
-        mockMvc.perform(delete("/api/recruiters/{id}", 9L))
+        mockMvc.perform(delete("/api/recruiters/{id}", 9L).param("workspaceId", "99"))
                 .andExpect(status().isNoContent());
 
-        verify(recruiterContactService).deleteRecruiter(9L);
+        verify(recruiterContactService).deleteRecruiter(9L, 99L);
     }
 }

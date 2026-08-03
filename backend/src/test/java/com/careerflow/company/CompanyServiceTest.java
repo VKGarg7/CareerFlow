@@ -3,6 +3,7 @@ package com.careerflow.company;
 import com.careerflow.application.ApplicationService;
 import com.careerflow.audit.AuditLogService;
 import com.careerflow.common.SecurityUtils;
+import com.careerflow.common.WorkspaceAccessUtils;
 import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
 import com.careerflow.company.dto.CompanyUpdateRequest;
@@ -11,6 +12,7 @@ import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.followup.FollowUpService;
 import com.careerflow.user.User;
+import com.careerflow.workspace.Workspace;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +39,8 @@ class CompanyServiceTest {
     @Mock
     private CompanyRepository companyRepository;
     @Mock
+    private WorkspaceAccessUtils workspaceAccessUtils;
+    @Mock
     private SecurityUtils securityUtils;
     @Mock
     private AuditLogService auditLogService;
@@ -49,6 +53,7 @@ class CompanyServiceTest {
     private CompanyService companyService;
 
     private User currentUser;
+    private static final Long WORKSPACE_ID = 99L;
 
     @BeforeEach
     void setUp() {
@@ -56,10 +61,17 @@ class CompanyServiceTest {
         currentUser.setId(1L);
     }
 
+    private Workspace workspace() {
+        Workspace workspace = new Workspace();
+        workspace.setId(WORKSPACE_ID);
+        return workspace;
+    }
+
     @Test
     void addCompany_savesAndReturnsResponse_whenNameIsUnique() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(companyRepository.existsByUserIdAndNameIgnoreCase(1L, "Acme")).thenReturn(false);
+        when(companyRepository.existsByWorkspaceIdAndNameIgnoreCase(WORKSPACE_ID, "Acme")).thenReturn(false);
+        when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
         when(companyRepository.save(any(Company.class))).thenAnswer(invocation -> {
             Company company = invocation.getArgument(0);
             company.setId(10L);
@@ -69,7 +81,7 @@ class CompanyServiceTest {
         CompanyRequest request = new CompanyRequest();
         request.setName("Acme");
 
-        CompanyResponse response = companyService.addCompany(request);
+        CompanyResponse response = companyService.addCompany(request, WORKSPACE_ID);
 
         assertThat(response.getId()).isEqualTo(10L);
         assertThat(response.getName()).isEqualTo("Acme");
@@ -81,12 +93,12 @@ class CompanyServiceTest {
     @Test
     void addCompany_throwsDuplicateResourceException_whenNameAlreadyExists() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(companyRepository.existsByUserIdAndNameIgnoreCase(1L, "Acme")).thenReturn(true);
+        when(companyRepository.existsByWorkspaceIdAndNameIgnoreCase(WORKSPACE_ID, "Acme")).thenReturn(true);
 
         CompanyRequest request = new CompanyRequest();
         request.setName("Acme");
 
-        assertThatThrownBy(() -> companyService.addCompany(request))
+        assertThatThrownBy(() -> companyService.addCompany(request, WORKSPACE_ID))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("Acme");
 
@@ -96,11 +108,11 @@ class CompanyServiceTest {
     @Test
     void updateCompany_throwsResourceNotFoundException_whenCompanyNotOwnedByUser() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(companyRepository.findByIdAndUserId(99L, 1L)).thenReturn(Optional.empty());
+        when(companyRepository.findByIdAndUserIdAndWorkspaceId(99L, 1L, WORKSPACE_ID)).thenReturn(Optional.empty());
 
         CompanyUpdateRequest request = new CompanyUpdateRequest();
 
-        assertThatThrownBy(() -> companyService.updateCompany(99L, request))
+        assertThatThrownBy(() -> companyService.updateCompany(99L, request, WORKSPACE_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -110,10 +122,10 @@ class CompanyServiceTest {
         company.setId(5L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(companyRepository.findByIdAndUserId(5L, 1L)).thenReturn(Optional.of(company));
-        when(applicationService.hasApplications(1L, 5L)).thenReturn(true);
+        when(companyRepository.findByIdAndUserIdAndWorkspaceId(5L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(company));
+        when(applicationService.hasApplications(1L, 5L, WORKSPACE_ID)).thenReturn(true);
 
-        assertThatThrownBy(() -> companyService.deleteCompany(5L, false))
+        assertThatThrownBy(() -> companyService.deleteCompany(5L, false, WORKSPACE_ID))
                 .isInstanceOf(ConflictException.class);
 
         verify(companyRepository, never()).save(any());
@@ -125,13 +137,13 @@ class CompanyServiceTest {
         company.setId(5L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(companyRepository.findByIdAndUserId(5L, 1L)).thenReturn(Optional.of(company));
-        when(applicationService.hasApplications(1L, 5L)).thenReturn(true);
+        when(companyRepository.findByIdAndUserIdAndWorkspaceId(5L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(company));
+        when(applicationService.hasApplications(1L, 5L, WORKSPACE_ID)).thenReturn(true);
         when(companyRepository.save(any(Company.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        companyService.deleteCompany(5L, true);
+        companyService.deleteCompany(5L, true, WORKSPACE_ID);
 
-        verify(applicationService).deleteAllByCompany(5L);
+        verify(applicationService).deleteAllByCompany(5L, WORKSPACE_ID);
         verify(companyRepository).save(argThat(c -> c.getDeletedAt() != null));
     }
 }

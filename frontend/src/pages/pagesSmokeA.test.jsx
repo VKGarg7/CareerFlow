@@ -68,6 +68,22 @@ vi.mock('../context/ProfileContext', () => {
   }
 })
 
+vi.mock('../context/WorkspaceContext', () => {
+  // Same stable-object requirement as ProfileContext above.
+  const stableWorkspaceCtx = {
+    workspaces: [{ id: 1, name: 'Default', isDefault: true }],
+    activeWorkspaceId: '1',
+    activeWorkspace: { id: 1, name: 'Default', isDefault: true },
+    setActiveWorkspaceId: vi.fn(),
+    loading: false,
+    refetch: vi.fn().mockResolvedValue(null),
+  }
+  return {
+    useWorkspace: () => stableWorkspaceCtx,
+    WorkspaceProvider: ({ children }) => <>{children}</>,
+  }
+})
+
 // Import paths must be literal so Vite can resolve them; a variable dynamic
 // import hangs vite-node.
 const smoke = async (pageModule) => {

@@ -23,6 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -53,9 +54,10 @@ class ReferralRequestControllerTest extends ControllerTestSupport {
         request.setTargetRole("Backend Engineer");
 
         ReferralResponse response = ReferralResponse.builder().id(1L).status(ReferralStatus.DRAFT).build();
-        when(referralRequestService.create(any(ReferralRequestDto.class))).thenReturn(response);
+        when(referralRequestService.create(any(ReferralRequestDto.class), anyLong())).thenReturn(response);
 
         mockMvc.perform(post("/api/referrals")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -67,6 +69,7 @@ class ReferralRequestControllerTest extends ControllerTestSupport {
         ReferralRequestDto request = new ReferralRequestDto();
 
         mockMvc.perform(post("/api/referrals")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -77,10 +80,11 @@ class ReferralRequestControllerTest extends ControllerTestSupport {
         ReferralUpdateRequest request = new ReferralUpdateRequest();
         request.setStatus(ReferralStatus.OFFER_RECEIVED);
 
-        when(referralRequestService.update(eq(9L), any(ReferralUpdateRequest.class)))
+        when(referralRequestService.update(eq(9L), any(ReferralUpdateRequest.class), anyLong()))
                 .thenThrow(new BadRequestException("Status can only be set to OFFER_RECEIVED after INTERVIEWING."));
 
         mockMvc.perform(patch("/api/referrals/{id}", 9L)
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -88,9 +92,9 @@ class ReferralRequestControllerTest extends ControllerTestSupport {
 
     @Test
     void getById_returns404_whenNotOwned() throws Exception {
-        when(referralRequestService.getById(9L)).thenThrow(new ResourceNotFoundException("Referral request not found"));
+        when(referralRequestService.getById(eq(9L), anyLong())).thenThrow(new ResourceNotFoundException("Referral request not found"));
 
-        mockMvc.perform(get("/api/referrals/{id}", 9L))
+        mockMvc.perform(get("/api/referrals/{id}", 9L).param("workspaceId", "99"))
                 .andExpect(status().isNotFound());
     }
 
@@ -99,10 +103,11 @@ class ReferralRequestControllerTest extends ControllerTestSupport {
         ReferralNoteActionRequest request = new ReferralNoteActionRequest();
         request.setAction("BOGUS");
 
-        when(referralRequestService.manageNote(eq(9L), any(ReferralNoteActionRequest.class)))
+        when(referralRequestService.manageNote(eq(9L), any(ReferralNoteActionRequest.class), anyLong()))
                 .thenThrow(new BadRequestException("Invalid action: BOGUS. Must be ADD, EDIT, or DELETE"));
 
         mockMvc.perform(patch("/api/referrals/{id}/notes", 9L)
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -110,11 +115,11 @@ class ReferralRequestControllerTest extends ControllerTestSupport {
 
     @Test
     void delete_returns204_whenSuccessful() throws Exception {
-        doNothing().when(referralRequestService).delete(9L);
+        doNothing().when(referralRequestService).delete(9L, 99L);
 
-        mockMvc.perform(delete("/api/referrals/{id}", 9L))
+        mockMvc.perform(delete("/api/referrals/{id}", 9L).param("workspaceId", "99"))
                 .andExpect(status().isNoContent());
 
-        verify(referralRequestService).delete(9L);
+        verify(referralRequestService).delete(9L, 99L);
     }
 }

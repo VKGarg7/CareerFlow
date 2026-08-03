@@ -54,9 +54,10 @@ class CompanyControllerTest extends ControllerTestSupport {
         request.setName("Acme");
 
         CompanyResponse response = CompanyResponse.builder().id(1L).name("Acme").status(CompanyStatus.TARGETING).build();
-        when(companyService.addCompany(any(CompanyRequest.class))).thenReturn(response);
+        when(companyService.addCompany(any(CompanyRequest.class), anyLong())).thenReturn(response);
 
         mockMvc.perform(post("/api/companies")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -70,11 +71,12 @@ class CompanyControllerTest extends ControllerTestSupport {
         request.setName("   ");
 
         mockMvc.perform(post("/api/companies")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
 
-        verify(companyService, never()).addCompany(any());
+        verify(companyService, never()).addCompany(any(), anyLong());
     }
 
     @Test
@@ -82,10 +84,11 @@ class CompanyControllerTest extends ControllerTestSupport {
         CompanyRequest request = new CompanyRequest();
         request.setName("Acme");
 
-        when(companyService.addCompany(any(CompanyRequest.class)))
+        when(companyService.addCompany(any(CompanyRequest.class), anyLong()))
                 .thenThrow(new DuplicateResourceException("Company 'Acme' already exists"));
 
         mockMvc.perform(post("/api/companies")
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
@@ -98,19 +101,20 @@ class CompanyControllerTest extends ControllerTestSupport {
                 .content(java.util.List.of())
                 .page(0).size(10).totalElements(0).totalPages(0).last(true)
                 .build();
-        when(companyService.getMyCompanies(any(), any(), any(), any(), any(), anyInt(), anyInt())).thenReturn(page);
+        when(companyService.getMyCompanies(any(), any(), any(), any(), any(), anyInt(), anyInt(), anyLong())).thenReturn(page);
 
-        mockMvc.perform(get("/api/companies"))
+        mockMvc.perform(get("/api/companies").param("workspaceId", "99"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray());
     }
 
     @Test
     void updateCompany_returns404_whenNotFound() throws Exception {
-        when(companyService.updateCompany(eq(99L), any()))
+        when(companyService.updateCompany(eq(99L), any(), anyLong()))
                 .thenThrow(new ResourceNotFoundException("Company not found"));
 
         mockMvc.perform(patch("/api/companies/{id}", 99L)
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isNotFound())
@@ -120,19 +124,19 @@ class CompanyControllerTest extends ControllerTestSupport {
     @Test
     void deleteCompany_returns409_whenConflictAndForceNotSet() throws Exception {
         doThrow(new ConflictException("Company has existing applications"))
-                .when(companyService).deleteCompany(eq(5L), eq(false));
+                .when(companyService).deleteCompany(eq(5L), eq(false), anyLong());
 
-        mockMvc.perform(delete("/api/companies/{id}", 5L))
+        mockMvc.perform(delete("/api/companies/{id}", 5L).param("workspaceId", "99"))
                 .andExpect(status().isConflict());
     }
 
     @Test
     void deleteCompany_returns204_whenSuccessful() throws Exception {
-        doNothing().when(companyService).deleteCompany(anyLong(), anyBoolean());
+        doNothing().when(companyService).deleteCompany(anyLong(), anyBoolean(), anyLong());
 
-        mockMvc.perform(delete("/api/companies/{id}", 5L).param("force", "true"))
+        mockMvc.perform(delete("/api/companies/{id}", 5L).param("force", "true").param("workspaceId", "99"))
                 .andExpect(status().isNoContent());
 
-        verify(companyService).deleteCompany(5L, true);
+        verify(companyService).deleteCompany(5L, true, 99L);
     }
 }
