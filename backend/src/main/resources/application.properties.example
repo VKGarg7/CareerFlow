@@ -30,6 +30,18 @@ app.frontend-url=http://localhost:3000
 # CORS (comma-separated list of allowed origins)
 app.cors.allowed-origins=http://localhost:5173
 
+# AWS S3 (document storage for resumes/cover letters)
+# Credentials are read from the standard AWS credential chain — set
+# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY as environment variables (or use an
+# IAM role if deployed on AWS infrastructure).
+aws.s3.bucket=${AWS_S3_BUCKET:}
+aws.region=${AWS_REGION:us-east-1}
+
+# One-off: uploads pre-dating the S3 migration are still saved to local disk.
+# Set to true for a single run to copy them into the S3 bucket above, then
+# revert to false. Safe to leave enabled — it no-ops once nothing is left to migrate.
+app.migrate-local-files-to-s3=false
+
 # JWT
 jwt.secret=your_hex_encoded_256bit_secret
 jwt.expiration-ms=86400000
@@ -57,6 +69,12 @@ spring.security.oauth2.client.provider.linkedin.token-uri=https://www.linkedin.c
 spring.security.oauth2.client.provider.linkedin.user-info-uri=https://api.linkedin.com/v2/userinfo
 spring.security.oauth2.client.provider.linkedin.jwk-set-uri=https://www.linkedin.com/oauth/openid/jwks
 spring.security.oauth2.client.provider.linkedin.user-name-attribute=sub
+
+# Gemini (interview prep chatbot)
+gemini.api-key=${GEMINI_API_KEY:}
+gemini.model=${GEMINI_MODEL:gemini-flash-latest}
+gemini.max-tokens=${GEMINI_MAX_TOKENS:1024}
+chat.rate-limit.max-messages-per-day=${CHAT_RATE_LIMIT_MAX_MESSAGES_PER_DAY:40}
 
 # Actuator
 management.endpoints.web.exposure.include=health,info

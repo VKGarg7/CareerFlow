@@ -26,6 +26,7 @@ import * as referral from './referral'
 import * as user from './user'
 import * as admin from './admin'
 import * as auditLog from './auditLog'
+import * as chatbot from './chatbot'
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -227,5 +228,25 @@ describe('auditLog api', () => {
   it('personal activity route', async () => {
     await auditLog.getMyActivity({ page: 0 })
     expect(api.get).toHaveBeenCalledWith('/audit-logs/me', { params: { page: 0 } })
+  })
+})
+
+describe('chatbot api', () => {
+  it('session and message routes', async () => {
+    await chatbot.listChatSessions()
+    await chatbot.createChatSession(5)
+    await chatbot.getChatMessages(3)
+    await chatbot.sendChatMessage(3, 'hello')
+    await chatbot.deleteChatSession(3)
+    expect(api.get).toHaveBeenCalledWith('/chat/sessions')
+    expect(api.post).toHaveBeenCalledWith('/chat/sessions', { jobApplicationId: 5 })
+    expect(api.get).toHaveBeenCalledWith('/chat/sessions/3/messages')
+    expect(api.post).toHaveBeenCalledWith('/chat/sessions/3/messages', { content: 'hello' })
+    expect(api.delete).toHaveBeenCalledWith('/chat/sessions/3')
+  })
+
+  it('createChatSession without an application sends an empty body', async () => {
+    await chatbot.createChatSession(null)
+    expect(api.post).toHaveBeenCalledWith('/chat/sessions', {})
   })
 })

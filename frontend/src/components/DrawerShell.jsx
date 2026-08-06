@@ -1,17 +1,18 @@
+import { forwardRef } from 'react'
 import { Close } from '@mui/icons-material'
 
-export function DrawerShell({ children }) {
+export const DrawerShell = forwardRef(function DrawerShell({ children }, ref) {
   return (
-    <aside className="fixed inset-y-0 right-0 z-40 w-full max-w-sm bg-app-surface border-l border-white/[0.08] shadow-card-hover flex flex-col"
+    <aside ref={ref} className="fixed inset-y-0 right-0 z-40 w-full max-w-sm bg-app-surface border-l border-white/[0.08] shadow-card-hover flex flex-col"
       style={{ animation: 'drawer-in 0.24s cubic-bezier(0.16,1,0.3,1)' }}>
       {children}
     </aside>
   )
-}
+})
 
 export function CloseIconButton({ onClose, className = '' }) {
   return (
-    <button onClick={onClose}
+    <button onClick={onClose} aria-label="Close"
       className={`p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition ${className}`}>
       <Close sx={{ fontSize: 18 }} />
     </button>
