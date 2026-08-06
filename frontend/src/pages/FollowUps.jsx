@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Alert, CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
@@ -18,6 +17,7 @@ import useTransientMessage from '../hooks/useTransientMessage'
 import RescheduleInline from '../components/RescheduleInline'
 import CompanyDetailModal from '../components/CompanyDetailModal'
 import { CardMenu } from '../components/EntityCard'
+import { useWorkspace } from '../context/WorkspaceContext'
 
 function monthKey(dtStr) {
   const d = new Date(dtStr)
@@ -238,6 +238,7 @@ function HistoryCard({ fu, onUndo, onDelete, onCompany }) {
 
 export default function FollowUps() {
   const navigate = useNavigate()
+  const { activeWorkspaceId, loading: workspaceLoading } = useWorkspace()
   const [tab, setTab] = useState('active')
   const [followUps, setFollowUps] = useState([])
   const [loading, setLoading] = useState(true)
@@ -287,9 +288,11 @@ export default function FollowUps() {
   const refreshAll = useCallback(() => { fetch(); fetchCounts() }, [fetch, fetchCounts])
 
   useEffect(() => {
+    if (workspaceLoading || !activeWorkspaceId) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting filter chip on workspace switch/mount is the intended effect
     setActiveChip(null)
     refreshAll()
-  }, [refreshAll])
+  }, [refreshAll, activeWorkspaceId, workspaceLoading])
 
   const flash = setSuccess
 

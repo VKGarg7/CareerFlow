@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import useFetchOnce from './useFetchOnce'
 
+vi.mock('../context/WorkspaceContext', () => ({
+  useWorkspace: () => ({ activeWorkspaceId: '1', loading: false }),
+}))
+
 describe('useFetchOnce', () => {
   it('fetches on mount and exposes the response data', async () => {
     const fetchFn = vi.fn().mockResolvedValue({ data: { total: 5 } })

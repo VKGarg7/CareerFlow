@@ -41,6 +41,8 @@ aws.region=${AWS_REGION:us-east-1}
 # Set to true for a single run to copy them into the S3 bucket above, then
 # revert to false. Safe to leave enabled — it no-ops once nothing is left to migrate.
 app.migrate-local-files-to-s3=false
+# Directory for uploaded files (resumes, documents, etc.)
+app.upload-dir=uploads/
 
 # JWT
 jwt.secret=your_hex_encoded_256bit_secret
