@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Alert, CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
@@ -15,7 +14,6 @@ import { ConfirmDeleteModal } from '../components/ModalShell'
 import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats, getApplicationCountsByCompany, getCompanyCreationTrend, getCompanyActivitySummary } from '../api/company'
 import { getRecruiters } from '../api/recruiter'
 import EmptyState from '../components/EmptyState'
-import SharedStatusBadge from '../components/StatusBadge'
 import CompanyDetailModal from '../components/CompanyDetailModal'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
@@ -27,6 +25,7 @@ import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
 import usePagedList from '../hooks/usePagedList'
 import useFetchOnce from '../hooks/useFetchOnce'
+import { useWorkspace } from '../context/WorkspaceContext'
 import { DrawerShell } from '../components/DrawerShell'
 import { FormFooterButtons } from '../components/formKit'
 import { CloseGlyphIcon } from '../components/CloseGlyphIcon'
@@ -54,11 +53,6 @@ const SORT_OPTIONS = [
 const EMPTY_FORM = {
   name: '', website: '', industry: '', location: '',
   description: '', notes: '', status: 'TARGETING',
-}
-
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.TARGETING
-  return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
 }
 
 function CompanyStatusChanger({ company, onStatusChanged }) {
@@ -258,6 +252,7 @@ function AddEditModal({ open, company, onClose, onSaved }) {
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the modal's form state when it opens for a given company is the intended effect
       setForm(company ? {
         name: company.name || '', website: company.website || '',
         industry: company.industry || '', location: company.location || '',
@@ -353,6 +348,7 @@ function DeleteModal({ open, company, onClose, onDeleted }) {
   const [warning, setWarning] = useState('')
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the modal's confirm state when it opens is the intended effect
     if (open) { setForce(false); setWarning('') }
   }, [open])
 
@@ -392,6 +388,7 @@ function DeleteModal({ open, company, onClose, onDeleted }) {
 }
 
 export default function Companies() {
+  const { activeWorkspaceId, loading: workspaceLoading } = useWorkspace()
   const [success, setSuccess] = useTransientMessage()
 
   const [search, setSearch] = useState('')
@@ -407,7 +404,7 @@ export default function Companies() {
 
   const {
     items: companies, setItems: setCompanies, loading, error, setError,
-    page, setPage, size, setSize, refetch: fetchCompanies,
+    setPage, setSize, refetch: fetchCompanies,
   } = usePagedList(
     useCallback(
       (page, size) => getCompanies({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
@@ -437,8 +434,9 @@ export default function Companies() {
   useSearchShortcut(searchInputRef)
 
   useEffect(() => {
+    if (workspaceLoading || !activeWorkspaceId) return
     getRecruiters({ size: 1000 }).then((r) => setRecruiters(r.data || [])).catch(() => {})
-  }, [])
+  }, [activeWorkspaceId, workspaceLoading])
 
   const statsByCompany = activitySummaryByCompany
 
@@ -505,14 +503,6 @@ export default function Companies() {
     [locationFilter, setLocationFilter],
     [recruiterFilter, setRecruiterFilter],
   ])
-
-  const grouped = filteredCompanies.reduce((acc, c) => {
-    const letter = c.name[0]?.toUpperCase() || '#'
-    if (!acc[letter]) acc[letter] = []
-    acc[letter].push(c)
-    return acc
-  }, {})
-  const sortedLetters = Object.keys(grouped).sort()
 
   const openView = (id) => { setModalOpen(false); setViewId(id) }
   const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onView: openView, onStatusChanged: handleStatusChanged }

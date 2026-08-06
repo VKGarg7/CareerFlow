@@ -71,7 +71,7 @@ class ChatServiceTest {
     @Test
     void createSession_savesSession_withOwnedApplication() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(applicationRepository.findByIdAndUserId(50L, 1L))
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, 200L))
                 .thenReturn(Optional.of(application));
         when(chatSessionRepository.save(any(ChatSession.class))).thenAnswer(invocation -> {
             ChatSession session = invocation.getArgument(0);
@@ -82,7 +82,7 @@ class ChatServiceTest {
         ChatSessionRequest request = new ChatSessionRequest();
         request.setJobApplicationId(50L);
 
-        ChatSessionResponse response = chatService.createSession(request);
+        ChatSessionResponse response = chatService.createSession(request, 200L);
 
         assertThat(response.getId()).isEqualTo(7L);
         assertThat(response.getJobApplicationId()).isEqualTo(50L);
@@ -99,24 +99,24 @@ class ChatServiceTest {
             return session;
         });
 
-        ChatSessionResponse response = chatService.createSession(new ChatSessionRequest());
+        ChatSessionResponse response = chatService.createSession(new ChatSessionRequest(), null);
 
         assertThat(response.getId()).isEqualTo(8L);
         assertThat(response.getJobApplicationId()).isNull();
         assertThat(response.getTitle()).isEqualTo("General prep chat");
-        verify(applicationRepository, never()).findByIdAndUserId(any(), any());
+        verify(applicationRepository, never()).findByIdAndUserIdAndWorkspaceId(any(), any(), any());
     }
 
     @Test
     void createSession_throwsResourceNotFoundException_whenApplicationNotOwned() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(applicationRepository.findByIdAndUserId(50L, 1L))
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, 200L))
                 .thenReturn(Optional.empty());
 
         ChatSessionRequest request = new ChatSessionRequest();
         request.setJobApplicationId(50L);
 
-        assertThatThrownBy(() -> chatService.createSession(request))
+        assertThatThrownBy(() -> chatService.createSession(request, 200L))
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(chatSessionRepository, never()).save(any());

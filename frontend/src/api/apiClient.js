@@ -2,11 +2,7 @@ import axios from 'axios'
 
 const apiClient = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api' })
 
-// Endpoints scoped by the active workspace (CF-PRO-001). Every request whose
-// path starts with one of these prefixes automatically gets `?workspaceId=`
-// injected from localStorage — add any new workspace-scoped endpoint's
-// prefix here, or its requests will silently go through unscoped.
-const WORKSPACE_SCOPED_PREFIXES = ['/companies', '/applications', '/recruiters', '/referrals', '/follow-ups', '/interviews']
+const WORKSPACE_SCOPED_PREFIXES = ['/companies', '/applications', '/recruiters', '/referrals', '/follow-ups', '/interviews', '/chat/sessions']
 
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
@@ -20,11 +16,6 @@ apiClient.interceptors.request.use((config) => {
 })
 
 export default apiClient
-
-// Unwraps a paginated PageResponse ({ content, page, size, totalElements, totalPages, last })
-// into a plain array carrying the pagination metadata as extra properties, so existing
-// `res.data.map(...)` / `res.data.length` call sites keep working unchanged while
-// `res.data.totalElements` etc. remain available for pages that add pagination controls.
 export const unwrapPage = (res) => {
   const body = res.data
   const content = Array.isArray(body?.content) ? body.content : []

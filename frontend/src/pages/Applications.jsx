@@ -1,9 +1,9 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react'
-import { Alert, CircularProgress } from '@mui/material'
+import { CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
-  Close, WorkOutlineRounded, SendRounded, BoltRounded,
+  WorkOutlineRounded, SendRounded, BoltRounded,
   TrackChangesRounded, PsychologyRounded, TrendingUpRounded, TrendingDownRounded,
   KeyboardArrowDown, FilterListRounded, VisibilityOutlined, EditOutlined,
   DeleteOutlineRounded, NotificationsNoneOutlined, BookmarkBorderRounded, BookmarkRounded,
@@ -23,7 +23,6 @@ import { todayStr, fmtDate, fmt, daysDiff } from '../utils/followup'
 import { fmtFileSize, isAllowedDocExt, openDocInNewTab, downloadDoc } from '../utils/documents'
 import RescheduleInline from '../components/RescheduleInline'
 import EmptyState from '../components/EmptyState'
-import SharedStatusBadge from '../components/StatusBadge'
 import CompanyDetailModal from '../components/CompanyDetailModal'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import { CardMenu } from '../components/EntityCard'
@@ -39,6 +38,7 @@ import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
 import usePagedList from '../hooks/usePagedList'
 import useFetchOnce from '../hooks/useFetchOnce'
+import { useWorkspace } from '../context/WorkspaceContext'
 import ApplicationSourcesCard from '../components/ApplicationSourcesCard'
 import AnalyticsCard from '../components/AnalyticsCard'
 import { DrawerShell, CloseIconButton } from '../components/DrawerShell'
@@ -64,11 +64,6 @@ const EMPTY_FORM = {
   source: '', status: 'SAVED', expectedSalary: '', notes: '',
 }
 
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.APPLIED
-  return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
-}
-
 function AppStatusChanger({ app, onStatusChanged }) {
   return (
     <InlineStatusChanger
@@ -86,6 +81,7 @@ function useLocalBookmark(appId) {
   const [bookmarked, setBookmarked] = useState(() => localStorage.getItem(key) === '1')
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-reading bookmark from localStorage when the app identity (key) changes is the intended effect
     setBookmarked(localStorage.getItem(key) === '1')
   }, [key])
 
@@ -328,7 +324,10 @@ function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete
   const [processingId, setProcessingId] = useState(null)
   const [ivFlash, setIvFlash] = useTransientMessage(2500)
 
-  useEffect(() => { setApp(initialApp) }, [initialApp])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local editable copy when the prop identity changes is the intended effect
+    setApp(initialApp)
+  }, [initialApp])
 
   const fetchInterviews = useCallback(async () => {
     if (!initialApp) return
@@ -342,6 +341,7 @@ function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete
 
   useEffect(() => {
     if (open && initialApp) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the modal's form state when it opens for a new application is the intended effect
       setShowAddForm(false)
       setAddForm(EMPTY_INTERVIEW_FORM)
       setAddError('')
@@ -349,7 +349,7 @@ function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete
       setIvFlash('')
       fetchInterviews()
     }
-  }, [open, initialApp, fetchInterviews])
+  }, [open, initialApp, fetchInterviews, setIvFlash])
 
   if (!open) return null
 
@@ -700,6 +700,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the modal's form state when it opens for a given application is the intended effect
       setLiveApp(app ?? null)
       setForm(app ? {
         companyId: app.companyId || '', role: app.role || '',
@@ -1055,13 +1056,14 @@ function FollowUpModal({ open, app, onClose, onChanged }) {
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the modal's form state when it opens is the intended effect
       setForm({ followUpDate: todayStr(), note: '', daysFromNow: '' })
       setUseDays(true)
       setError('')
       setSuccessMsg('')
       fetch()
     }
-  }, [open, fetch])
+  }, [open, fetch, setSuccessMsg])
 
   const handleAdd = async (e) => {
     e.preventDefault()
@@ -1409,6 +1411,7 @@ function DeleteModal({ open, app, onClose, onDeleted }) {
 }
 
 export default function Applications() {
+  const { activeWorkspaceId, loading: workspaceLoading } = useWorkspace()
   const [companies, setCompanies] = useState([])
   const [success, setSuccess] = useTransientMessage()
 
@@ -1431,14 +1434,15 @@ export default function Applications() {
   const [companyDetailId, setCompanyDetailId] = useState(null)
 
   useEffect(() => {
+    if (workspaceLoading || !activeWorkspaceId) return
     getCompanies({ size: 1000 }).then((res) => setCompanies(res.data)).catch(() => {})
-  }, [])
+  }, [activeWorkspaceId, workspaceLoading])
 
   const activeSortOption = SORT_OPTIONS.find((o) => o.value === sortBy)
 
   const {
     items: applications, setItems: setApplications, loading, error, setError,
-    setPage, size, setSize, refetch: fetchApplications,
+    setPage, setSize, refetch: fetchApplications,
   } = usePagedList(
     useCallback((page, size) => {
       const isClientSort = activeSortOption?.clientSide
@@ -1602,14 +1606,6 @@ export default function Applications() {
       .sort((a, b) => b.total - a.total)
   })()
   const bestSource = sourceAnalysis.filter((s) => s.total >= 2).sort((a, b) => b.offerRate - a.offerRate)[0] ?? null
-
-  const grouped = displayApplications.reduce((acc, a) => {
-    const letter = a.companyName?.[0]?.toUpperCase() || '#'
-    if (!acc[letter]) acc[letter] = []
-    acc[letter].push(a)
-    return acc
-  }, {})
-  const sortedLetters = Object.keys(grouped).sort()
 
   const handleStatusChanged = (updated) => {
     setApplications(prev => prev.map(a => a.id === updated.id ? updated : a))
