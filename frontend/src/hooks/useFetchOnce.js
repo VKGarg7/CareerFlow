@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useWorkspace } from '../context/WorkspaceContext'
 
-// Centralizes the "fetch on mount/when deps change, expose a refetch, swallow
-// errors" pattern used for stats endpoints and bulk "give me everything" list
-// fetches. Pass a stable (memoized) `fetchFn` — its identity change re-fetches.
 export default function useFetchOnce(fetchFn, initialValue = null) {
   const [data, setData] = useState(initialValue)
+  const { activeWorkspaceId, loading: workspaceLoading } = useWorkspace()
 
   const fetch = useCallback(async () => {
     try {
@@ -15,7 +14,11 @@ export default function useFetchOnce(fetchFn, initialValue = null) {
     }
   }, [fetchFn])
 
-  useEffect(() => { fetch() }, [fetch])
+  useEffect(() => {
+    if (workspaceLoading || !activeWorkspaceId) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on mount/dep change is the intended effect
+    fetch()
+  }, [fetch, activeWorkspaceId, workspaceLoading])
 
   return { data, setData, refetch: fetch }
 }

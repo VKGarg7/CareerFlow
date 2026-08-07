@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   DashboardOutlined, BusinessOutlined, WorkOutlined,
   PeopleOutlined, PersonOutlined, LogoutOutlined,
   Menu, Close, NotificationsNoneOutlined, Handshake,
-  AdminPanelSettingsOutlined, KeyboardArrowDownRounded,
+  AdminPanelSettingsOutlined, FolderOutlined, KeyboardArrowDownRounded,
   BusinessCenterOutlined, HandshakeOutlined, PersonAddAltOutlined,
+  FlagOutlined,
 } from '@mui/icons-material'
 import { useProfile } from '../context/ProfileContext'
+import { useWorkspace } from '../context/WorkspaceContext'
+import useCloseOnOutsideEvent from '../hooks/useCloseOnOutsideEvent'
 import { profileInitial } from '../utils/followup'
 import ChatWidgetButton from './ChatWidgetButton'
 
@@ -18,6 +21,7 @@ const PAGE_META = {
   '/follow-ups':   { title: 'Follow-Ups',   sub: 'Stay ahead of every thread' },
   '/recruiters':   { title: 'Recruiters',   sub: 'Your network of contacts' },
   '/referrals':    { title: 'Referrals',    sub: 'Who’s vouching for you' },
+  '/goals':        { title: 'Goals',        sub: 'Track progress toward your targets' },
   '/profile':      { title: 'Profile',      sub: 'Your public-facing story' },
   '/admin':        { title: 'Admin',        sub: 'Workspace administration' },
   '/activity':     { title: 'Activity',     sub: 'Everything that’s happened' },
@@ -26,11 +30,13 @@ const PAGE_META = {
 
 const NAV = [
   { to: '/dashboard',    Icon: DashboardOutlined,        label: 'Dashboard'    },
+  { to: '/workspaces',   Icon: FolderOutlined,            label: 'Workspaces'   },
   { to: '/companies',    Icon: BusinessOutlined,          label: 'Companies'    },
   { to: '/applications', Icon: WorkOutlined,              label: 'Applications' },
   { to: '/follow-ups',   Icon: NotificationsNoneOutlined, label: 'Follow-Ups'   },
   { to: '/recruiters',   Icon: PeopleOutlined,            label: 'Recruiters'   },
   { to: '/referrals',    Icon: Handshake,                 label: 'Referrals'    },
+  { to: '/goals',        Icon: FlagOutlined,              label: 'Goals'        },
 ]
 
 const ADMIN_NAV = { to: '/admin', Icon: AdminPanelSettingsOutlined, label: 'Admin' }
@@ -42,18 +48,81 @@ const QUICK_ACTIONS = [
   { to: '/referrals?add=1',    Icon: HandshakeOutlined,      label: 'New Referral',    key: 'N' },
 ]
 
-function Brand({ onNavigate }) {
+function Brand({ onNavigate, iconOnly = false }) {
   return (
     <Link to="/dashboard" onClick={onNavigate}
       className="group flex items-center gap-2.5 rounded-xl transition-transform active:scale-[0.98]">
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-app-accent to-app-accent2 shadow-[0_2px_12px_-2px_rgba(99,102,241,0.55)] transition-shadow duration-200 group-hover:shadow-[0_4px_18px_-2px_rgba(99,102,241,0.75)]">
         <span className="font-display text-[11px] font-bold tracking-tight text-white">CF</span>
       </div>
-      <div className="leading-tight">
-        <p className="font-display text-[13px] font-semibold text-white">CareerFlow</p>
-        <p className="text-[10px] text-white/30">Workspace</p>
-      </div>
+      {!iconOnly && (
+        <div className="leading-tight">
+          <p className="font-display text-[13px] font-semibold text-white">CareerFlow</p>
+        </div>
+      )}
     </Link>
+  )
+}
+
+function WorkspaceSwitcher({ onNavigate }) {
+  const { workspaces, activeWorkspaceId, activeWorkspace, setActiveWorkspaceId, loading } = useWorkspace()
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef(null)
+  const menuRef = useRef(null)
+
+  useCloseOnOutsideEvent(open, () => setOpen(false), [triggerRef, menuRef])
+
+  if (loading || workspaces.length === 0) {
+    return <p className="px-2 pb-1 text-[10px] text-white/30">Workspace</p>
+  }
+
+  return (
+    <div className="relative px-0 pb-1">
+      <button
+        ref={triggerRef}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1 rounded-lg px-2 py-1 text-left transition-colors hover:bg-white/[0.05]"
+      >
+        <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-white/45">
+          {activeWorkspace?.name || 'Select workspace'}
+        </span>
+        <KeyboardArrowDownRounded sx={{ fontSize: 13 }} className={`shrink-0 text-white/25 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          className="absolute left-0 top-full z-10 mt-1 w-56 overflow-hidden rounded-xl border border-white/[0.08] bg-app-raised shadow-[0_16px_36px_-12px_rgba(0,0,0,0.6)]"
+        >
+          <p className="px-3.5 pt-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-wider text-white/25">Workspaces</p>
+          <div className="max-h-64 overflow-y-auto no-scrollbar py-1">
+            {workspaces.map((w) => (
+              <button
+                key={w.id}
+                onClick={() => { setActiveWorkspaceId(String(w.id)); setOpen(false) }}
+                className={`flex h-9 w-full items-center gap-2 px-3.5 text-left text-[13px] font-medium transition-colors ${
+                  String(w.id) === String(activeWorkspaceId)
+                    ? 'bg-white/[0.07] text-white'
+                    : 'text-white/60 hover:bg-white/[0.05] hover:text-white'
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate">{w.name}</span>
+                {w.isDefault && <span className="shrink-0 text-[10px] text-white/25">Default</span>}
+              </button>
+            ))}
+          </div>
+          <div className="border-t border-white/[0.06] py-1">
+            <Link
+              to="/workspaces"
+              onClick={() => { setOpen(false); onNavigate?.() }}
+              className="flex h-9 items-center gap-2 px-3.5 text-left text-[12.5px] font-medium text-white/45 transition-colors hover:bg-white/[0.05] hover:text-white/80"
+            >
+              Manage workspaces
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -64,13 +133,10 @@ function SidebarContent({ onClose, onLogout }) {
   const navigate = useNavigate()
   const { profile } = useProfile()
   const [accountOpen, setAccountOpen] = useState(false)
+  const accountTriggerRef = useRef(null)
+  const accountMenuRef = useRef(null)
 
-  useEffect(() => {
-    if (!accountOpen) return
-    const close = () => setAccountOpen(false)
-    window.addEventListener('click', close)
-    return () => window.removeEventListener('click', close)
-  }, [accountOpen])
+  useCloseOnOutsideEvent(accountOpen, () => setAccountOpen(false), [accountTriggerRef, accountMenuRef])
 
   const name = profile?.firstName ? `${profile.firstName}${profile.lastName ? ' ' + profile.lastName : ''}` : 'Account'
   const initial = profileInitial(profile)
@@ -85,6 +151,8 @@ function SidebarContent({ onClose, onLogout }) {
           </button>
         )}
       </div>
+
+      <WorkspaceSwitcher onNavigate={onClose} />
 
       <div className="my-1.5 h-px shrink-0 bg-white/[0.06]" />
 
@@ -148,7 +216,7 @@ function SidebarContent({ onClose, onLogout }) {
       <div className="relative shrink-0 pt-1.5">
         {accountOpen && (
           <div
-            onClick={(e) => e.stopPropagation()}
+            ref={accountMenuRef}
             className="absolute inset-x-0 bottom-full mb-1.5 overflow-hidden rounded-xl border border-white/[0.08] bg-app-raised shadow-[0_16px_36px_-12px_rgba(0,0,0,0.6)]"
           >
             <button
@@ -168,7 +236,8 @@ function SidebarContent({ onClose, onLogout }) {
           </div>
         )}
         <button
-          onClick={(e) => { e.stopPropagation(); setAccountOpen((v) => !v) }}
+          ref={accountTriggerRef}
+          onClick={() => setAccountOpen((v) => !v)}
           className="group flex w-full items-center gap-2.5 rounded-xl p-2 text-left transition-colors duration-200 hover:bg-white/[0.05]"
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-app-accent to-app-accent2 text-[11px] font-bold text-white">
@@ -259,18 +328,20 @@ export default function Layout({ children, headerAction, drawerOpen = false }) {
           <button onClick={() => setMobileOpen(true)} className="rounded-lg p-1.5 text-white/50 transition hover:bg-white/[0.08] hover:text-white">
             <Menu fontSize="small" />
           </button>
-          <Brand />
+          <Brand iconOnly />
         </header>
 
-        <header className={`sticky top-0 z-20 hidden h-20 items-center justify-between gap-4 px-8 lg:flex transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
-          <div className="min-w-0">
-            <h1 className="font-display text-[30px] font-bold leading-tight tracking-tight text-app-text truncate">{meta.title}</h1>
-            {meta.sub && <p className="mt-1 text-sm text-app-text-muted truncate">{meta.sub}</p>}
-          </div>
-          <div className={location.pathname === '/dashboard' && headerAction ? 'min-w-0 flex-1 max-w-xl' : 'shrink-0'}>
-            {headerAction || (location.pathname === '/dashboard' && <UserChip />)}
-          </div>
-        </header>
+        {location.pathname !== '/workspaces' && (
+          <header className={`sticky top-0 z-20 hidden h-20 items-center justify-between gap-4 px-8 lg:flex transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
+            <div className="min-w-0">
+              <h1 className="font-display text-[30px] font-bold leading-tight tracking-tight text-app-text truncate">{meta.title}</h1>
+              {meta.sub && <p className="mt-1 text-sm text-app-text-muted truncate">{meta.sub}</p>}
+            </div>
+            <div className={location.pathname === '/dashboard' && headerAction ? 'min-w-0 flex-1 max-w-xl' : 'shrink-0'}>
+              {headerAction || (location.pathname === '/dashboard' && <UserChip />)}
+            </div>
+          </header>
+        )}
 
         <main className="mx-auto w-full max-w-[84rem] flex-1 px-8 pb-10 pt-2">
           {headerAction && <div className="mb-6 flex flex-wrap justify-end gap-2 lg:hidden">{headerAction}</div>}

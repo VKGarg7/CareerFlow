@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Alert, CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
@@ -15,8 +14,8 @@ import { ConfirmDeleteModal } from '../components/ModalShell'
 import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats, getApplicationCountsByCompany, getCompanyCreationTrend, getCompanyActivitySummary } from '../api/company'
 import { getRecruiters } from '../api/recruiter'
 import EmptyState from '../components/EmptyState'
-import SharedStatusBadge from '../components/StatusBadge'
 import CompanyDetailModal from '../components/CompanyDetailModal'
+import ResearchNoteSearch from '../components/ResearchNoteSearch'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
 import CompanyLogo from '../components/CompanyLogo'
@@ -27,6 +26,7 @@ import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
 import usePagedList from '../hooks/usePagedList'
 import useFetchOnce from '../hooks/useFetchOnce'
+import { useWorkspace } from '../context/WorkspaceContext'
 import { DrawerShell } from '../components/DrawerShell'
 import { FormFooterButtons } from '../components/formKit'
 import { CloseGlyphIcon } from '../components/CloseGlyphIcon'
@@ -51,14 +51,18 @@ const SORT_OPTIONS = [
   { value: 'updatedAt', label: 'Last Updated' },
 ]
 
+const PRIORITY_CONFIG = {
+  DREAM:  { label: 'Dream',  badge: 'bg-app-accent2/10 text-app-accent-soft', hex: '#8B5CF6' },
+  HIGH:   { label: 'High',   badge: 'bg-app-danger/10 text-app-danger',       hex: '#F43F5E' },
+  MEDIUM: { label: 'Medium', badge: 'bg-app-warning/10 text-app-warning',     hex: '#F59E0B' },
+  LOW:    { label: 'Low',    badge: 'bg-white/[0.06] text-white/50',          hex: '#6B7280' },
+}
+
 const EMPTY_FORM = {
   name: '', website: '', industry: '', location: '',
   description: '', notes: '', status: 'TARGETING',
-}
-
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.TARGETING
-  return <SharedStatusBadge badge={cfg.badge} dot={cfg.dot} label={cfg.label} />
+  priority: '', targetReason: '', hiringStatus: '',
+  recruiterLeads: '', referralNotes: '', strategyNotes: '',
 }
 
 function CompanyStatusChanger({ company, onStatusChanged }) {
@@ -84,7 +88,10 @@ function CompanyListRow({ company, onEdit, onDelete, onView, onStatusChanged, st
       <CompanyLogo name={company.name} website={company.website} dotColor={dotHex(company.status)} className="w-10 h-10 shrink-0" />
 
       <div className={`min-w-0 shrink-0 ${compact ? 'w-24' : 'w-28 sm:w-44'}`}>
-        <p className="text-sm font-bold text-white/90 truncate">{company.name}</p>
+        <p className="text-sm font-bold text-white/90 truncate flex items-center gap-1.5">
+          {company.name}
+          {company.priority && <PriorityBadge priority={company.priority} />}
+        </p>
         {company.industry && <p className="text-xs text-white/40 truncate mt-0.5">{company.industry}</p>}
       </div>
 
@@ -161,7 +168,10 @@ function CompanyDirectoryCard({ company, onEdit, onDelete, onView, onStatusChang
       avatarSlot={<CompanyLogo name={company.name} website={company.website} dotColor={dotHex(company.status)} className="w-12 h-12" />}
       titleSlot={
         <>
-          <p className="text-[15px] font-bold text-white/90 truncate leading-snug">{company.name}</p>
+          <p className="text-[15px] font-bold text-white/90 truncate leading-snug flex items-center gap-1.5">
+            {company.name}
+            {company.priority && <PriorityBadge priority={company.priority} />}
+          </p>
           {company.industry && (
             <p className="flex items-center gap-1.5 text-[13px] text-white/40 truncate mt-0.5">
               <BusinessCenterOutlined sx={{ fontSize: 13 }} className="text-white/25 shrink-0" />
@@ -251,6 +261,14 @@ function CompanyDirectoryCard({ company, onEdit, onDelete, onView, onStatusChang
 
 const dotHex = (status) => (STATUS_CONFIG[status] || STATUS_CONFIG.TARGETING).hex
 
+function PriorityBadge({ priority }) {
+  const cfg = PRIORITY_CONFIG[priority]
+  if (!cfg) return null
+  return (
+    <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${cfg.badge}`}>{cfg.label}</span>
+  )
+}
+
 function AddEditModal({ open, company, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -258,11 +276,15 @@ function AddEditModal({ open, company, onClose, onSaved }) {
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the modal's form state when it opens for a given company is the intended effect
       setForm(company ? {
         name: company.name || '', website: company.website || '',
         industry: company.industry || '', location: company.location || '',
         description: company.description || '', notes: company.notes || '',
         status: company.status || 'TARGETING',
+        priority: company.priority || '', targetReason: company.targetReason || '',
+        hiringStatus: company.hiringStatus || '', recruiterLeads: company.recruiterLeads || '',
+        referralNotes: company.referralNotes || '', strategyNotes: company.strategyNotes || '',
       } : EMPTY_FORM)
       setError('')
     }
@@ -307,15 +329,27 @@ function AddEditModal({ open, company, onClose, onSaved }) {
             </label>
             <input type="text" value={form.name} onChange={set('name')} placeholder="e.g. Google" className={inputCls} />
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Status</label>
-            <FilterSelect
-              value={form.status}
-              onChange={(val) => setForm((f) => ({ ...f, status: val }))}
-              options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
-              hideAll
-              className="w-full"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Status</label>
+              <FilterSelect
+                value={form.status}
+                onChange={(val) => setForm((f) => ({ ...f, status: val }))}
+                options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
+                hideAll
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Priority</label>
+              <FilterSelect
+                value={form.priority}
+                onChange={(val) => setForm((f) => ({ ...f, priority: val }))}
+                allLabel="No priority"
+                options={Object.entries(PRIORITY_CONFIG).map(([value, { label }]) => ({ value, label }))}
+                className="w-full"
+              />
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -341,6 +375,38 @@ function AddEditModal({ open, company, onClose, onSaved }) {
             <textarea value={form.notes} onChange={set('notes')} rows={2}
               placeholder="Personal notes, referral contacts..." className={`${inputCls} resize-none`} />
           </div>
+
+          <div className="pt-2 border-t border-white/[0.06]">
+            <p className="text-xs font-semibold text-white/50 uppercase tracking-wide mb-3">Target Strategy</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Reason for Targeting</label>
+                <textarea value={form.targetReason} onChange={set('targetReason')} rows={2}
+                  placeholder="Why this company? e.g. mission alignment, tech stack..." className={`${inputCls} resize-none`} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Hiring Status</label>
+                <input type="text" value={form.hiringStatus} onChange={set('hiringStatus')}
+                  placeholder="e.g. Actively hiring, hiring freeze..." className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Recruiter Leads</label>
+                <textarea value={form.recruiterLeads} onChange={set('recruiterLeads')} rows={2}
+                  placeholder="Recruiter names, LinkedIn contacts..." className={`${inputCls} resize-none`} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Alumni / Referral Opportunities</label>
+                <textarea value={form.referralNotes} onChange={set('referralNotes')} rows={2}
+                  placeholder="Contacts who could refer you..." className={`${inputCls} resize-none`} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-app-text-muted uppercase tracking-wide mb-1.5">Strategy Notes</label>
+                <textarea value={form.strategyNotes} onChange={set('strategyNotes')} rows={2}
+                  placeholder="Plan of action, timing, next steps..." className={`${inputCls} resize-none`} />
+              </div>
+            </div>
+          </div>
+
           <FormFooterButtons saving={saving} onCancel={onClose} saveLabel={company ? 'Save Changes' : 'Add Company'} />
         </form>
       </div>
@@ -353,6 +419,7 @@ function DeleteModal({ open, company, onClose, onDeleted }) {
   const [warning, setWarning] = useState('')
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the modal's confirm state when it opens is the intended effect
     if (open) { setForce(false); setWarning('') }
   }, [open])
 
@@ -392,6 +459,7 @@ function DeleteModal({ open, company, onClose, onDeleted }) {
 }
 
 export default function Companies() {
+  const { activeWorkspaceId, loading: workspaceLoading } = useWorkspace()
   const [success, setSuccess] = useTransientMessage()
 
   const [search, setSearch] = useState('')
@@ -407,7 +475,7 @@ export default function Companies() {
 
   const {
     items: companies, setItems: setCompanies, loading, error, setError,
-    page, setPage, size, setSize, refetch: fetchCompanies,
+    setPage, setSize, refetch: fetchCompanies,
   } = usePagedList(
     useCallback(
       (page, size) => getCompanies({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
@@ -437,8 +505,9 @@ export default function Companies() {
   useSearchShortcut(searchInputRef)
 
   useEffect(() => {
+    if (workspaceLoading || !activeWorkspaceId) return
     getRecruiters({ size: 1000 }).then((r) => setRecruiters(r.data || [])).catch(() => {})
-  }, [])
+  }, [activeWorkspaceId, workspaceLoading])
 
   const statsByCompany = activitySummaryByCompany
 
@@ -506,14 +575,6 @@ export default function Companies() {
     [recruiterFilter, setRecruiterFilter],
   ])
 
-  const grouped = filteredCompanies.reduce((acc, c) => {
-    const letter = c.name[0]?.toUpperCase() || '#'
-    if (!acc[letter]) acc[letter] = []
-    acc[letter].push(c)
-    return acc
-  }, {})
-  const sortedLetters = Object.keys(grouped).sort()
-
   const openView = (id) => { setModalOpen(false); setViewId(id) }
   const cardProps = { onEdit: openEdit, onDelete: setDeleteTarget, onView: openView, onStatusChanged: handleStatusChanged }
   const drawerOpen = modalOpen || viewId !== null
@@ -557,6 +618,8 @@ export default function Companies() {
               ⌘K
             </span>
           </div>
+
+          <ResearchNoteSearch onSelectCompany={openView} />
 
           <button onClick={() => setFiltersOpen((o) => !o)}
             className={`h-11 px-4 flex items-center gap-2 border rounded-xl text-sm font-medium transition whitespace-nowrap ${

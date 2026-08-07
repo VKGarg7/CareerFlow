@@ -16,8 +16,9 @@ public class ChatController {
     private final ChatService chatService;
 
     @PostMapping("/api/chat/sessions")
-    public ResponseEntity<ChatSessionResponse> createSession(@RequestBody ChatSessionRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(chatService.createSession(request));
+    public ResponseEntity<ChatSessionResponse> createSession(@RequestBody ChatSessionRequest request,
+                                                               @RequestParam(required = false) Long workspaceId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(chatService.createSession(request, workspaceId));
     }
 
     @GetMapping("/api/chat/sessions")

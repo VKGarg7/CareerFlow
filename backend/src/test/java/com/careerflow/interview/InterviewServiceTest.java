@@ -24,6 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @SuppressWarnings("null")
@@ -44,6 +45,7 @@ class InterviewServiceTest {
 
     private User currentUser;
     private JobApplication application;
+    private static final Long WORKSPACE_ID = 99L;
 
     @BeforeEach
     void setUp() {
@@ -60,7 +62,7 @@ class InterviewServiceTest {
     @Test
     void create_savesInterview_withDefaultOutcome_whenOutcomeNotProvided() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(applicationRepository.findByIdAndUserId(50L, 1L)).thenReturn(Optional.of(application));
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
         when(interviewRepository.save(any(Interview.class))).thenAnswer(invocation -> {
             Interview interview = invocation.getArgument(0);
             interview.setId(7L);
@@ -70,7 +72,7 @@ class InterviewServiceTest {
         InterviewRequest request = new InterviewRequest();
         request.setScheduledAt(LocalDateTime.now().plusDays(1));
 
-        InterviewResponse response = interviewService.create(50L, request);
+        InterviewResponse response = interviewService.create(50L, request, WORKSPACE_ID);
 
         assertThat(response.getId()).isEqualTo(7L);
         assertThat(response.getOutcome()).isEqualTo(InterviewOutcome.AWAITING_RESPONSE);
@@ -80,11 +82,11 @@ class InterviewServiceTest {
     @Test
     void create_throwsResourceNotFoundException_whenApplicationNotOwned() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(applicationRepository.findByIdAndUserId(50L, 1L)).thenReturn(Optional.empty());
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.empty());
 
         InterviewRequest request = new InterviewRequest();
 
-        assertThatThrownBy(() -> interviewService.create(50L, request))
+        assertThatThrownBy(() -> interviewService.create(50L, request, WORKSPACE_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(interviewRepository, never()).save(any());
@@ -93,16 +95,16 @@ class InterviewServiceTest {
     @Test
     void getForApplication_throwsResourceNotFoundException_whenApplicationNotOwned() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(applicationRepository.findByIdAndUserId(50L, 1L)).thenReturn(Optional.empty());
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> interviewService.getForApplication(50L))
+        assertThatThrownBy(() -> interviewService.getForApplication(50L, WORKSPACE_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void getForApplication_returnsMappedList_whenOwned() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(applicationRepository.findByIdAndUserId(50L, 1L)).thenReturn(Optional.of(application));
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
 
         Interview interview = Interview.builder().application(application).user(currentUser)
                 .scheduledAt(LocalDateTime.now()).build();
@@ -110,7 +112,7 @@ class InterviewServiceTest {
         when(interviewRepository.findAllByUserIdAndApplicationIdOrderByScheduledAtAsc(1L, 50L))
                 .thenReturn(List.of(interview));
 
-        List<InterviewResponse> result = interviewService.getForApplication(50L);
+        List<InterviewResponse> result = interviewService.getForApplication(50L, WORKSPACE_ID);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getId()).isEqualTo(9L);

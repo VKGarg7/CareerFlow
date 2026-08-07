@@ -8,6 +8,7 @@ import com.careerflow.common.PageResponse;
 import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.StatusCountsResponse;
+import com.careerflow.common.WorkspaceAccessUtils;
 import com.careerflow.company.dto.CompanyActivitySummary;
 import com.careerflow.company.dto.CompanyRequest;
 import com.careerflow.company.dto.CompanyResponse;
@@ -16,6 +17,7 @@ import com.careerflow.exception.ConflictException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.user.User;
+import com.careerflow.workspace.Workspace;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
@@ -34,6 +36,7 @@ public class CompanyService {
             Set.of("name", "industry", "location", "status", "createdAt", "updatedAt");
 
     private final CompanyRepository companyRepository;
+    private final WorkspaceAccessUtils workspaceAccessUtils;
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
     @Lazy
@@ -41,12 +44,14 @@ public class CompanyService {
     @Lazy
     private final FollowUpService followUpService;
 
-    public CompanyResponse addCompany(CompanyRequest request) {
+    public CompanyResponse addCompany(CompanyRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        if (companyRepository.existsByUserIdAndNameIgnoreCase(user.getId(), request.getName()))
+        if (companyRepository.existsByWorkspaceIdAndNameIgnoreCase(workspaceId, request.getName()))
             throw new DuplicateResourceException("Company '" + request.getName() + "' already exists");
+        Workspace workspace = workspaceAccessUtils.getOwnedWorkspace(workspaceId, user.getId());
         Company company = Company.builder()
                 .user(user)
+                .workspace(workspace)
                 .name(request.getName())
                 .website(request.getWebsite())
                 .industry(request.getIndustry())
@@ -54,6 +59,12 @@ public class CompanyService {
                 .description(request.getDescription())
                 .notes(request.getNotes())
                 .status(request.getStatus() != null ? request.getStatus() : CompanyStatus.TARGETING)
+                .priority(request.getPriority())
+                .targetReason(request.getTargetReason())
+                .hiringStatus(request.getHiringStatus())
+                .recruiterLeads(request.getRecruiterLeads())
+                .referralNotes(request.getReferralNotes())
+                .strategyNotes(request.getStrategyNotes())
                 .build();
         company = companyRepository.save(company);
         auditLogService.log(user, AuditAction.COMPANY_CREATED, "Added company " + company.getName());
@@ -61,37 +72,37 @@ public class CompanyService {
     }
 
     public PageResponse<CompanyResponse> getMyCompanies(
-            Long id, String search, CompanyStatus status, String sortBy, String order, int page, int size) {
+            Long id, String search, CompanyStatus status, String sortBy, String order, int page, int size, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         if (id != null) {
-            CompanyResponse single = toResponse(findOwned(id, user.getId()));
+            CompanyResponse single = toResponse(findOwned(id, user.getId(), workspaceId));
             return PageResponse.single(single);
         }
         Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
         boolean hasSearch = search != null && !search.isBlank();
         Page<Company> results;
         if (status != null && hasSearch) {
-            results = companyRepository.findAllByUserIdAndStatusAndNameContainingIgnoreCase(user.getId(), status, search.trim(), pageable);
+            results = companyRepository.findAllByUserIdAndWorkspaceIdAndStatusAndNameContainingIgnoreCase(user.getId(), workspaceId, status, search.trim(), pageable);
         } else if (status != null) {
-            results = companyRepository.findAllByUserIdAndStatus(user.getId(), status, pageable);
+            results = companyRepository.findAllByUserIdAndWorkspaceIdAndStatus(user.getId(), workspaceId, status, pageable);
         } else if (hasSearch) {
-            results = companyRepository.findAllByUserIdAndNameContainingIgnoreCase(user.getId(), search.trim(), pageable);
+            results = companyRepository.findAllByUserIdAndWorkspaceIdAndNameContainingIgnoreCase(user.getId(), workspaceId, search.trim(), pageable);
         } else {
-            results = companyRepository.findAllByUserId(user.getId(), pageable);
+            results = companyRepository.findAllByUserIdAndWorkspaceId(user.getId(), workspaceId, pageable);
         }
         return PageResponse.of(results.map(this::toResponse));
     }
 
-    public StatusCountsResponse getMyCompanyStats() {
+    public StatusCountsResponse getMyCompanyStats(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        return StatusCountsResponse.fromGroupedCounts(companyRepository.countByStatusGroupedForUser(user.getId()));
+        return StatusCountsResponse.fromGroupedCounts(companyRepository.countByStatusGroupedForUser(user.getId(), workspaceId));
     }
 
-    public Map<Long, Long> getMyApplicationCountsByCompany() {
-        return applicationService.getMyApplicationCountsByCompany();
+    public Map<Long, Long> getMyApplicationCountsByCompany(Long workspaceId) {
+        return applicationService.getMyApplicationCountsByCompany(workspaceId);
     }
 
-    public Map<String, java.util.List<Long>> getCreationTrend(int days) {
+    public Map<String, java.util.List<Long>> getCreationTrend(int days, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         java.time.LocalDate today = java.time.LocalDate.now();
         java.util.List<java.time.LocalDate> dayKeys = new java.util.ArrayList<>();
@@ -99,7 +110,7 @@ public class CompanyService {
 
         java.time.LocalDateTime since = dayKeys.get(0).atStartOfDay();
         java.util.List<CompanyRepository.DailyStatusCount> rows =
-                companyRepository.countByDayAndStatusGroupedForUser(user.getId(), since);
+                companyRepository.countByDayAndStatusGroupedForUser(user.getId(), workspaceId, since);
 
         Map<String, java.util.List<Long>> result = new java.util.LinkedHashMap<>();
         for (CompanyStatus status : CompanyStatus.values()) {
@@ -108,7 +119,7 @@ public class CompanyService {
                 if (row.getStatus() != status) continue;
                 perDay.put(row.getDay().toLocalDate(), row.getTotal());
             }
-            long running = companyRepository.countByUserIdAndStatusAndCreatedAtBefore(user.getId(), status, since);
+            long running = companyRepository.countByUserIdAndStatusAndCreatedAtBefore(user.getId(), workspaceId, status, since);
             java.util.List<Long> series = new java.util.ArrayList<>();
             for (java.time.LocalDate day : dayKeys) {
                 running += perDay.getOrDefault(day, 0L);
@@ -119,9 +130,9 @@ public class CompanyService {
         return result;
     }
 
-    public Map<Long, CompanyActivitySummary> getMyActivitySummary() {
-        Map<Long, java.time.LocalDate> lastActivity = applicationService.getMyLastActivityByCompany();
-        Map<Long, java.time.LocalDate> nextFollowUp = followUpService.getMyNextFollowUpByCompany();
+    public Map<Long, CompanyActivitySummary> getMyActivitySummary(Long workspaceId) {
+        Map<Long, java.time.LocalDate> lastActivity = applicationService.getMyLastActivityByCompany(workspaceId);
+        Map<Long, java.time.LocalDate> nextFollowUp = followUpService.getMyNextFollowUpByCompany(workspaceId);
 
         Map<Long, CompanyActivitySummary> result = new java.util.HashMap<>();
         java.util.Set<Long> companyIds = new java.util.HashSet<>();
@@ -133,12 +144,12 @@ public class CompanyService {
         return result;
     }
 
-    public CompanyResponse updateCompany(Long id, CompanyUpdateRequest request) {
+    public CompanyResponse updateCompany(Long id, CompanyUpdateRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        Company company = findOwned(id, user.getId());
+        Company company = findOwned(id, user.getId(), workspaceId);
 
         if (request.getName() != null && !request.getName().isBlank()) {
-            if (companyRepository.existsByUserIdAndNameIgnoreCaseAndIdNot(user.getId(), request.getName(), id))
+            if (companyRepository.existsByWorkspaceIdAndNameIgnoreCaseAndIdNot(workspaceId, request.getName(), id))
                 throw new DuplicateResourceException("Company '" + request.getName() + "' already exists");
             company.setName(request.getName());
         }
@@ -148,28 +159,34 @@ public class CompanyService {
         if (request.getDescription() != null) company.setDescription(request.getDescription());
         if (request.getNotes() != null) company.setNotes(request.getNotes());
         if (request.getStatus() != null) company.setStatus(request.getStatus());
+        if (request.getPriority() != null) company.setPriority(request.getPriority());
+        if (request.getTargetReason() != null) company.setTargetReason(request.getTargetReason());
+        if (request.getHiringStatus() != null) company.setHiringStatus(request.getHiringStatus());
+        if (request.getRecruiterLeads() != null) company.setRecruiterLeads(request.getRecruiterLeads());
+        if (request.getReferralNotes() != null) company.setReferralNotes(request.getReferralNotes());
+        if (request.getStrategyNotes() != null) company.setStrategyNotes(request.getStrategyNotes());
 
         company = companyRepository.save(company);
         auditLogService.log(user, AuditAction.COMPANY_UPDATED, "Updated company " + company.getName());
         return toResponse(company);
     }
 
-    public void deleteCompany(Long id, boolean force) {
+    public void deleteCompany(Long id, boolean force, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        Company company = findOwned(id, user.getId());
-        boolean hasApplications = applicationService.hasApplications(user.getId(), id);
+        Company company = findOwned(id, user.getId(), workspaceId);
+        boolean hasApplications = applicationService.hasApplications(user.getId(), id, workspaceId);
         if (hasApplications && !force)
             throw new ConflictException(
                     "Company '" + company.getName() + "' has existing applications. " +
                     "Pass force=true to delete it along with all associated applications.");
-        if (hasApplications) applicationService.deleteAllByCompany(id);
+        if (hasApplications) applicationService.deleteAllByCompany(id, workspaceId);
         company.softDelete();
         companyRepository.save(company);
         auditLogService.log(user, AuditAction.COMPANY_DELETED, "Deleted company " + company.getName());
     }
 
-    private Company findOwned(Long companyId, Long userId) {
-        return companyRepository.findByIdAndUserId(companyId, userId)
+    private Company findOwned(Long companyId, Long userId, Long workspaceId) {
+        return companyRepository.findByIdAndUserIdAndWorkspaceId(companyId, userId, workspaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found"));
     }
 
@@ -183,6 +200,12 @@ public class CompanyService {
                 .description(company.getDescription())
                 .notes(company.getNotes())
                 .status(company.getStatus())
+                .priority(company.getPriority())
+                .targetReason(company.getTargetReason())
+                .hiringStatus(company.getHiringStatus())
+                .recruiterLeads(company.getRecruiterLeads())
+                .referralNotes(company.getReferralNotes())
+                .strategyNotes(company.getStrategyNotes())
                 .createdAt(company.getCreatedAt())
                 .updatedAt(company.getUpdatedAt())
                 .build();

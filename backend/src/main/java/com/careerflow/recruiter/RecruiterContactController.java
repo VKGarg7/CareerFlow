@@ -18,8 +18,9 @@ public class RecruiterContactController {
 
     @PostMapping
     public ResponseEntity<RecruiterContactResponse> addRecruiter(
-            @Valid @RequestBody RecruiterContactRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(recruiterService.addRecruiter(request));
+            @Valid @RequestBody RecruiterContactRequest request,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(recruiterService.addRecruiter(request, workspaceId));
     }
 
     @GetMapping
@@ -30,30 +31,34 @@ public class RecruiterContactController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String order,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(recruiterService.getMyRecruiters(id, search, status, sortBy, order, page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(recruiterService.getMyRecruiters(id, search, status, sortBy, order, page, size, workspaceId));
     }
 
     @GetMapping("/stats")
-    public ResponseEntity<StatusCountsResponse> getMyRecruiterStats() {
-        return ResponseEntity.ok(recruiterService.getMyRecruiterStats());
+    public ResponseEntity<StatusCountsResponse> getMyRecruiterStats(@RequestParam Long workspaceId) {
+        return ResponseEntity.ok(recruiterService.getMyRecruiterStats(workspaceId));
     }
 
     @GetMapping("/sources")
-    public ResponseEntity<java.util.List<RecruiterSource>> getMySources() {
-        return ResponseEntity.ok(recruiterService.getMySources());
+    public ResponseEntity<java.util.List<RecruiterSource>> getMySources(@RequestParam Long workspaceId) {
+        return ResponseEntity.ok(recruiterService.getMySources(workspaceId));
     }
 
     @PatchMapping("/{id}")
     public ResponseEntity<RecruiterContactResponse> updateRecruiter(
             @PathVariable Long id,
-            @Valid @RequestBody RecruiterContactUpdateRequest request) {
-        return ResponseEntity.ok(recruiterService.updateRecruiter(id, request));
+            @Valid @RequestBody RecruiterContactUpdateRequest request,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(recruiterService.updateRecruiter(id, request, workspaceId));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteRecruiter(@PathVariable Long id) {
-        recruiterService.deleteRecruiter(id);
+    public ResponseEntity<Void> deleteRecruiter(
+            @PathVariable Long id,
+            @RequestParam Long workspaceId) {
+        recruiterService.deleteRecruiter(id, workspaceId);
         return ResponseEntity.noContent().build();
     }
 }

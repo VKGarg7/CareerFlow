@@ -17,6 +17,7 @@ import CompanyLogo from '../components/CompanyLogo'
 import StatusBadge from '../components/StatusBadge'
 import { todayStr, daysDiff } from '../utils/followup'
 import { useProfile } from '../context/ProfileContext'
+import { useWorkspace } from '../context/WorkspaceContext'
 import { getCompanies, getCompanyStats } from '../api/company'
 import { getApplications, getApplicationStats, getWeeklyTrend, getUpcomingDeadlines } from '../api/application'
 import { getRecruiters, getRecruiterStats } from '../api/recruiter'
@@ -267,23 +268,6 @@ function ListWidget({ title, onViewAll, empty, emptyIcon, children }) {
   )
 }
 
-function ChecklistItem({ done, text, index }) {
-  return (
-    <div className="flex items-center gap-3">
-      {done ? (
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-app-success/15 text-app-success">
-          <CheckRounded sx={{ fontSize: 13 }} />
-        </div>
-      ) : (
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/15">
-          <span className="text-[9px] font-medium text-white/30">{index + 1}</span>
-        </div>
-      )}
-      <span className={`text-sm ${done ? 'text-white/30 line-through' : 'text-white/70'}`}>{text}</span>
-    </div>
-  )
-}
-
 export default function Dashboard() {
   const { profile, loading: profileLoading } = useProfile()
   const [companies,    setCompanies]    = useState([])
@@ -300,8 +284,10 @@ export default function Dashboard() {
     () => localStorage.getItem('cf_summary_dismissed') === todayStr()
   )
   const navigate = useNavigate()
+  const { activeWorkspaceId, loading: workspaceLoading } = useWorkspace()
 
   useEffect(() => {
+    if (workspaceLoading || !activeWorkspaceId) return
     Promise.allSettled([
       getCompanies({ size: 1000 }), getApplications({ size: 1000 }), getRecruiters({ size: 1000 }),
       getUpcomingFollowUps(7), getUpcomingDeadlines(7), getWeeklyTrend(14),
@@ -318,7 +304,7 @@ export default function Dashboard() {
       if (rs.status === 'fulfilled') setRecruiterStats(rs.value.data)
       setLoading(false)
     })
-  }, [])
+  }, [activeWorkspaceId, workspaceLoading])
 
   const name = profile?.firstName ? `${profile.firstName}${profile.lastName ? ' ' + profile.lastName : ''}` : 'there'
 
@@ -347,7 +333,9 @@ export default function Dashboard() {
     .map((a) => ({ ...a, daysLeft: daysDiff(today, a.deadline) }))
     .slice(0, 5)
 
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+  const tomorrowDate = new Date(today)
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1)
+  const tomorrow = tomorrowDate.toISOString().slice(0, 10)
   const interviewFollowUpIds = new Set(
     upcomingFollowUps.filter((f) => f.followUpDate === today || f.followUpDate === tomorrow).map((f) => f.applicationId)
   )

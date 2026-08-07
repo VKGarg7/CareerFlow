@@ -52,10 +52,21 @@
 -- while fictional companies (no logo) are dated 366-1460 days ago -- this
 -- guarantees every real company sorts above every fictional one under the
 -- default sort, without requiring the user to touch the sort dropdown.
+--
+-- Workspaces (section 8) are a separate, low-cardinality, personal-
+-- organization entity -- a real user might have 3-8 of them across an
+-- active job search, never thousands like companies. So that section seeds
+-- a small, realistic, hand-written set (N_WORKSPACES, currently 6) instead
+-- of a bulk generator. Each per-row jsonb field (target roles, preferred
+-- locations, job types) is picked with a `CASE i WHEN ... END` rather than
+-- a 2D Postgres array, since native 2D arrays require every row to be the
+-- same length and don't index back down to a 1D row the way they would in
+-- JS/Python.
 
 DO $$
 DECLARE
     v_user_id BIGINT;
+    v_workspace_ids BIGINT[] := ARRAY[]::BIGINT[];
     v_company_ids BIGINT[] := ARRAY[]::BIGINT[];
     v_app_ids BIGINT[] := ARRAY[]::BIGINT[];
     v_recruiter_ids BIGINT[] := ARRAY[]::BIGINT[];
@@ -213,6 +224,23 @@ DECLARE
     v_full_name TEXT;
     v_fic_name TEXT;
     v_p INT; v_m INT; v_s INT;
+
+    -- Workspaces (small, hand-written set -- see section 8 below)
+    N_WORKSPACES CONSTANT INT := 6;
+    v_ws_name TEXT;
+    v_ws_description TEXT;
+    v_ws_target_roles JSONB;
+    v_ws_preferred_locations JSONB;
+    v_ws_comp_min BIGINT;
+    v_ws_comp_max BIGINT;
+    v_ws_work_mode TEXT;
+    v_ws_job_types JSONB;
+    v_ws_goal_apps INT;
+    v_ws_goal_ivs INT;
+    v_ws_goal_offers INT;
+    v_ws_status TEXT;
+    v_ws_created_at TIMESTAMP;
+    v_ws_search_start DATE;
 BEGIN
     -- 0) Merge the three real-company tiers (225 original + 486 batch-1 +
     --    788 batch-2) into single arrays so every downstream reference below
@@ -255,13 +283,108 @@ BEGIN
     END IF;
     DELETE FROM job_applications WHERE user_id = v_user_id;
     DELETE FROM companies WHERE user_id = v_user_id;
+    DELETE FROM workspaces WHERE user_id = v_user_id;
+
+    -- 2) Workspaces -- a low-cardinality, personal-organization entity (a
+    --    real user might have 3-8 of them across an active job search),
+    --    never thousands like companies. So this is a small, hand-written
+    --    set instead of a bulk generator. Each per-row jsonb field (target
+    --    roles, preferred locations, job types) is picked with a
+    --    `CASE i WHEN ... END` rather than a 2D Postgres array, since native
+    --    2D arrays require every row to be the same length and don't index
+    --    back down to a 1D row the way they would in JS/Python. Seeded
+    --    before companies/applications/recruiters/referrals so their
+    --    workspace_id can cycle through v_workspace_ids below.
+    FOR i IN 1..N_WORKSPACES LOOP
+        CASE i
+        WHEN 1 THEN
+            v_ws_name := 'Backend SDE 2026';
+            v_ws_description := 'Primary search focused on backend/distributed-systems roles at product companies. Prioritizing teams with strong on-call culture and clear leveling.';
+            v_ws_target_roles := '["SDE-2", "Backend Engineer", "Software Engineer II"]'::jsonb;
+            v_ws_preferred_locations := '["Bangalore, India", "Hyderabad, India"]'::jsonb;
+            v_ws_comp_min := 1800000; v_ws_comp_max := 3200000;
+            v_ws_work_mode := 'HYBRID';
+            v_ws_job_types := '["FULL_TIME"]'::jsonb;
+            v_ws_goal_apps := 40; v_ws_goal_ivs := 10; v_ws_goal_offers := 2;
+            v_ws_status := 'ACTIVE';
+        WHEN 2 THEN
+            v_ws_name := 'ML & Applied Research Roles';
+            v_ws_description := 'Targeting ML engineer and applied research roles at companies actually shipping models to production, not just research labs.';
+            v_ws_target_roles := '["ML Engineer", "Applied Scientist", "Research Engineer"]'::jsonb;
+            v_ws_preferred_locations := '["Remote", "Bangalore, India"]'::jsonb;
+            v_ws_comp_min := 2200000; v_ws_comp_max := 4500000;
+            v_ws_work_mode := 'REMOTE';
+            v_ws_job_types := '["FULL_TIME", "CONTRACT"]'::jsonb;
+            v_ws_goal_apps := 25; v_ws_goal_ivs := 8; v_ws_goal_offers := 1;
+            v_ws_status := 'ACTIVE';
+        WHEN 3 THEN
+            v_ws_name := 'Remote-Only Fallback';
+            v_ws_description := 'Backup workspace for fully-remote roles in case the on-site search stalls out. Lower bar on company size, higher bar on remote-first culture.';
+            v_ws_target_roles := '["Backend Engineer", "Full Stack Engineer"]'::jsonb;
+            v_ws_preferred_locations := '["Remote"]'::jsonb;
+            v_ws_comp_min := 1500000; v_ws_comp_max := 2800000;
+            v_ws_work_mode := 'REMOTE';
+            v_ws_job_types := '["FULL_TIME", "FREELANCE"]'::jsonb;
+            v_ws_goal_apps := 15; v_ws_goal_ivs := 4; v_ws_goal_offers := 1;
+            v_ws_status := 'PAUSED';
+        WHEN 4 THEN
+            v_ws_name := 'Bangalore Fintech Push';
+            v_ws_description := 'Narrow, high-intent search across fintech and payments companies headquartered in Bangalore. Leaning on referrals over cold applications.';
+            v_ws_target_roles := '["Backend Engineer", "SDE-2", "Senior Software Engineer"]'::jsonb;
+            v_ws_preferred_locations := '["Bangalore, India"]'::jsonb;
+            v_ws_comp_min := 2000000; v_ws_comp_max := 3800000;
+            v_ws_work_mode := 'ONSITE';
+            v_ws_job_types := '["FULL_TIME"]'::jsonb;
+            v_ws_goal_apps := 20; v_ws_goal_ivs := 6; v_ws_goal_offers := 1;
+            v_ws_status := 'ACTIVE';
+        WHEN 5 THEN
+            v_ws_name := 'Early-Stage Startup Hunt';
+            v_ws_description := 'Casting a wide net across seed/Series A startups for a founding-engineer-adjacent role. Comfortable with higher risk for higher equity/scope.';
+            v_ws_target_roles := '["Founding Engineer", "Early Engineer", "Full Stack Engineer"]'::jsonb;
+            v_ws_preferred_locations := '["Bangalore, India", "Remote", "Gurgaon, India"]'::jsonb;
+            v_ws_comp_min := 1200000; v_ws_comp_max := 3000000;
+            v_ws_work_mode := 'HYBRID';
+            v_ws_job_types := '["FULL_TIME"]'::jsonb;
+            v_ws_goal_apps := 30; v_ws_goal_ivs := 8; v_ws_goal_offers := 1;
+            v_ws_status := 'ARCHIVED';
+        WHEN 6 THEN
+            v_ws_name := 'Platform & Infra Track';
+            v_ws_description := 'Infra, platform, and developer-tools focused search -- Kubernetes, observability, internal developer platforms.';
+            v_ws_target_roles := '["Platform Engineer", "Infrastructure Engineer", "DevOps Engineer"]'::jsonb;
+            v_ws_preferred_locations := '["Remote", "Pune, India"]'::jsonb;
+            v_ws_comp_min := 2000000; v_ws_comp_max := 3600000;
+            v_ws_work_mode := 'REMOTE';
+            v_ws_job_types := '["FULL_TIME", "CONTRACT"]'::jsonb;
+            v_ws_goal_apps := 20; v_ws_goal_ivs := 6; v_ws_goal_offers := 1;
+            v_ws_status := 'COMPLETED';
+        END CASE;
+
+        v_ws_created_at := now() - ((i * 137) % 540 || ' days')::interval - ((i * 53) % 1440 || ' minutes')::interval;
+        v_ws_search_start := (v_ws_created_at - ((i * 29) % 60 || ' days')::interval)::date;
+
+        INSERT INTO workspaces (
+            user_id, name, description, target_roles, preferred_locations,
+            compensation_min, compensation_max, work_mode, job_types,
+            search_start_date, goal_applications_target, goal_interviews_target,
+            goal_offers_target, status, is_default, created_at, updated_at, deleted_at
+        )
+        VALUES (
+            v_user_id, v_ws_name, v_ws_description, v_ws_target_roles, v_ws_preferred_locations,
+            v_ws_comp_min, v_ws_comp_max, v_ws_work_mode, v_ws_job_types,
+            v_ws_search_start, v_ws_goal_apps, v_ws_goal_ivs, v_ws_goal_offers,
+            v_ws_status, (i = 1), v_ws_created_at, v_ws_created_at, NULL
+        )
+        RETURNING id INTO v_new_id;
+        v_workspace_ids := array_append(v_workspace_ids, v_new_id);
+    END LOOP;
 
     -- 2a) Real companies (1499 entries, real domain -> real favicon logo)
     v_num_real := array_length(v_real_names, 1);
     FOR i IN 1..v_num_real LOOP
-        INSERT INTO companies (user_id, name, website, industry, location, description, notes, status, created_at, updated_at, deleted_at)
+        INSERT INTO companies (user_id, workspace_id, name, website, industry, location, description, notes, status, created_at, updated_at, deleted_at)
         VALUES (
             v_user_id,
+            v_workspace_ids[1 + ((i - 1) % array_length(v_workspace_ids, 1))],
             v_real_names[i],
             'https://' || v_real_websites[i],
             v_real_industries[i],
@@ -290,9 +413,10 @@ BEGIN
         v_s := 1 + ((i - 1) % array_length(v_fic_suffixes, 1));
         v_fic_name := v_fic_prefixes[v_p] || v_fic_mids[v_m] || ' ' || v_fic_suffixes[v_s];
 
-        INSERT INTO companies (user_id, name, website, industry, location, description, notes, status, created_at, updated_at, deleted_at)
+        INSERT INTO companies (user_id, workspace_id, name, website, industry, location, description, notes, status, created_at, updated_at, deleted_at)
         VALUES (
             v_user_id,
+            v_workspace_ids[1 + ((i - 1) % array_length(v_workspace_ids, 1))],
             v_fic_name,
             NULL,
             v_fic_industries[1 + ((i - 1) % array_length(v_fic_industries, 1))],
@@ -323,9 +447,10 @@ BEGIN
         END IF;
         FOR j IN 1..v_num_apps_for_company LOOP
             v_app_counter := v_app_counter + 1;
-            INSERT INTO job_applications (user_id, company_id, role, application_date, source, status, expected_salary, deadline, notes, created_at, updated_at, deleted_at)
+            INSERT INTO job_applications (user_id, workspace_id, company_id, role, application_date, source, status, expected_salary, deadline, notes, created_at, updated_at, deleted_at)
             VALUES (
                 v_user_id,
+                v_workspace_ids[1 + ((i - 1) % array_length(v_workspace_ids, 1))],
                 v_company_ids[i],
                 v_app_roles[1 + ((v_app_counter - 1) % array_length(v_app_roles, 1))],
                 CURRENT_DATE - ((v_app_counter * 137) % 730 || ' days')::interval,
@@ -381,9 +506,10 @@ BEGIN
         v_last_name := v_last_names[1 + (((i - 1) / array_length(v_first_names, 1)) % array_length(v_last_names, 1))];
         v_full_name := v_first_name || ' ' || v_last_name;
 
-        INSERT INTO recruiter_contacts (user_id, name, email, phone, linked_in, company, job_title, status, source, last_contacted_at, notes, created_at, updated_at, deleted_at)
+        INSERT INTO recruiter_contacts (user_id, workspace_id, name, email, phone, linked_in, company, job_title, status, source, last_contacted_at, notes, created_at, updated_at, deleted_at)
         VALUES (
             v_user_id,
+            v_workspace_ids[1 + ((i - 1) % array_length(v_workspace_ids, 1))],
             v_full_name,
             lower(v_first_name) || '.' || lower(v_last_name) || i || '@example.com',
             '+91-9' || lpad(i::text, 9, '0'),
@@ -415,11 +541,12 @@ BEGIN
         v_last_name := v_last_names[1 + ((i - 1) % array_length(v_last_names, 1))];
         v_full_name := v_first_name || ' ' || v_last_name;
 
-        INSERT INTO referral_requests (user_id, referrer_name, referrer_email, referrer_linked_in, referrer_company, referrer_job_title,
+        INSERT INTO referral_requests (user_id, workspace_id, referrer_name, referrer_email, referrer_linked_in, referrer_company, referrer_job_title,
                                         target_role, job_posting_url, relationship_context, message_to_referrer, status,
                                         requested_date, follow_up_date, notes, created_at, updated_at, deleted_at)
         VALUES (
             v_user_id,
+            v_workspace_ids[1 + ((i - 1) % array_length(v_workspace_ids, 1))],
             v_full_name,
             lower(v_first_name) || '.' || lower(v_last_name) || '.ref' || i || '@example.com',
             'https://linkedin.com/in/' || lower(v_first_name) || '-' || lower(v_last_name) || '-ref-' || i,
@@ -459,6 +586,6 @@ BEGIN
         );
     END LOOP;
 
-    RAISE NOTICE 'Seed data inserted for user_id=%: % companies (% real + % fictional), % applications, % interviews, % recruiters, % referrals, % follow-ups',
-        v_user_id, v_num_companies, v_num_real, v_num_fictional, array_length(v_app_ids,1), v_num_interviews, array_length(v_recruiter_ids,1), array_length(v_referral_ids,1), v_num_followups;
+    RAISE NOTICE 'Seed data inserted for user_id=%: % companies (% real + % fictional), % applications, % interviews, % recruiters, % referrals, % follow-ups, % workspaces',
+        v_user_id, v_num_companies, v_num_real, v_num_fictional, array_length(v_app_ids,1), v_num_interviews, array_length(v_recruiter_ids,1), array_length(v_referral_ids,1), v_num_followups, N_WORKSPACES;
 END $$;

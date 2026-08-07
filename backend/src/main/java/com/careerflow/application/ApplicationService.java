@@ -14,6 +14,7 @@ import com.careerflow.common.PageResponse;
 import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.StatusCountsResponse;
+import com.careerflow.common.WorkspaceAccessUtils;
 import com.careerflow.company.Company;
 import com.careerflow.company.CompanyRepository;
 import com.careerflow.config.FileStorageService;
@@ -24,6 +25,7 @@ import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.followup.FollowUpRepository;
 import com.careerflow.user.User;
+import com.careerflow.workspace.Workspace;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
@@ -53,6 +55,7 @@ public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
     private final CompanyRepository companyRepository;
+    private final WorkspaceAccessUtils workspaceAccessUtils;
     private final FollowUpRepository followUpRepository;
     private final FileStorageService fileStorageService;
     private final DocumentRepository documentRepository;
@@ -60,12 +63,14 @@ public class ApplicationService {
     private final com.careerflow.user.UserResumeRepository userResumeRepository;
     private final AuditLogService auditLogService;
 
-    public ApplicationResponse addApplication(ApplicationRequest request) {
+    public ApplicationResponse addApplication(ApplicationRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        Company company = findOwnedCompany(request.getCompanyId(), user.getId());
+        Company company = findOwnedCompany(request.getCompanyId(), user.getId(), workspaceId);
+        Workspace workspace = workspaceAccessUtils.getOwnedWorkspace(workspaceId, user.getId());
 
         JobApplication application = JobApplication.builder()
                 .user(user)
+                .workspace(workspace)
                 .company(company)
                 .role(request.getRole())
                 .applicationDate(request.getApplicationDate())
@@ -82,19 +87,19 @@ public class ApplicationService {
     }
 
     public PageResponse<ApplicationResponse> getMyApplications(
-            Long companyId, ApplicationStatus status, String sortBy, String order, int page, int size) {
+            Long companyId, ApplicationStatus status, String sortBy, String order, int page, int size, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         Pageable pageable = PaginationHelper.build(page, size, sortBy, order, SORTABLE_FIELDS);
 
         Page<JobApplication> results;
         if (companyId != null && status != null) {
-            results = applicationRepository.findAllByUserIdAndCompanyIdAndStatus(user.getId(), companyId, status, pageable);
+            results = applicationRepository.findAllByUserIdAndWorkspaceIdAndCompanyIdAndStatus(user.getId(), workspaceId, companyId, status, pageable);
         } else if (companyId != null) {
-            results = applicationRepository.findAllByUserIdAndCompanyId(user.getId(), companyId, pageable);
+            results = applicationRepository.findAllByUserIdAndWorkspaceIdAndCompanyId(user.getId(), workspaceId, companyId, pageable);
         } else if (status != null) {
-            results = applicationRepository.findAllByUserIdAndStatus(user.getId(), status, pageable);
+            results = applicationRepository.findAllByUserIdAndWorkspaceIdAndStatus(user.getId(), workspaceId, status, pageable);
         } else {
-            results = applicationRepository.findAllByUserId(user.getId(), pageable);
+            results = applicationRepository.findAllByUserIdAndWorkspaceId(user.getId(), workspaceId, pageable);
         }
 
         List<JobApplication> content = results.getContent();
@@ -103,15 +108,15 @@ public class ApplicationService {
         return PageResponse.of(results.map(a -> toResponse(a, nearestFollowUps.get(a.getId()), upcomingFollowUps.get(a.getId()))));
     }
 
-    public ApplicationStatsResponse getMyApplicationStats() {
+    public ApplicationStatsResponse getMyApplicationStats(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         StatusCountsResponse base =
-                StatusCountsResponse.fromGroupedCounts(applicationRepository.countByStatusGroupedForUser(user.getId()));
+                StatusCountsResponse.fromGroupedCounts(applicationRepository.countByStatusGroupedForUser(user.getId(), workspaceId));
 
         LocalDate now = LocalDate.now();
         LocalDate prev = now.minusMonths(1);
         Map<String, Long> countsByMonth = MapCollectors.toMap(
-                applicationRepository.countByMonthGroupedForUser(user.getId(), prev.withDayOfMonth(1)),
+                applicationRepository.countByMonthGroupedForUser(user.getId(), workspaceId, prev.withDayOfMonth(1)),
                 ApplicationService::yearMonthKey, ApplicationRepository.MonthlyCount::getTotal);
 
         return ApplicationStatsResponse.builder()
@@ -122,28 +127,28 @@ public class ApplicationService {
                 .build();
     }
 
-    public List<String> getMyRoles() {
+    public List<String> getMyRoles(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        return applicationRepository.findDistinctRolesForUser(user.getId());
+        return applicationRepository.findDistinctRolesForUser(user.getId(), workspaceId);
     }
 
-    public Map<Long, Long> getMyApplicationCountsByCompany() {
+    public Map<Long, Long> getMyApplicationCountsByCompany(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        return MapCollectors.toMap(applicationRepository.countByCompanyGroupedForUser(user.getId()),
+        return MapCollectors.toMap(applicationRepository.countByCompanyGroupedForUser(user.getId(), workspaceId),
                 ApplicationRepository.CompanyCount::getCompanyId, ApplicationRepository.CompanyCount::getTotal);
     }
 
-    public Map<Long, LocalDate> getMyLastActivityByCompany() {
+    public Map<Long, LocalDate> getMyLastActivityByCompany(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        return MapCollectors.toMap(applicationRepository.lastActivityByCompanyGroupedForUser(user.getId()),
+        return MapCollectors.toMap(applicationRepository.lastActivityByCompanyGroupedForUser(user.getId(), workspaceId),
                 ApplicationRepository.CompanyLastActivity::getCompanyId, ApplicationRepository.CompanyLastActivity::getLastActivity);
     }
 
-    public List<MonthlyTrendItem> getMyMonthlyTrend() {
+    public List<MonthlyTrendItem> getMyMonthlyTrend(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         LocalDate since = LocalDate.now().withDayOfMonth(1).minusMonths(11);
         Map<String, Long> countsByKey = MapCollectors.toMap(
-                applicationRepository.countByMonthGroupedForUser(user.getId(), since),
+                applicationRepository.countByMonthGroupedForUser(user.getId(), workspaceId, since),
                 ApplicationService::yearMonthKey, ApplicationRepository.MonthlyCount::getTotal);
 
         List<MonthlyTrendItem> result = new java.util.ArrayList<>();
@@ -167,12 +172,12 @@ public class ApplicationService {
         return row.getYear() + "-" + row.getMonth();
     }
 
-    public List<DailyTrendItem> getMyWeeklyTrend(int days) {
+    public List<DailyTrendItem> getMyWeeklyTrend(int days, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         int safeDays = days <= 0 ? 14 : Math.min(days, 90);
         LocalDate since = LocalDate.now().minusDays(safeDays - 1L);
         Map<LocalDate, Long> countsByDay = MapCollectors.toMap(
-                applicationRepository.countByDayGroupedForUser(user.getId(), since),
+                applicationRepository.countByDayGroupedForUser(user.getId(), workspaceId, since),
                 ApplicationRepository.DailyCount::getDay, ApplicationRepository.DailyCount::getTotal);
 
         List<DailyTrendItem> result = new java.util.ArrayList<>();
@@ -188,12 +193,12 @@ public class ApplicationService {
         return result;
     }
 
-    public List<ApplicationResponse> getMyUpcomingDeadlines(int withinDays) {
+    public List<ApplicationResponse> getMyUpcomingDeadlines(int withinDays, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         LocalDate today = LocalDate.now();
         LocalDate until = today.plusDays(Math.max(withinDays, 0));
         List<JobApplication> apps = applicationRepository
-                .findAllByUserIdAndDeadlineBetweenOrderByDeadlineAsc(user.getId(), today, until);
+                .findAllByUserIdAndDeadlineBetweenOrderByDeadlineAsc(user.getId(), workspaceId, today, until);
         Map<Long, LocalDate> nearestFollowUps = buildNearestFollowUpMap(apps);
         Map<Long, LocalDate> upcomingFollowUps = buildUpcomingFollowUpMap(apps);
         return apps.stream()
@@ -201,9 +206,9 @@ public class ApplicationService {
                 .toList();
     }
 
-    public List<SourceAnalysisItem> getMySourceAnalysis() {
+    public List<SourceAnalysisItem> getMySourceAnalysis(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        return applicationRepository.countBySourceGroupedForUser(user.getId()).stream()
+        return applicationRepository.countBySourceGroupedForUser(user.getId(), workspaceId).stream()
                 .map(row -> SourceAnalysisItem.builder()
                         .source(row.getSource())
                         .total(row.getTotal())
@@ -213,12 +218,12 @@ public class ApplicationService {
                 .toList();
     }
 
-    public ApplicationResponse updateApplication(Long id, ApplicationUpdateRequest request) {
+    public ApplicationResponse updateApplication(Long id, ApplicationUpdateRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        JobApplication application = findOwned(id, user.getId());
+        JobApplication application = findOwned(id, user.getId(), workspaceId);
 
         if (request.getCompanyId() != null) {
-            Company company = findOwnedCompany(request.getCompanyId(), user.getId());
+            Company company = findOwnedCompany(request.getCompanyId(), user.getId(), workspaceId);
             application.setCompany(company);
         }
         if (request.getRole() != null && !request.getRole().isBlank())
@@ -241,29 +246,29 @@ public class ApplicationService {
         return toResponse(application);
     }
 
-    public void deleteApplication(Long id) {
+    public void deleteApplication(Long id, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        JobApplication application = findOwned(id, user.getId());
+        JobApplication application = findOwned(id, user.getId(), workspaceId);
         application.softDelete();
         applicationRepository.save(application);
         auditLogService.log(user, AuditAction.APPLICATION_DELETED, "Deleted application for " + describe(application));
     }
 
     @Transactional
-    public void deleteAllByCompany(Long companyId) {
-        applicationRepository.softDeleteAllByCompanyId(companyId, LocalDateTime.now());
+    public void deleteAllByCompany(Long companyId, Long workspaceId) {
+        applicationRepository.softDeleteAllByCompanyId(companyId, workspaceId, LocalDateTime.now());
     }
 
-    public boolean hasApplications(Long userId, Long companyId) {
-        return applicationRepository.existsByUserIdAndCompanyId(userId, companyId);
+    public boolean hasApplications(Long userId, Long companyId, Long workspaceId) {
+        return applicationRepository.existsByUserIdAndCompanyIdAndWorkspaceId(userId, companyId, workspaceId);
     }
 
     // ─── Documents ────────────────────────────────────────────────────────────
 
     public ApplicationResponse uploadDocuments(Long appId, MultipartFile resume,
-                                               MultipartFile coverLetter, Long profileResumeDocumentId) {
+                                               MultipartFile coverLetter, Long profileResumeDocumentId, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        JobApplication application = findOwned(appId, user.getId());
+        JobApplication application = findOwned(appId, user.getId(), workspaceId);
 
         if (profileResumeDocumentId != null) {
             if (!userResumeRepository.existsByUserIdAndDocumentId(user.getId(), profileResumeDocumentId))
@@ -293,9 +298,9 @@ public class ApplicationService {
         return toResponse(application);
     }
 
-    public ApplicationResponse deleteDocument(Long appId, Long documentId) {
+    public ApplicationResponse deleteDocument(Long appId, Long documentId, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        JobApplication application = findOwned(appId, user.getId());
+        JobApplication application = findOwned(appId, user.getId(), workspaceId);
 
         if (application.getResume() != null && documentId.equals(application.getResume().getId())) {
             application.setResume(null);
@@ -338,13 +343,13 @@ public class ApplicationService {
             throw new BadRequestException("Only PDF, DOC, and DOCX files are supported");
     }
 
-    private JobApplication findOwned(Long appId, Long userId) {
-        return applicationRepository.findByIdAndUserId(appId, userId)
+    private JobApplication findOwned(Long appId, Long userId, Long workspaceId) {
+        return applicationRepository.findByIdAndUserIdAndWorkspaceId(appId, userId, workspaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
     }
 
-    private Company findOwnedCompany(Long companyId, Long userId) {
-        return companyRepository.findByIdAndUserId(companyId, userId)
+    private Company findOwnedCompany(Long companyId, Long userId, Long workspaceId) {
+        return companyRepository.findByIdAndUserIdAndWorkspaceId(companyId, userId, workspaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found"));
     }
 

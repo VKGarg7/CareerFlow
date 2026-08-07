@@ -5,7 +5,7 @@ import useFloatingMenu from '../hooks/useFloatingMenu'
 import useCloseOnOutsideEvent from '../hooks/useCloseOnOutsideEvent'
 import { CircularProgress } from '@mui/material'
 import {
-  CloseRounded, BusinessCenterOutlined, Place, LanguageOutlined, WorkOutlineOutlined,
+  CloseRounded, Place, LanguageOutlined, WorkOutlineOutlined,
   StarRounded, StarBorderRounded, KeyboardArrowDown,
   HandshakeOutlined, NotificationsNoneOutlined, PeopleOutlined,
   PersonOutlineRounded, VisibilityOutlined, CallOutlined, DesktopWindowsOutlined,
@@ -18,6 +18,7 @@ import { getFollowUpsByCompany } from '../api/followup'
 import InlineStatusChanger from './InlineStatusChanger'
 import CompanyLogo from './CompanyLogo'
 import { DrawerShell } from './DrawerShell'
+import ResearchNotesSection from './ResearchNotesSection'
 import { fmtDate, todayStr } from '../utils/followup'
 import { APP_STATUS_CONFIG, appStatusLabel } from '../constants/applicationStatus'
 
@@ -29,11 +30,19 @@ const STATUS_CONFIG = {
   REJECTED:     { label: 'Rejected',     badge: 'bg-app-danger/10 text-app-danger'     },
 }
 
+const PRIORITY_CONFIG = {
+  DREAM:  { label: 'Dream',  badge: 'bg-app-accent2/10 text-app-accent-soft' },
+  HIGH:   { label: 'High',   badge: 'bg-app-danger/10 text-app-danger'     },
+  MEDIUM: { label: 'Medium', badge: 'bg-app-warning/10 text-app-warning'   },
+  LOW:    { label: 'Low',    badge: 'bg-white/[0.06] text-white/50'       },
+}
+
 function useLocalRating(companyId) {
   const key = `cf_company_rating_${companyId}`
   const [rating, setRating] = useState(() => Number(localStorage.getItem(key)) || 0)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-syncing from localStorage when the company (key) changes is the intended effect
     setRating(Number(localStorage.getItem(key)) || 0)
   }, [key])
 
@@ -145,7 +154,7 @@ function ActivityTimeline({ events }) {
   )
 }
 
-function MoreActionsMenu({ company }) {
+function MoreActionsMenu() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const triggerRef = useRef(null)
@@ -199,6 +208,7 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
   useEffect(() => {
     if (!open) return
     if (companyId == null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- surfacing a fatal precondition failure on open is the intended effect
       setError('Company ID not available. Please restart the backend server.')
       return
     }
@@ -274,7 +284,7 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
                   {company.industry && <p className="text-xs text-white/40 truncate">{company.industry}</p>}
                 </div>
               </div>
-              <div className="mt-2.5">
+              <div className="mt-2.5 flex items-center gap-2 flex-wrap">
                 <InlineStatusChanger
                   item={company}
                   statusConfig={STATUS_CONFIG}
@@ -282,6 +292,11 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
                   updateFn={(id, payload) => updateCompany(id, payload)}
                   onStatusChanged={handleStatusChanged}
                 />
+                {company.priority && PRIORITY_CONFIG[company.priority] && (
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${PRIORITY_CONFIG[company.priority].badge}`}>
+                    {PRIORITY_CONFIG[company.priority].label} Priority
+                  </span>
+                )}
               </div>
               <div className="mt-2.5">
                 <StarRating companyId={company.id} />
@@ -330,6 +345,52 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
                 <p className="text-sm text-white/50 italic">"{company.notes}"</p>
               </div>
             )}
+
+            {(company.targetReason || company.hiringStatus || company.recruiterLeads || company.referralNotes || company.strategyNotes) && (
+              <div className="space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wide">Target Strategy</p>
+                  {onEdit && (
+                    <button onClick={() => onEdit(company)} className="flex items-center gap-1 text-xs font-semibold text-app-accent-soft hover:text-white transition">
+                      <EditOutlined sx={{ fontSize: 12 }} />
+                      Edit
+                    </button>
+                  )}
+                </div>
+                {company.targetReason && (
+                  <div>
+                    <p className="text-[11px] font-medium text-white/40 mb-1">Why this company</p>
+                    <p className="text-sm text-white/65 leading-relaxed">{company.targetReason}</p>
+                  </div>
+                )}
+                {company.hiringStatus && (
+                  <div>
+                    <p className="text-[11px] font-medium text-white/40 mb-1">Hiring Status</p>
+                    <p className="text-sm text-white/65">{company.hiringStatus}</p>
+                  </div>
+                )}
+                {company.recruiterLeads && (
+                  <div>
+                    <p className="text-[11px] font-medium text-white/40 mb-1">Recruiter Leads</p>
+                    <p className="text-sm text-white/65 leading-relaxed">{company.recruiterLeads}</p>
+                  </div>
+                )}
+                {company.referralNotes && (
+                  <div>
+                    <p className="text-[11px] font-medium text-white/40 mb-1">Alumni / Referral Opportunities</p>
+                    <p className="text-sm text-white/65 leading-relaxed">{company.referralNotes}</p>
+                  </div>
+                )}
+                {company.strategyNotes && (
+                  <div>
+                    <p className="text-[11px] font-medium text-white/40 mb-1">Strategy Notes</p>
+                    <p className="text-sm text-white/65 leading-relaxed">{company.strategyNotes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <ResearchNotesSection companyId={company.id} />
 
             <div>
               <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wide mb-3">Activity Timeline</p>
@@ -396,7 +457,7 @@ export default function CompanyDetailModal({ open, companyId, onClose, onStatusC
 
       {company && !loading && (
         <div className="flex items-center gap-2.5 px-6 py-4 border-t border-white/[0.06] shrink-0">
-          <MoreActionsMenu company={company} />
+          <MoreActionsMenu />
           {onDelete && (
             <button onClick={() => onDelete(company)}
               className="flex-1 h-11 text-sm font-semibold text-app-danger bg-app-danger/10 rounded-xl hover:bg-app-danger/20 transition">

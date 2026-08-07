@@ -31,9 +31,9 @@ public class FollowUpService {
     private final ApplicationRepository applicationRepository;
     private final SecurityUtils securityUtils;
 
-    public FollowUpResponse createFollowUp(Long applicationId, FollowUpRequest request) {
+    public FollowUpResponse createFollowUp(Long applicationId, FollowUpRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        JobApplication application = findOwnedApplication(applicationId, user.getId());
+        JobApplication application = findOwnedApplication(applicationId, user.getId(), workspaceId);
 
         FollowUp followUp = FollowUp.builder()
                 .application(application)
@@ -45,15 +45,15 @@ public class FollowUpService {
         return toResponse(followUpRepository.save(followUp));
     }
 
-    public List<FollowUpResponse> getFollowUpsForApplication(Long applicationId) {
+    public List<FollowUpResponse> getFollowUpsForApplication(Long applicationId, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        findOwnedApplication(applicationId, user.getId());
+        findOwnedApplication(applicationId, user.getId(), workspaceId);
         return followUpRepository
-                .findAllByUserIdAndApplicationIdOrderByFollowUpDateAsc(user.getId(), applicationId)
+                .findAllByUserIdAndApplicationIdOrderByFollowUpDateAsc(user.getId(), workspaceId, applicationId)
                 .stream().map(this::toResponse).toList();
     }
 
-    public PageResponse<FollowUpResponse> getAllFollowUps(Long companyId, FollowUpStatus status, FollowUpBucket bucket, int page, int size) {
+    public PageResponse<FollowUpResponse> getAllFollowUps(Long companyId, FollowUpStatus status, FollowUpBucket bucket, int page, int size, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         Long userId = user.getId();
         int safePage = Math.max(page, 0);
@@ -62,46 +62,46 @@ public class FollowUpService {
 
         Page<FollowUp> results;
         if (companyId != null && status != null) {
-            results = followUpRepository.findAllByUserIdAndCompanyIdAndStatusOrderByFollowUpDateAsc(userId, companyId, status, pageable);
+            results = followUpRepository.findAllByUserIdAndCompanyIdAndStatusOrderByFollowUpDateAsc(userId, workspaceId, companyId, status, pageable);
         } else if (companyId != null) {
-            results = followUpRepository.findAllByUserIdAndCompanyIdOrderByFollowUpDateAsc(userId, companyId, pageable);
+            results = followUpRepository.findAllByUserIdAndCompanyIdOrderByFollowUpDateAsc(userId, workspaceId, companyId, pageable);
         } else if (bucket != null && status == FollowUpStatus.PENDING) {
             LocalDate today = LocalDate.now();
             results = switch (bucket) {
-                case OVERDUE -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDateBefore(userId, status, today, pageable);
-                case TODAY -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDate(userId, status, today, pageable);
-                case UPCOMING -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDateAfter(userId, status, today, pageable);
+                case OVERDUE -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDateBefore(userId, workspaceId, status, today, pageable);
+                case TODAY -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDate(userId, workspaceId, status, today, pageable);
+                case UPCOMING -> followUpRepository.findAllByUserIdAndStatusAndFollowUpDateAfter(userId, workspaceId, status, today, pageable);
             };
         } else if (status != null) {
-            results = followUpRepository.findAllByUserIdAndStatusOrderByFollowUpDateAsc(userId, status, pageable);
+            results = followUpRepository.findAllByUserIdAndStatusOrderByFollowUpDateAsc(userId, workspaceId, status, pageable);
         } else {
-            results = followUpRepository.findAllByUserIdOrderByFollowUpDateAsc(userId, pageable);
+            results = followUpRepository.findAllByUserIdOrderByFollowUpDateAsc(userId, workspaceId, pageable);
         }
         return PageResponse.of(results.map(this::toResponse));
     }
 
-    public java.util.Map<Long, LocalDate> getMyNextFollowUpByCompany() {
+    public java.util.Map<Long, LocalDate> getMyNextFollowUpByCompany(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        return MapCollectors.toMap(followUpRepository.nextFollowUpByCompanyGroupedForUser(user.getId(), LocalDate.now()),
+        return MapCollectors.toMap(followUpRepository.nextFollowUpByCompanyGroupedForUser(user.getId(), workspaceId, LocalDate.now()),
                 FollowUpRepository.CompanyNextFollowUp::getCompanyId, FollowUpRepository.CompanyNextFollowUp::getNextFollowUp);
     }
 
-    public List<FollowUpResponse> getUpcomingFollowUps(int withinDays) {
+    public List<FollowUpResponse> getUpcomingFollowUps(int withinDays, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         LocalDate until = LocalDate.now().plusDays(Math.max(withinDays, 0));
         return followUpRepository
-                .findAllByUserIdAndStatusAndFollowUpDateLessThanEqualOrderByFollowUpDateAsc(user.getId(), FollowUpStatus.PENDING, until)
+                .findAllByUserIdAndStatusAndFollowUpDateLessThanEqualOrderByFollowUpDateAsc(user.getId(), workspaceId, FollowUpStatus.PENDING, until)
                 .stream().map(this::toResponse).toList();
     }
 
-    public FollowUpCountsResponse getFollowUpCounts() {
+    public FollowUpCountsResponse getFollowUpCounts(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         Long userId = user.getId();
         LocalDate today = LocalDate.now();
         return FollowUpCountsResponse.builder()
-                .overdue(followUpRepository.countByUserIdAndStatusAndFollowUpDateBefore(userId, FollowUpStatus.PENDING, today))
-                .dueToday(followUpRepository.countByUserIdAndStatusAndFollowUpDate(userId, FollowUpStatus.PENDING, today))
-                .upcoming(followUpRepository.countByUserIdAndStatusAndFollowUpDateAfter(userId, FollowUpStatus.PENDING, today))
+                .overdue(followUpRepository.countByUserIdAndStatusAndFollowUpDateBefore(userId, workspaceId, FollowUpStatus.PENDING, today))
+                .dueToday(followUpRepository.countByUserIdAndStatusAndFollowUpDate(userId, workspaceId, FollowUpStatus.PENDING, today))
+                .upcoming(followUpRepository.countByUserIdAndStatusAndFollowUpDateAfter(userId, workspaceId, FollowUpStatus.PENDING, today))
                 .completed(followUpRepository.countByUserIdAndStatus(userId, FollowUpStatus.DONE))
                 .build();
     }
@@ -128,8 +128,8 @@ public class FollowUpService {
                 .orElseThrow(() -> new ResourceNotFoundException("Follow-up not found"));
     }
 
-    private JobApplication findOwnedApplication(Long applicationId, Long userId) {
-        return applicationRepository.findByIdAndUserId(applicationId, userId)
+    private JobApplication findOwnedApplication(Long applicationId, Long userId, Long workspaceId) {
+        return applicationRepository.findByIdAndUserIdAndWorkspaceId(applicationId, userId, workspaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
     }
 

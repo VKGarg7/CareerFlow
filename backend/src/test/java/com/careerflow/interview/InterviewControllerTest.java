@@ -52,9 +52,10 @@ class InterviewControllerTest extends ControllerTestSupport {
 
         InterviewResponse response = InterviewResponse.builder().id(1L).applicationId(50L)
                 .outcome(InterviewOutcome.AWAITING_RESPONSE).build();
-        when(interviewService.create(eq(50L), any(InterviewRequest.class))).thenReturn(response);
+        when(interviewService.create(eq(50L), any(InterviewRequest.class), anyLong())).thenReturn(response);
 
         mockMvc.perform(post("/api/applications/{applicationId}/interviews", 50L)
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -66,10 +67,11 @@ class InterviewControllerTest extends ControllerTestSupport {
         InterviewRequest request = new InterviewRequest();
         request.setScheduledAt(LocalDateTime.now().plusDays(1));
 
-        when(interviewService.create(eq(50L), any(InterviewRequest.class)))
+        when(interviewService.create(eq(50L), any(InterviewRequest.class), anyLong()))
                 .thenThrow(new ResourceNotFoundException("Application not found"));
 
         mockMvc.perform(post("/api/applications/{applicationId}/interviews", 50L)
+                        .param("workspaceId", "99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound());
@@ -77,9 +79,9 @@ class InterviewControllerTest extends ControllerTestSupport {
 
     @Test
     void getForApplication_returns200_withList() throws Exception {
-        when(interviewService.getForApplication(50L)).thenReturn(java.util.List.of());
+        when(interviewService.getForApplication(eq(50L), anyLong())).thenReturn(java.util.List.of());
 
-        mockMvc.perform(get("/api/applications/{applicationId}/interviews", 50L))
+        mockMvc.perform(get("/api/applications/{applicationId}/interviews", 50L).param("workspaceId", "99"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
     }

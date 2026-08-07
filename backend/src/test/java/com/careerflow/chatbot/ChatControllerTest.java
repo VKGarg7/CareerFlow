@@ -49,7 +49,7 @@ class ChatControllerTest extends ControllerTestSupport {
     void createSession_returns201_withCreatedSession() throws Exception {
         ChatSessionRequest request = new ChatSessionRequest();
         ChatSessionResponse response = ChatSessionResponse.builder().id(1L).title("General prep chat").build();
-        when(chatService.createSession(any(ChatSessionRequest.class))).thenReturn(response);
+        when(chatService.createSession(any(ChatSessionRequest.class), any())).thenReturn(response);
 
         mockMvc.perform(post("/api/chat/sessions")
                         .contentType(MediaType.APPLICATION_JSON)

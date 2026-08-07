@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import usePagedList from './usePagedList'
 
+vi.mock('../context/WorkspaceContext', () => ({
+  useWorkspace: () => ({ activeWorkspaceId: '1', loading: false }),
+}))
+
 const pageOf = (items) => ({ data: items })
 
 describe('usePagedList', () => {

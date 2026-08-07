@@ -4,11 +4,13 @@ import com.careerflow.common.PageResponse;
 import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.StatusCountsResponse;
+import com.careerflow.common.WorkspaceAccessUtils;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.recruiter.dto.*;
 import com.careerflow.user.User;
+import com.careerflow.workspace.Workspace;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,20 +33,23 @@ public class RecruiterContactService {
 
     private final RecruiterContactRepository recruiterRepository;
     private final RecruiterNoteRepository noteRepository;
+    private final WorkspaceAccessUtils workspaceAccessUtils;
     private final SecurityUtils securityUtils;
 
 
-    public RecruiterContactResponse addRecruiter(RecruiterContactRequest request) {
+    public RecruiterContactResponse addRecruiter(RecruiterContactRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
 
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            if (recruiterRepository.existsByUserIdAndEmailIgnoreCase(user.getId(), request.getEmail().trim()))
+            if (recruiterRepository.existsByWorkspaceIdAndEmailIgnoreCase(workspaceId, request.getEmail().trim()))
                 throw new DuplicateResourceException(
                         "A recruiter with email '" + request.getEmail().trim() + "' already exists");
         }
 
+        Workspace workspace = workspaceAccessUtils.getOwnedWorkspace(workspaceId, user.getId());
         RecruiterContact recruiter = RecruiterContact.builder()
                 .user(user)
+                .workspace(workspace)
                 .name(request.getName().trim())
                 .email(request.getEmail() != null ? request.getEmail().trim() : null)
                 .phone(request.getPhone())
@@ -61,12 +66,12 @@ public class RecruiterContactService {
     }
 
     public PageResponse<RecruiterContactResponse> getMyRecruiters(
-            Long id, String search, String status, String sortBy, String order, int page, int size) {
+            Long id, String search, String status, String sortBy, String order, int page, int size, Long workspaceId) {
 
         User user = securityUtils.getCurrentUser();
 
         if (id != null) {
-            RecruiterContact r = findOwned(id, user.getId());
+            RecruiterContact r = findOwned(id, user.getId(), workspaceId);
             List<RecruiterNoteResponse> notes = fetchNotes(id, user.getId());
             RecruiterContactResponse single = toDetailResponse(r, notes);
             return PageResponse.single(single);
@@ -86,13 +91,13 @@ public class RecruiterContactService {
 
         Page<RecruiterContact> results;
         if (hasSearch && statusFilter != null) {
-            results = recruiterRepository.searchByUserIdAndStatus(user.getId(), statusFilter, search.trim(), pageable);
+            results = recruiterRepository.searchByUserIdAndStatus(user.getId(), workspaceId, statusFilter, search.trim(), pageable);
         } else if (hasSearch) {
-            results = recruiterRepository.searchByUserId(user.getId(), search.trim(), pageable);
+            results = recruiterRepository.searchByUserId(user.getId(), workspaceId, search.trim(), pageable);
         } else if (statusFilter != null) {
-            results = recruiterRepository.findAllByUserIdAndStatus(user.getId(), statusFilter, pageable);
+            results = recruiterRepository.findAllByUserIdAndWorkspaceIdAndStatus(user.getId(), workspaceId, statusFilter, pageable);
         } else {
-            results = recruiterRepository.findAllByUserId(user.getId(), pageable);
+            results = recruiterRepository.findAllByUserIdAndWorkspaceId(user.getId(), workspaceId, pageable);
         }
 
         Map<Long, Integer> noteCounts = noteRepository.countGroupedByRecruiterForUser(user.getId())
@@ -105,19 +110,19 @@ public class RecruiterContactService {
         return PageResponse.of(results.map(r -> toSummaryResponse(r, noteCounts.getOrDefault(r.getId(), 0))));
     }
 
-    public StatusCountsResponse getMyRecruiterStats() {
+    public StatusCountsResponse getMyRecruiterStats(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        return StatusCountsResponse.fromGroupedCounts(recruiterRepository.countByStatusGroupedForUser(user.getId()));
+        return StatusCountsResponse.fromGroupedCounts(recruiterRepository.countByStatusGroupedForUser(user.getId(), workspaceId));
     }
 
-    public List<RecruiterSource> getMySources() {
+    public List<RecruiterSource> getMySources(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        return recruiterRepository.findDistinctSourcesForUser(user.getId());
+        return recruiterRepository.findDistinctSourcesForUser(user.getId(), workspaceId);
     }
 
-    public RecruiterContactResponse updateRecruiter(Long id, RecruiterContactUpdateRequest request) {
+    public RecruiterContactResponse updateRecruiter(Long id, RecruiterContactUpdateRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        RecruiterContact recruiter = findOwned(id, user.getId());
+        RecruiterContact recruiter = findOwned(id, user.getId(), workspaceId);
 
         if (request.getName() != null && !request.getName().isBlank())
             recruiter.setName(request.getName().trim());
@@ -125,7 +130,7 @@ public class RecruiterContactService {
         if (request.getEmail() != null) {
             String newEmail = request.getEmail().trim();
             if (!newEmail.isEmpty()) {
-                if (recruiterRepository.existsByUserIdAndEmailIgnoreCaseAndIdNot(user.getId(), newEmail, id))
+                if (recruiterRepository.existsByWorkspaceIdAndEmailIgnoreCaseAndIdNot(workspaceId, newEmail, id))
                     throw new DuplicateResourceException(
                             "A recruiter with email '" + newEmail + "' already exists");
                 recruiter.setEmail(newEmail);
@@ -174,9 +179,9 @@ public class RecruiterContactService {
         return toDetailResponse(recruiter, notes);
     }
 
-    public void deleteRecruiter(Long id) {
+    public void deleteRecruiter(Long id, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        RecruiterContact recruiter = findOwned(id, user.getId());
+        RecruiterContact recruiter = findOwned(id, user.getId(), workspaceId);
         recruiter.softDelete();
         recruiterRepository.save(recruiter);
     }
@@ -191,8 +196,8 @@ public class RecruiterContactService {
                 .toList();
     }
 
-    private RecruiterContact findOwned(Long recruiterId, Long userId) {
-        return recruiterRepository.findByIdAndUserId(recruiterId, userId)
+    private RecruiterContact findOwned(Long recruiterId, Long userId, Long workspaceId) {
+        return recruiterRepository.findByIdAndUserIdAndWorkspaceId(recruiterId, userId, workspaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recruiter contact not found"));
     }
 

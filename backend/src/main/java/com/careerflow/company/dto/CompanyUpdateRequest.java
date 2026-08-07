@@ -1,5 +1,6 @@
 package com.careerflow.company.dto;
 
+import com.careerflow.company.CompanyPriority;
 import com.careerflow.company.CompanyStatus;
 import lombok.Getter;
 import lombok.Setter;
@@ -19,4 +20,10 @@ public class CompanyUpdateRequest {
     private String description;
     private String notes;
     private CompanyStatus status;
+    private CompanyPriority priority;
+    private String targetReason;
+    private String hiringStatus;
+    private String recruiterLeads;
+    private String referralNotes;
+    private String strategyNotes;
 }

@@ -35,12 +35,12 @@ public class ChatService {
     @Value("${chat.rate-limit.max-messages-per-day}")
     private int maxMessagesPerDay;
 
-    public ChatSessionResponse createSession(ChatSessionRequest request) {
+    public ChatSessionResponse createSession(ChatSessionRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         JobApplication application = null;
         if (request.getJobApplicationId() != null) {
             application = applicationRepository
-                    .findByIdAndUserId(request.getJobApplicationId(), user.getId())
+                    .findByIdAndUserIdAndWorkspaceId(request.getJobApplicationId(), user.getId(), workspaceId)
                     .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
         }
 

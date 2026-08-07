@@ -27,8 +27,10 @@ public class ApplicationController {
     private final ApplicationService applicationService;
 
     @PostMapping
-    public ResponseEntity<ApplicationResponse> addApplication(@Valid @RequestBody ApplicationRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(applicationService.addApplication(request));
+    public ResponseEntity<ApplicationResponse> addApplication(
+            @Valid @RequestBody ApplicationRequest request,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(applicationService.addApplication(request, workspaceId));
     }
 
     @GetMapping
@@ -38,57 +40,62 @@ public class ApplicationController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String order,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(applicationService.getMyApplications(companyId, status, sortBy, order, page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getMyApplications(companyId, status, sortBy, order, page, size, workspaceId));
     }
 
     @GetMapping("/stats")
-    public ResponseEntity<ApplicationStatsResponse> getMyApplicationStats() {
-        return ResponseEntity.ok(applicationService.getMyApplicationStats());
+    public ResponseEntity<ApplicationStatsResponse> getMyApplicationStats(@RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getMyApplicationStats(workspaceId));
     }
 
     @GetMapping("/roles")
-    public ResponseEntity<List<String>> getMyRoles() {
-        return ResponseEntity.ok(applicationService.getMyRoles());
+    public ResponseEntity<List<String>> getMyRoles(@RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getMyRoles(workspaceId));
     }
 
     @GetMapping("/monthly-trend")
-    public ResponseEntity<List<MonthlyTrendItem>> getMyMonthlyTrend() {
-        return ResponseEntity.ok(applicationService.getMyMonthlyTrend());
+    public ResponseEntity<List<MonthlyTrendItem>> getMyMonthlyTrend(@RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getMyMonthlyTrend(workspaceId));
     }
 
     @GetMapping("/source-analysis")
-    public ResponseEntity<List<SourceAnalysisItem>> getMySourceAnalysis() {
-        return ResponseEntity.ok(applicationService.getMySourceAnalysis());
+    public ResponseEntity<List<SourceAnalysisItem>> getMySourceAnalysis(@RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getMySourceAnalysis(workspaceId));
     }
 
     @GetMapping("/weekly-trend")
     public ResponseEntity<List<DailyTrendItem>> getMyWeeklyTrend(
-            @RequestParam(defaultValue = "14") int days) {
-        return ResponseEntity.ok(applicationService.getMyWeeklyTrend(days));
+            @RequestParam(defaultValue = "14") int days,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getMyWeeklyTrend(days, workspaceId));
     }
 
     @GetMapping("/deadlines")
     public ResponseEntity<List<ApplicationResponse>> getMyUpcomingDeadlines(
-            @RequestParam(defaultValue = "7") int withinDays) {
-        return ResponseEntity.ok(applicationService.getMyUpcomingDeadlines(withinDays));
+            @RequestParam(defaultValue = "7") int withinDays,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getMyUpcomingDeadlines(withinDays, workspaceId));
     }
 
     @PatchMapping("/{id}")
     public ResponseEntity<ApplicationResponse> updateApplication(
             @PathVariable Long id,
-            @Valid @RequestBody ApplicationUpdateRequest request) {
-        return ResponseEntity.ok(applicationService.updateApplication(id, request));
+            @Valid @RequestBody ApplicationUpdateRequest request,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.updateApplication(id, request, workspaceId));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(
             @PathVariable Long id,
-            @RequestParam(required = false) Long documentId) {
+            @RequestParam(required = false) Long documentId,
+            @RequestParam Long workspaceId) {
         if (documentId != null) {
-            return ResponseEntity.ok(applicationService.deleteDocument(id, documentId));
+            return ResponseEntity.ok(applicationService.deleteDocument(id, documentId, workspaceId));
         }
-        applicationService.deleteApplication(id);
+        applicationService.deleteApplication(id, workspaceId);
         return ResponseEntity.noContent().build();
     }
 
@@ -97,8 +104,9 @@ public class ApplicationController {
             @PathVariable Long id,
             @RequestPart(required = false) MultipartFile resume,
             @RequestPart(required = false) MultipartFile coverLetter,
-            @RequestParam(required = false) Long profileResumeDocumentId) {
-        return ResponseEntity.ok(applicationService.uploadDocuments(id, resume, coverLetter, profileResumeDocumentId));
+            @RequestParam(required = false) Long profileResumeDocumentId,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.uploadDocuments(id, resume, coverLetter, profileResumeDocumentId, workspaceId));
     }
 
     @GetMapping("/documents/{documentId}")
