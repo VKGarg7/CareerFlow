@@ -27,4 +27,10 @@ public interface InterviewRepository extends JpaRepository<Interview, Long> {
         InterviewOutcome getOutcome();
         long getTotal();
     }
+
+    @Query("SELECT COUNT(i) FROM Interview i WHERE i.user.id = :userId AND i.application.workspace.id = :workspaceId " +
+            "AND FUNCTION('DATE', i.scheduledAt) BETWEEN :startDate AND :endDate")
+    long countByUserIdAndWorkspaceIdAndScheduledAtBetween(
+            @Param("userId") Long userId, @Param("workspaceId") Long workspaceId,
+            @Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate);
 }

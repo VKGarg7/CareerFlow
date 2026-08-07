@@ -57,6 +57,12 @@ public interface RecruiterContactRepository extends JpaRepository<RecruiterConta
     @Query("SELECT DISTINCT r.source FROM RecruiterContact r WHERE r.user.id = :userId AND r.workspace.id = :workspaceId AND r.source IS NOT NULL ORDER BY r.source ASC")
     List<RecruiterSource> findDistinctSourcesForUser(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId);
 
+    @Query("SELECT COUNT(r) FROM RecruiterContact r WHERE r.user.id = :userId AND r.workspace.id = :workspaceId " +
+            "AND FUNCTION('DATE', r.createdAt) BETWEEN :startDate AND :endDate")
+    long countByUserIdAndWorkspaceIdAndCreatedAtBetween(
+            @Param("userId") Long userId, @Param("workspaceId") Long workspaceId,
+            @Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate);
+
     interface StatusCount extends GroupedCountRow<RecruiterStatus> {
     }
 }

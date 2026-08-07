@@ -59,6 +59,12 @@ public class CompanyService {
                 .description(request.getDescription())
                 .notes(request.getNotes())
                 .status(request.getStatus() != null ? request.getStatus() : CompanyStatus.TARGETING)
+                .priority(request.getPriority())
+                .targetReason(request.getTargetReason())
+                .hiringStatus(request.getHiringStatus())
+                .recruiterLeads(request.getRecruiterLeads())
+                .referralNotes(request.getReferralNotes())
+                .strategyNotes(request.getStrategyNotes())
                 .build();
         company = companyRepository.save(company);
         auditLogService.log(user, AuditAction.COMPANY_CREATED, "Added company " + company.getName());
@@ -153,6 +159,12 @@ public class CompanyService {
         if (request.getDescription() != null) company.setDescription(request.getDescription());
         if (request.getNotes() != null) company.setNotes(request.getNotes());
         if (request.getStatus() != null) company.setStatus(request.getStatus());
+        if (request.getPriority() != null) company.setPriority(request.getPriority());
+        if (request.getTargetReason() != null) company.setTargetReason(request.getTargetReason());
+        if (request.getHiringStatus() != null) company.setHiringStatus(request.getHiringStatus());
+        if (request.getRecruiterLeads() != null) company.setRecruiterLeads(request.getRecruiterLeads());
+        if (request.getReferralNotes() != null) company.setReferralNotes(request.getReferralNotes());
+        if (request.getStrategyNotes() != null) company.setStrategyNotes(request.getStrategyNotes());
 
         company = companyRepository.save(company);
         auditLogService.log(user, AuditAction.COMPANY_UPDATED, "Updated company " + company.getName());
@@ -188,6 +200,12 @@ public class CompanyService {
                 .description(company.getDescription())
                 .notes(company.getNotes())
                 .status(company.getStatus())
+                .priority(company.getPriority())
+                .targetReason(company.getTargetReason())
+                .hiringStatus(company.getHiringStatus())
+                .recruiterLeads(company.getRecruiterLeads())
+                .referralNotes(company.getReferralNotes())
+                .strategyNotes(company.getStrategyNotes())
                 .createdAt(company.getCreatedAt())
                 .updatedAt(company.getUpdatedAt())
                 .build();

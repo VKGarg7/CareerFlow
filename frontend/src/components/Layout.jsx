@@ -6,6 +6,7 @@ import {
   Menu, Close, NotificationsNoneOutlined, Handshake,
   AdminPanelSettingsOutlined, FolderOutlined, KeyboardArrowDownRounded,
   BusinessCenterOutlined, HandshakeOutlined, PersonAddAltOutlined,
+  FlagOutlined,
 } from '@mui/icons-material'
 import { useProfile } from '../context/ProfileContext'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -20,6 +21,7 @@ const PAGE_META = {
   '/follow-ups':   { title: 'Follow-Ups',   sub: 'Stay ahead of every thread' },
   '/recruiters':   { title: 'Recruiters',   sub: 'Your network of contacts' },
   '/referrals':    { title: 'Referrals',    sub: 'Who’s vouching for you' },
+  '/goals':        { title: 'Goals',        sub: 'Track progress toward your targets' },
   '/profile':      { title: 'Profile',      sub: 'Your public-facing story' },
   '/admin':        { title: 'Admin',        sub: 'Workspace administration' },
   '/activity':     { title: 'Activity',     sub: 'Everything that’s happened' },
@@ -34,6 +36,7 @@ const NAV = [
   { to: '/follow-ups',   Icon: NotificationsNoneOutlined, label: 'Follow-Ups'   },
   { to: '/recruiters',   Icon: PeopleOutlined,            label: 'Recruiters'   },
   { to: '/referrals',    Icon: Handshake,                 label: 'Referrals'    },
+  { to: '/goals',        Icon: FlagOutlined,              label: 'Goals'        },
 ]
 
 const ADMIN_NAV = { to: '/admin', Icon: AdminPanelSettingsOutlined, label: 'Admin' }

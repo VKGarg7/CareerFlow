@@ -48,4 +48,21 @@ public class Company extends SoftDeleteEntity {
     @Column(nullable = false)
     @Builder.Default
     private CompanyStatus status = CompanyStatus.TARGETING;
+
+    @Enumerated(EnumType.STRING)
+    private CompanyPriority priority;
+
+    @Column(columnDefinition = "TEXT")
+    private String targetReason;
+
+    private String hiringStatus;
+
+    @Column(columnDefinition = "TEXT")
+    private String recruiterLeads;
+
+    @Column(columnDefinition = "TEXT")
+    private String referralNotes;
+
+    @Column(columnDefinition = "TEXT")
+    private String strategyNotes;
 }

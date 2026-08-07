@@ -115,4 +115,10 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
         Long getInterviews();
         Long getOffers();
     }
+
+    @Query("SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.workspace.id = :workspaceId " +
+            "AND a.applicationDate BETWEEN :startDate AND :endDate")
+    long countByUserIdAndWorkspaceIdAndApplicationDateBetween(
+            @Param("userId") Long userId, @Param("workspaceId") Long workspaceId,
+            @Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate);
 }

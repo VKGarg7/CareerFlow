@@ -39,6 +39,12 @@ public interface CompanyRepository extends JpaRepository<Company, Long> {
     @Query("SELECT COUNT(c) FROM Company c WHERE c.user.id = :userId AND c.workspace.id = :workspaceId AND c.status = :status AND c.createdAt < :before")
     long countByUserIdAndStatusAndCreatedAtBefore(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId, @Param("status") CompanyStatus status, @Param("before") java.time.LocalDateTime before);
 
+    @Query("SELECT COUNT(c) FROM Company c WHERE c.user.id = :userId AND c.workspace.id = :workspaceId " +
+            "AND FUNCTION('DATE', c.createdAt) BETWEEN :startDate AND :endDate")
+    long countByUserIdAndWorkspaceIdAndCreatedAtBetween(
+            @Param("userId") Long userId, @Param("workspaceId") Long workspaceId,
+            @Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate);
+
     interface StatusCount extends GroupedCountRow<CompanyStatus> {
     }
 

@@ -91,6 +91,55 @@ class CompanyServiceTest {
     }
 
     @Test
+    void addCompany_persistsTargetingFields() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(companyRepository.existsByWorkspaceIdAndNameIgnoreCase(WORKSPACE_ID, "Acme")).thenReturn(false);
+        when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
+        when(companyRepository.save(any(Company.class))).thenAnswer(invocation -> {
+            Company company = invocation.getArgument(0);
+            company.setId(11L);
+            return company;
+        });
+
+        CompanyRequest request = new CompanyRequest();
+        request.setName("Acme");
+        request.setPriority(CompanyPriority.DREAM);
+        request.setTargetReason("Great engineering culture");
+        request.setHiringStatus("Actively hiring");
+        request.setRecruiterLeads("Jane Doe on LinkedIn");
+        request.setReferralNotes("College friend works there");
+        request.setStrategyNotes("Apply after referral confirmed");
+
+        CompanyResponse response = companyService.addCompany(request, WORKSPACE_ID);
+
+        assertThat(response.getPriority()).isEqualTo(CompanyPriority.DREAM);
+        assertThat(response.getTargetReason()).isEqualTo("Great engineering culture");
+        assertThat(response.getHiringStatus()).isEqualTo("Actively hiring");
+        assertThat(response.getRecruiterLeads()).isEqualTo("Jane Doe on LinkedIn");
+        assertThat(response.getReferralNotes()).isEqualTo("College friend works there");
+        assertThat(response.getStrategyNotes()).isEqualTo("Apply after referral confirmed");
+    }
+
+    @Test
+    void updateCompany_updatesTargetingFields_withoutClearingUnsetOnes() {
+        Company company = Company.builder().user(currentUser).name("Acme")
+                .priority(CompanyPriority.LOW).targetReason("Old reason").build();
+        company.setId(12L);
+
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(companyRepository.findByIdAndUserIdAndWorkspaceId(12L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(company));
+        when(companyRepository.save(any(Company.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CompanyUpdateRequest request = new CompanyUpdateRequest();
+        request.setPriority(CompanyPriority.DREAM);
+
+        CompanyResponse response = companyService.updateCompany(12L, request, WORKSPACE_ID);
+
+        assertThat(response.getPriority()).isEqualTo(CompanyPriority.DREAM);
+        assertThat(response.getTargetReason()).isEqualTo("Old reason");
+    }
+
+    @Test
     void addCompany_throwsDuplicateResourceException_whenNameAlreadyExists() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
         when(companyRepository.existsByWorkspaceIdAndNameIgnoreCase(WORKSPACE_ID, "Acme")).thenReturn(true);
