@@ -6,7 +6,7 @@ import {
   Menu, Close, NotificationsNoneOutlined, Handshake,
   AdminPanelSettingsOutlined, FolderOutlined, KeyboardArrowDownRounded,
   BusinessCenterOutlined, HandshakeOutlined, PersonAddAltOutlined,
-  FlagOutlined,
+  FlagOutlined, BookmarkAddedOutlined,
 } from '@mui/icons-material'
 import { useProfile } from '../context/ProfileContext'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -17,6 +17,7 @@ import ChatWidgetButton from './ChatWidgetButton'
 const PAGE_META = {
   '/dashboard':    { title: 'Dashboard',    sub: 'Your job search, at a glance' },
   '/companies':    { title: 'Companies',    sub: 'Every employer you’re pursuing' },
+  '/opportunities': { title: 'Opportunities', sub: 'Roles you’re evaluating before you apply' },
   '/applications': { title: 'Applications', sub: 'Track every role through the pipeline' },
   '/follow-ups':   { title: 'Follow-Ups',   sub: 'Stay ahead of every thread' },
   '/recruiters':   { title: 'Recruiters',   sub: 'Your network of contacts' },
@@ -32,6 +33,7 @@ const NAV = [
   { to: '/dashboard',    Icon: DashboardOutlined,        label: 'Dashboard'    },
   { to: '/workspaces',   Icon: FolderOutlined,            label: 'Workspaces'   },
   { to: '/companies',    Icon: BusinessOutlined,          label: 'Companies'    },
+  { to: '/opportunities', Icon: BookmarkAddedOutlined,    label: 'Opportunities' },
   { to: '/applications', Icon: WorkOutlined,              label: 'Applications' },
   { to: '/follow-ups',   Icon: NotificationsNoneOutlined, label: 'Follow-Ups'   },
   { to: '/recruiters',   Icon: PeopleOutlined,            label: 'Recruiters'   },
