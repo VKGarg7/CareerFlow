@@ -12,8 +12,6 @@ import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
@@ -38,6 +36,7 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
     private final BlacklistedTokenRepository blacklistedTokenRepository;
+    private final TokenBlacklistService tokenBlacklistService;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
     private final AuditLogService auditLogService;
@@ -114,7 +113,7 @@ public class AuthService {
                         .expiresAt(expiresAt)
                         .build()
         );
-        markTokenBlacklistedInCache(token);
+        tokenBlacklistService.markBlacklisted(token);
 
         userRepository.findByEmail(jwtUtil.extractEmail(token))
                 .ifPresent(user -> auditLogService.log(user, AuditAction.USER_LOGOUT, "Logged out"));
@@ -196,16 +195,6 @@ public class AuthService {
         auditLogService.log(user, AuditAction.PASSWORD_CHANGED, "Password changed");
 
         return Map.of("message", "Password changed successfully");
-    }
-
-    @CachePut(value = CacheConfig.TOKEN_BLACKLIST_CACHE, key = "#token")
-    public boolean markTokenBlacklistedInCache(String token) {
-        return true;
-    }
-
-    @Cacheable(value = CacheConfig.TOKEN_BLACKLIST_CACHE, key = "#token")
-    public boolean isTokenBlacklisted(String token) {
-        return blacklistedTokenRepository.existsByToken(token);
     }
 
     @CacheEvict(value = CacheConfig.USER_DETAILS_CACHE, key = "#email")
