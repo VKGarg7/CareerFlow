@@ -158,7 +158,7 @@ function SidebarContent({ onClose, onLogout }) {
 
       <div className="my-1.5 h-px shrink-0 bg-white/[0.06]" />
 
-      <div className="flex-1 overflow-x-hidden overflow-y-auto">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto no-scrollbar">
       <nav className="space-y-0.5 py-2.5">
         <p className="px-3.5 pb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-white/25">Menu</p>
         {items.map(({ to, Icon, label }) => (

@@ -3,6 +3,7 @@ package com.careerflow.auth;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
 import com.careerflow.auth.dto.*;
+import com.careerflow.config.CacheConfig;
 import com.careerflow.config.JwtUtil;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.ResourceNotFoundException;
@@ -10,6 +11,7 @@ import com.careerflow.user.User;
 import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
@@ -34,6 +36,7 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
     private final BlacklistedTokenRepository blacklistedTokenRepository;
+    private final TokenBlacklistService tokenBlacklistService;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
     private final AuditLogService auditLogService;
@@ -110,6 +113,7 @@ public class AuthService {
                         .expiresAt(expiresAt)
                         .build()
         );
+        tokenBlacklistService.markBlacklisted(token);
 
         userRepository.findByEmail(jwtUtil.extractEmail(token))
                 .ifPresent(user -> auditLogService.log(user, AuditAction.USER_LOGOUT, "Logged out"));
@@ -163,6 +167,7 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+        evictUserDetailsCache(user.getEmail());
 
         passwordResetTokenRepository.delete(resetToken);
         auditLogService.log(user, AuditAction.PASSWORD_RESET, "Password reset via email link");
@@ -186,9 +191,14 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+        evictUserDetailsCache(user.getEmail());
         auditLogService.log(user, AuditAction.PASSWORD_CHANGED, "Password changed");
 
         return Map.of("message", "Password changed successfully");
+    }
+
+    @CacheEvict(value = CacheConfig.USER_DETAILS_CACHE, key = "#email")
+    public void evictUserDetailsCache(String email) {
     }
 
     @Scheduled(cron = "0 0 * * * *")
