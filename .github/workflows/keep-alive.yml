@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping health endpoint
-        run: curl -sf https://careerflow-backend-ravi.onrender.com/actuator/health
+        run: curl -s --retry 3 --retry-delay 10 --max-time 100 https://careerflow-backend-ravi.onrender.com/actuator/health
