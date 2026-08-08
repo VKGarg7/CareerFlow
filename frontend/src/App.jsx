@@ -17,6 +17,7 @@ import Recruiters from './pages/Recruiters'
 import FollowUps from './pages/FollowUps'
 import Referrals from './pages/Referrals'
 import Goals from './pages/Goals'
+import Opportunities from './pages/Opportunities'
 import AdminDashboard from './pages/AdminDashboard'
 import Activity from './pages/Activity'
 
@@ -84,6 +85,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <Applications />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/opportunities"
+          element={
+            <PrivateRoute>
+              <Opportunities />
             </PrivateRoute>
           }
         />

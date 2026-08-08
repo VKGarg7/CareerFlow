@@ -3,9 +3,12 @@ import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from 'framer-motion'
 import { pageTransition, drawerSlideBlur } from '../lib/motion'
 import {
-  PersonOutlined, LogoutOutlined,
-  Menu, Close, KeyboardArrowDownRounded,
-  FolderRounded, CheckRounded,
+  DashboardOutlined, BusinessOutlined, WorkOutlined,
+  PeopleOutlined, PersonOutlined, LogoutOutlined,
+  Menu, Close, NotificationsNoneOutlined, Handshake,
+  AdminPanelSettingsOutlined, FolderOutlined, KeyboardArrowDownRounded,
+  BusinessCenterOutlined, HandshakeOutlined, PersonAddAltOutlined,
+  FlagOutlined,
 } from '@mui/icons-material'
 import { useProfile } from '../context/ProfileContext'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -21,6 +24,7 @@ import CommandPalette from './CommandPalette'
 const PAGE_META = {
   '/dashboard':    { title: 'Dashboard',    sub: 'Your job search, at a glance' },
   '/companies':    { title: 'Companies',    sub: 'Every employer you’re pursuing' },
+  '/opportunities': { title: 'Opportunities', sub: 'Roles you’re evaluating before you apply' },
   '/applications': { title: 'Applications', sub: 'Track every role through the pipeline' },
   '/follow-ups':   { title: 'Follow-Ups',   sub: 'Stay ahead of every thread' },
   '/recruiters':   { title: 'Recruiters',   sub: 'Your network of contacts' },
@@ -31,6 +35,26 @@ const PAGE_META = {
   '/activity':     { title: 'Activity',     sub: 'Everything that’s happened' },
   '/change-password': { title: 'Change Password', sub: 'Keep your account secure' },
 }
+
+const NAV = [
+  { to: '/dashboard',    Icon: DashboardOutlined,        label: 'Dashboard'    },
+  { to: '/workspaces',   Icon: FolderOutlined,            label: 'Workspaces'   },
+  { to: '/companies',    Icon: BusinessOutlined,          label: 'Companies'    },
+  { to: '/applications', Icon: WorkOutlined,              label: 'Applications' },
+  { to: '/follow-ups',   Icon: NotificationsNoneOutlined, label: 'Follow-Ups'   },
+  { to: '/recruiters',   Icon: PeopleOutlined,            label: 'Recruiters'   },
+  { to: '/referrals',    Icon: Handshake,                 label: 'Referrals'    },
+  { to: '/goals',        Icon: FlagOutlined,              label: 'Goals'        },
+]
+
+const ADMIN_NAV = { to: '/admin', Icon: AdminPanelSettingsOutlined, label: 'Admin' }
+
+const QUICK_ACTIONS = [
+  { to: '/applications?add=1', Icon: BusinessCenterOutlined, label: 'Log Application', key: 'A' },
+  { to: '/companies?add=1',    Icon: BusinessOutlined,       label: 'Add Company',     key: 'C' },
+  { to: '/recruiters?add=1',   Icon: PersonAddAltOutlined,   label: 'Add Recruiter',   key: 'R' },
+  { to: '/referrals?add=1',    Icon: HandshakeOutlined,      label: 'New Referral',    key: 'N' },
+]
 
 function Brand({ onNavigate, iconOnly = false }) {
   return (
@@ -158,10 +182,9 @@ function SidebarContent({ onClose, onLogout, onRailScroll }) {
 
       <div className="my-1.5 h-px shrink-0 bg-white/[0.06]" />
 
-      <div className="cf-rail-scroll flex-1 overflow-x-hidden overflow-y-auto" onScroll={onRailScroll}>
-      <GlowTrail className="py-2.5" color="rgba(91,95,239,0.14)">
-        <p className="sidebar-label px-3.5 pb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-white/25">Main</p>
-        <nav className="space-y-0.5">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto">
+      <nav className="space-y-0.5 py-2.5">
+        <p className="px-3.5 pb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-white/25">Menu</p>
         {items.map(({ to, Icon, label }) => (
           <NavLink
             key={to}

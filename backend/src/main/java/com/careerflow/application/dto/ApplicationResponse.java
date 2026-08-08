@@ -16,8 +16,15 @@ public class ApplicationResponse {
     private Long companyId;
     private String companyName;
     private String role;
+    private String jobLink;
+    private String location;
     private LocalDate applicationDate;
     private ApplicationSource source;
+    private String sourceUrl;
+    private String sourceNotes;
+    private boolean requiresCoverLetter;
+    private boolean requiresAssessment;
+    private boolean hasSpecialSteps;
     private ApplicationStatus status;
     private String expectedSalary;
     private LocalDate deadline;

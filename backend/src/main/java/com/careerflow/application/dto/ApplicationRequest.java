@@ -19,9 +19,17 @@ public class ApplicationRequest {
     @NotBlank(message = "Role is required")
     private String role;
 
+    private String jobLink;
+    private String location;
+
     private LocalDate applicationDate;
     private LocalDate deadline;
     private ApplicationSource source;
+    private String sourceUrl;
+    private String sourceNotes;
+    private Boolean requiresCoverLetter;
+    private Boolean requiresAssessment;
+    private Boolean hasSpecialSteps;
     private ApplicationStatus status;
     private String expectedSalary;
     private String notes;

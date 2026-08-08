@@ -3,6 +3,7 @@ package com.careerflow.admin;
 import com.careerflow.admin.dto.AdminUserResponse;
 import com.careerflow.application.ApplicationRepository;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.auth.AuthService;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.company.CompanyRepository;
 import com.careerflow.exception.BadRequestException;
@@ -46,6 +47,8 @@ class AdminServiceTest {
     private SecurityUtils securityUtils;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private AuthService authService;
 
     @InjectMocks
     private AdminService adminService;
