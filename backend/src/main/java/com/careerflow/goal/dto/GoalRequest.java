@@ -2,7 +2,6 @@ package com.careerflow.goal.dto;
 
 import com.careerflow.goal.GoalMetricType;
 import com.careerflow.goal.GoalStatus;
-import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;

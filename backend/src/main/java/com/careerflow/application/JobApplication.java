@@ -30,8 +30,6 @@ public class JobApplication extends SoftDeleteEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // Nullable for now: backfilled by WorkspaceBackfillRunner on boot, then
-    // tightened to nullable = false once every existing row is confirmed backfilled.
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "workspace_id")
     private Workspace workspace;
@@ -43,11 +41,28 @@ public class JobApplication extends SoftDeleteEntity {
     @Column(nullable = false)
     private String role;
 
+    private String jobLink;
+    private String location;
+
     @Builder.Default
     private LocalDate applicationDate = LocalDate.now();
 
     @Enumerated(EnumType.STRING)
     private ApplicationSource source;
+
+    private String sourceUrl;
+
+    @Column(columnDefinition = "TEXT")
+    private String sourceNotes;
+
+    @Builder.Default
+    private boolean requiresCoverLetter = false;
+
+    @Builder.Default
+    private boolean requiresAssessment = false;
+
+    @Builder.Default
+    private boolean hasSpecialSteps = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

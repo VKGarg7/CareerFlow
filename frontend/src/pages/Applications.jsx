@@ -44,11 +44,7 @@ import AnalyticsCard from '../components/AnalyticsCard'
 import { DrawerShell, CloseIconButton } from '../components/DrawerShell'
 import { FieldLabel, FormFooterButtons } from '../components/formKit'
 import { APP_STATUS_CONFIG as STATUS_CONFIG, appStatusHex as dotHex } from '../constants/applicationStatus'
-
-const SOURCE_LABELS = {
-  CAREERS_PAGE: 'Careers Page', LINKEDIN: 'LinkedIn', REFERRAL: 'Referral',
-  NAUKRI: 'Naukri', INTERNSHALA: 'Internshala', JOB_PORTAL: 'Job Portal', OTHER: 'Other',
-}
+import { SOURCE_LABELS } from '../constants/applicationSource'
 
 const SORT_OPTIONS = [
   { value: 'applicationDate', label: 'Date',    clientSide: false },

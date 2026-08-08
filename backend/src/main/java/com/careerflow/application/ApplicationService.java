@@ -73,8 +73,15 @@ public class ApplicationService {
                 .workspace(workspace)
                 .company(company)
                 .role(request.getRole())
+                .jobLink(request.getJobLink())
+                .location(request.getLocation())
                 .applicationDate(request.getApplicationDate())
                 .source(request.getSource())
+                .sourceUrl(request.getSourceUrl())
+                .sourceNotes(request.getSourceNotes())
+                .requiresCoverLetter(Boolean.TRUE.equals(request.getRequiresCoverLetter()))
+                .requiresAssessment(Boolean.TRUE.equals(request.getRequiresAssessment()))
+                .hasSpecialSteps(Boolean.TRUE.equals(request.getHasSpecialSteps()))
                 .status(request.getStatus() != null ? request.getStatus() : ApplicationStatus.APPLIED)
                 .expectedSalary(request.getExpectedSalary())
                 .deadline(request.getDeadline())
@@ -228,10 +235,24 @@ public class ApplicationService {
         }
         if (request.getRole() != null && !request.getRole().isBlank())
             application.setRole(request.getRole());
+        if (request.getJobLink() != null)
+            application.setJobLink(request.getJobLink());
+        if (request.getLocation() != null)
+            application.setLocation(request.getLocation());
         if (request.getApplicationDate() != null)
             application.setApplicationDate(request.getApplicationDate());
         if (request.getSource() != null)
             application.setSource(request.getSource());
+        if (request.getSourceUrl() != null)
+            application.setSourceUrl(request.getSourceUrl());
+        if (request.getSourceNotes() != null)
+            application.setSourceNotes(request.getSourceNotes());
+        if (request.getRequiresCoverLetter() != null)
+            application.setRequiresCoverLetter(request.getRequiresCoverLetter());
+        if (request.getRequiresAssessment() != null)
+            application.setRequiresAssessment(request.getRequiresAssessment());
+        if (request.getHasSpecialSteps() != null)
+            application.setHasSpecialSteps(request.getHasSpecialSteps());
         if (request.getStatus() != null)
             application.setStatus(request.getStatus());
         if (request.getExpectedSalary() != null)
@@ -263,7 +284,6 @@ public class ApplicationService {
         return applicationRepository.existsByUserIdAndCompanyIdAndWorkspaceId(userId, companyId, workspaceId);
     }
 
-    // ─── Documents ────────────────────────────────────────────────────────────
 
     public ApplicationResponse uploadDocuments(Long appId, MultipartFile resume,
                                                MultipartFile coverLetter, Long profileResumeDocumentId, Long workspaceId) {
@@ -334,7 +354,6 @@ public class ApplicationService {
                 .body(resource);
     }
 
-    // ─── Private helpers ──────────────────────────────────────────────────────
 
     private void validateExtension(MultipartFile file) {
         String name = file.getOriginalFilename() != null ? file.getOriginalFilename() : "";
@@ -386,8 +405,15 @@ public class ApplicationService {
                 .companyId(app.getCompany().getId())
                 .companyName(app.getCompany().getName())
                 .role(app.getRole())
+                .jobLink(app.getJobLink())
+                .location(app.getLocation())
                 .applicationDate(app.getApplicationDate())
                 .source(app.getSource())
+                .sourceUrl(app.getSourceUrl())
+                .sourceNotes(app.getSourceNotes())
+                .requiresCoverLetter(app.isRequiresCoverLetter())
+                .requiresAssessment(app.isRequiresAssessment())
+                .hasSpecialSteps(app.isHasSpecialSteps())
                 .status(app.getStatus())
                 .expectedSalary(app.getExpectedSalary())
                 .deadline(app.getDeadline())
