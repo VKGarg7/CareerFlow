@@ -3,6 +3,7 @@ package com.careerflow.auth;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
 import com.careerflow.auth.dto.*;
+import com.careerflow.config.CacheConfig;
 import com.careerflow.config.JwtUtil;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.ResourceNotFoundException;
@@ -10,6 +11,9 @@ import com.careerflow.user.User;
 import com.careerflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
@@ -110,6 +114,7 @@ public class AuthService {
                         .expiresAt(expiresAt)
                         .build()
         );
+        markTokenBlacklistedInCache(token);
 
         userRepository.findByEmail(jwtUtil.extractEmail(token))
                 .ifPresent(user -> auditLogService.log(user, AuditAction.USER_LOGOUT, "Logged out"));
@@ -163,6 +168,7 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+        evictUserDetailsCache(user.getEmail());
 
         passwordResetTokenRepository.delete(resetToken);
         auditLogService.log(user, AuditAction.PASSWORD_RESET, "Password reset via email link");
@@ -186,9 +192,24 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+        evictUserDetailsCache(user.getEmail());
         auditLogService.log(user, AuditAction.PASSWORD_CHANGED, "Password changed");
 
         return Map.of("message", "Password changed successfully");
+    }
+
+    @CachePut(value = CacheConfig.TOKEN_BLACKLIST_CACHE, key = "#token")
+    public boolean markTokenBlacklistedInCache(String token) {
+        return true;
+    }
+
+    @Cacheable(value = CacheConfig.TOKEN_BLACKLIST_CACHE, key = "#token")
+    public boolean isTokenBlacklisted(String token) {
+        return blacklistedTokenRepository.existsByToken(token);
+    }
+
+    @CacheEvict(value = CacheConfig.USER_DETAILS_CACHE, key = "#email")
+    public void evictUserDetailsCache(String email) {
     }
 
     @Scheduled(cron = "0 0 * * * *")
