@@ -190,6 +190,15 @@ export function AuthErrorBanner({ children }) {
   )
 }
 
+export function AuthSuccessBanner({ children }) {
+  if (!children) return null
+  return (
+    <div className="mb-5 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+      {children}
+    </div>
+  )
+}
+
 export function AuthDemoBanner({ email, password, onFill }) {
   if (!email || !password) return null
   return (
@@ -209,12 +218,12 @@ export function AuthDemoBanner({ email, password, onFill }) {
   )
 }
 
-export function AuthSubmitButton({ loading, loadingText, children, arrow = false, ...props }) {
+export function AuthSubmitButton({ loading, loadingText, children, arrow = false, className = '', ...props }) {
   return (
     <button
       type="submit"
       disabled={loading}
-      className="mt-1 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#5B5FEF] to-[#8B5CF6] py-3 text-sm font-bold text-white shadow-[0_0_24px_rgba(91,95,239,0.35)] transition-all hover:scale-[1.01] hover:shadow-[0_0_32px_rgba(91,95,239,0.55)] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100"
+      className={`mt-1 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#5B5FEF] to-[#8B5CF6] py-3 text-sm font-bold text-white shadow-[0_0_24px_rgba(91,95,239,0.35)] transition-all hover:scale-[1.01] hover:shadow-[0_0_32px_rgba(91,95,239,0.55)] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 ${className || 'w-full'}`}
       {...props}
     >
       {loading ? loadingText : (

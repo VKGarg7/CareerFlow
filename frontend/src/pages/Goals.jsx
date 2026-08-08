@@ -1,20 +1,24 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
   FlagOutlined, DeleteOutlineRounded, EditOutlined, PauseCircleOutlineRounded, PlayCircleOutlineRounded,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
-import Pagination from '../components/Pagination'
+import InfiniteScrollSentinel from '../components/InfiniteScrollSentinel'
 import EmptyState from '../components/EmptyState'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
 import { FieldLabel, fieldInputCls, FormFooterButtons } from '../components/formKit'
 import FilterSelect from '../components/FilterSelect'
 import HeaderAddButton from '../components/HeaderAddButton'
+import MagneticButton from '../components/MagneticButton'
+import CursorSpotlight from '../components/CursorSpotlight'
+import AchievementToast from '../components/AchievementToast'
+import CountUp from '../components/CountUp'
 import { getGoals, addGoal, updateGoal, deleteGoal } from '../api/goal'
 import { fmtDate } from '../utils/followup'
 import useTransientMessage from '../hooks/useTransientMessage'
-import usePagedList from '../hooks/usePagedList'
+import useInfiniteList from '../hooks/useInfiniteList'
 import useCrudModals from '../hooks/useCrudModals'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 
@@ -52,11 +56,13 @@ function ProgressBar({ progress, target, hex }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-sm font-semibold text-white/80">{progress} / {target}</span>
+        <span className="text-sm font-semibold text-white/80">
+          <CountUp value={progress} duration={0.7} /> / {target}
+        </span>
         <span className="text-xs font-medium text-white/40">{pct}%</span>
       </div>
-      <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: hex }} />
+      <div className="engraved-well h-2 overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${pct}%`, background: hex, boxShadow: `0 0 10px -1px ${hex}99` }} />
       </div>
     </div>
   )
@@ -67,8 +73,9 @@ function GoalCard({ goal, onEdit, onDelete, onToggleActive }) {
   const status = STATUS_CONFIG[goal.status] || STATUS_CONFIG.ACTIVE
 
   return (
-    <div className="rounded-card border border-white/[0.06] border-l-4 bg-app-surface shadow-card p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.1] hover:shadow-card-hover"
+    <CursorSpotlight className="glass-surface glass-edge corner-light elevate-float overflow-hidden rounded-hud border-l-4 shadow-glass-1 p-5 transition-shadow duration-300 hover:-translate-y-0.5 hover:shadow-glass-hover"
       style={{ borderLeftColor: metric.hex }}>
+      <div className="card-noise bg-noise" />
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
           <p className="text-sm font-bold text-white/90 truncate">{metric.label}</p>
@@ -82,22 +89,22 @@ function GoalCard({ goal, onEdit, onDelete, onToggleActive }) {
       <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-white/[0.06]">
         {goal.status !== 'COMPLETED' && (
           <button onClick={() => onToggleActive(goal)}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.08] text-white/60 bg-white/[0.02] hover:bg-white/[0.08] transition">
+            className="btn-liquid flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.08] text-white/60 bg-white/[0.02] hover:bg-white/[0.08] transition">
             {goal.status === 'ACTIVE'
               ? <><PauseCircleOutlineRounded sx={{ fontSize: 14 }} /> Mark Inactive</>
               : <><PlayCircleOutlineRounded sx={{ fontSize: 14 }} /> Reactivate</>}
           </button>
         )}
         <button onClick={() => onEdit(goal)}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.08] text-white/60 bg-white/[0.02] hover:bg-white/[0.08] transition">
+          className="btn-liquid flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.08] text-white/60 bg-white/[0.02] hover:bg-white/[0.08] transition">
           <EditOutlined sx={{ fontSize: 14 }} /> Edit
         </button>
         <button onClick={() => onDelete(goal)}
-          className="ml-auto flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-app-danger/20 text-app-danger bg-app-danger/[0.04] hover:bg-app-danger hover:text-white hover:border-app-danger transition">
+          className="btn-liquid ml-auto flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-app-danger/20 text-app-danger bg-app-danger/[0.04] hover:bg-app-danger hover:text-white hover:border-app-danger transition">
           <DeleteOutlineRounded sx={{ fontSize: 14 }} />
         </button>
       </div>
-    </div>
+    </CursorSpotlight>
   )
 }
 
@@ -206,17 +213,30 @@ function DeleteModal({ open, goal, onClose, onDeleted }) {
 
 export default function Goals() {
   const [success, setSuccess] = useTransientMessage()
+  const [achievement, setAchievement] = useTransientMessage(4500)
   const [statusFilter, setStatusFilter] = useState('')
   const [sortBy, setSortBy] = useState('createdAt')
   const [order, setOrder] = useState('desc')
+  const knownStatuses = useRef({})
 
   const {
-    items: goals, loading, error, setError, setPage, setSize, refetch: fetchGoals,
-  } = usePagedList(
+    items: goals, loading, loadingMore, hasMore, loadMore, error, setError, refetch: fetchGoals,
+  } = useInfiniteList(
     useCallback((page, size) => getGoals({ status: statusFilter || undefined, sortBy, order, page, size }),
       [statusFilter, sortBy, order]),
     'Failed to load goals.'
   )
+
+  React.useEffect(() => {
+    for (const g of goals) {
+      const prev = knownStatuses.current[g.id]
+      if (prev && prev !== 'COMPLETED' && g.status === 'COMPLETED') {
+        const metric = METRIC_CONFIG[g.metricType] || METRIC_CONFIG.APPLICATIONS
+        setAchievement(`${metric.label} goal complete — ${g.targetValue}/${g.targetValue}!`)
+      }
+      knownStatuses.current[g.id] = g.status
+    }
+  }, [goals, setAchievement])
 
   const {
     modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
@@ -240,6 +260,7 @@ export default function Goals() {
 
   return (
     <Layout headerAction={<HeaderAddButton label="Add Goal" onClick={openAdd} />}>
+      <AchievementToast message={achievement} title="Goal achieved" />
       <div className="overflow-x-hidden">
         <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
         <PageAlert severity="error" message={error} onClose={() => setError('')} />
@@ -262,10 +283,10 @@ export default function Goals() {
             title="No goals yet"
             description="Set measurable targets to keep your job search on track."
             action={
-              <button onClick={openAdd}
-                className="px-6 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition shadow-glow shadow-app-accent/40">
+              <MagneticButton onClick={openAdd}
+                className="btn-liquid px-6 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition shadow-ring-accent">
                 Add your first goal
-              </button>
+              </MagneticButton>
             }
           />
         ) : (
@@ -279,8 +300,7 @@ export default function Goals() {
                 <GoalCard key={g.id} goal={g} onEdit={openEdit} onDelete={setDeleteTarget} onToggleActive={handleToggleActive} />
               ))}
             </div>
-            <Pagination page={goals.page} totalPages={goals.totalPages}
-              totalElements={goals.totalElements} size={goals.size} onPageChange={setPage} onSizeChange={setSize} />
+            <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
           </div>
         )}
       </div>

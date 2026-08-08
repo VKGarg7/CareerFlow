@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { profileInitial } from '../utils/followup'
 import {
   Search, NotificationsNoneOutlined, CalendarTodayOutlined,
@@ -24,22 +25,29 @@ export default function DashboardTopBar({ profile, pendingFollowUpCount = 0 }) {
   }, [addOpen])
 
   const initial = profileInitial(profile)
+  const [searchFocused, setSearchFocused] = useState(false)
 
   return (
     <div className="flex w-full flex-wrap items-center gap-3">
-      <div className="relative min-w-[10rem] flex-1">
+      <motion.div
+        animate={{ flexGrow: searchFocused ? 1.6 : 1 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="relative min-w-[10rem] flex-1"
+      >
         <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30">
           <Search sx={{ fontSize: 18 }} />
         </span>
         <input
           type="text"
           placeholder="Search anything..."
-          className="h-10 w-full rounded-xl border border-white/[0.06] bg-white/[0.03] pl-10 pr-14 text-sm text-white placeholder:text-white/30 transition hover:border-white/[0.12] focus:border-app-accent/40 focus:outline-none focus:ring-2 focus:ring-app-accent/30"
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
+          className="h-10 w-full rounded-xl border border-white/[0.06] bg-white/[0.03] pl-10 pr-14 text-sm text-white placeholder:text-white/30 transition-colors hover:border-white/[0.12] focus:border-app-accent/40 focus:outline-none focus:ring-2 focus:ring-app-accent/30"
         />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/[0.08] bg-white/[0.04] px-1.5 py-1 text-[11px] font-medium text-white/30">
           ⌘K
         </span>
-      </div>
+      </motion.div>
 
       <button
         onClick={() => navigate('/follow-ups')}

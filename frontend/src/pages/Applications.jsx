@@ -10,7 +10,8 @@ import {
   PlaceRounded, LanguageRounded,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
-import Pagination from '../components/Pagination'
+import InfiniteScrollSentinel from '../components/InfiniteScrollSentinel'
+import HybridRow from '../components/HybridRow'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
@@ -33,10 +34,9 @@ import FilterSelect from '../components/FilterSelect'
 import HeaderAddButton from '../components/HeaderAddButton'
 import useCrudModals from '../hooks/useCrudModals'
 import useFilterState from '../hooks/useFilterState'
-import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
-import usePagedList from '../hooks/usePagedList'
+import useInfiniteList from '../hooks/useInfiniteList'
 import useFetchOnce from '../hooks/useFetchOnce'
 import { useWorkspace } from '../context/WorkspaceContext'
 import ApplicationSourcesCard from '../components/ApplicationSourcesCard'
@@ -236,73 +236,73 @@ const NEXT_STEP_TONE = {
   muted:   'text-white/25',
 }
 
-function ApplicationTableRow({ app, company, onView, onEdit, onDelete, onFollowUp, onStatusChanged }) {
+function ApplicationTableRow({ app, company, isLast, expanded, onToggleExpand, onView, onEdit, onDelete, onFollowUp, onStatusChanged }) {
   const step = nextStepInfo(app)
+  const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.APPLIED
+  const timelineTone = cfg.dot.includes('success') || cfg.dot.includes('emerald') ? 'success'
+    : cfg.dot.includes('warning') ? 'warning' : cfg.dot.includes('danger') ? 'danger' : 'accent'
+
   return (
-    <div onClick={() => onView(app)}
-      className="group flex items-center gap-2.5 sm:gap-4 border-b border-white/[0.05] px-3 sm:px-4 py-3.5 cursor-pointer transition-colors hover:bg-white/[0.025] last:border-0 min-w-0 md:min-w-0">
-      <div className="w-28 sm:w-56 min-w-0 shrink-0 flex items-center gap-2 sm:gap-3">
-        <CompanyLogo name={app.companyName} website={company?.website} dotColor={dotHex(app.status)} className="h-9 w-9 shrink-0" />
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-white/90 truncate">{app.companyName}</p>
-          {company?.location && <p className="text-xs text-white/35 truncate mt-0.5">{company.location}</p>}
+    <HybridRow
+      onClick={() => onView(app)}
+      accentBorder={cfg.border}
+      isLast={isLast}
+      timelineTone={timelineTone}
+      logoSlot={<CompanyLogo name={app.companyName} website={company?.website} dotColor={dotHex(app.status)} className="h-12 w-12 shrink-0" />}
+      name={app.companyName}
+      subtitle={app.role}
+      statusSlot={<AppStatusChanger app={app} onStatusChanged={onStatusChanged} />}
+      expanded={expanded}
+      onToggleExpand={onToggleExpand}
+      menuItems={[
+        { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(app) },
+        { key: 'followup', label: 'Follow-Up', icon: <NotificationsNoneOutlined sx={{ fontSize: 16 }} />, onClick: () => onFollowUp(app) },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(app) },
+        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(app), tone: 'danger' },
+      ]}
+      hidden={
+        <>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Source</p>
+            <p className="mt-0.5 truncate text-sm font-medium text-white/70">{SOURCE_LABELS[app.source] || app.source || '—'}</p>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Applied On</p>
+            <p className="mt-0.5 text-sm font-medium text-white/70">{app.applicationDate ? fmtDate(app.applicationDate) : '—'}</p>
+          </div>
+          <div className="min-w-0 flex-1" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[11px] text-white/35">Next Step</p>
+            {step.label !== 'None' && (app.nextFollowUpDate || app.deadline) ? (
+              <button type="button" onClick={() => onFollowUp(app)} className={`mt-0.5 truncate text-sm font-medium hover:underline ${NEXT_STEP_TONE[step.tone]}`}>
+                {step.label}
+              </button>
+            ) : (
+              <p className={`mt-0.5 truncate text-sm ${NEXT_STEP_TONE[step.tone]}`}>{step.label}</p>
+            )}
+          </div>
+        </>
+      }
+      expandedContent={
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Source</p>
+            <p className="mt-1 text-sm text-white/80">{SOURCE_LABELS[app.source] || app.source || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Applied On</p>
+            <p className="mt-1 text-sm text-white/80">{app.applicationDate ? fmtDate(app.applicationDate) : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Next Step</p>
+            <p className={`mt-1 text-sm ${NEXT_STEP_TONE[step.tone]}`}>{step.label}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Location</p>
+            <p className="mt-1 text-sm text-white/80">{company?.location || '—'}</p>
+          </div>
         </div>
-      </div>
-
-      <div className="w-24 sm:w-36 min-w-0 shrink-0" onClick={(e) => e.stopPropagation()}>
-        <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
-      </div>
-
-      <div className="w-44 min-w-0 shrink-0 hidden md:block">
-        <p className="text-sm text-white/75 truncate">{app.role}</p>
-      </div>
-
-      <div className="w-32 min-w-0 shrink-0 hidden lg:block">
-        <p className="text-sm text-white/70 truncate">{app.companyName}</p>
-      </div>
-
-      <div className="w-28 shrink-0 hidden lg:block">
-        <p className="text-sm text-white/60 truncate">{SOURCE_LABELS[app.source] || app.source || '—'}</p>
-      </div>
-
-      <div className="w-28 shrink-0 hidden xl:block">
-        <p className="text-sm text-white/60">{app.applicationDate ? fmtDate(app.applicationDate) : '—'}</p>
-      </div>
-
-      <div className="w-36 min-w-0 shrink-0 hidden xl:block" onClick={(e) => e.stopPropagation()}>
-        {step.label !== 'None' && (app.nextFollowUpDate || app.deadline) ? (
-          <button type="button" onClick={() => onFollowUp(app)} className={`text-sm font-medium truncate hover:underline ${NEXT_STEP_TONE[step.tone]}`}>
-            {step.label}
-          </button>
-        ) : (
-          <p className={`text-sm truncate ${NEXT_STEP_TONE[step.tone]}`}>{step.label}</p>
-        )}
-      </div>
-
-      <div className="ml-auto shrink-0" onClick={(e) => e.stopPropagation()}>
-        <CardMenu items={[
-          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(app) },
-          { key: 'followup', label: 'Follow-Up', icon: <NotificationsNoneOutlined sx={{ fontSize: 16 }} />, onClick: () => onFollowUp(app) },
-          { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(app) },
-          { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(app), tone: 'danger' },
-        ]} />
-      </div>
-    </div>
-  )
-}
-
-function ApplicationTableHeader() {
-  return (
-    <div className="hidden md:flex items-center gap-4 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-white/35 border-b border-white/[0.06]">
-      <div className="w-40 sm:w-56 shrink-0">Application</div>
-      <div className="w-28 sm:w-36 shrink-0">Status</div>
-      <div className="w-44 shrink-0">Role</div>
-      <div className="w-32 shrink-0 hidden lg:block">Company</div>
-      <div className="w-28 shrink-0 hidden lg:block">Source</div>
-      <div className="w-28 shrink-0 hidden xl:block">Applied On</div>
-      <div className="w-36 shrink-0 hidden xl:block">Next Step</div>
-      <div className="ml-auto w-8 shrink-0" />
-    </div>
+      }
+    />
   )
 }
 
@@ -1432,6 +1432,7 @@ export default function Applications() {
   const [viewTarget, setViewTarget] = useState(null)
   const [followUpTarget, setFollowUpTarget] = useState(null)
   const [companyDetailId, setCompanyDetailId] = useState(null)
+  const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => {
     if (workspaceLoading || !activeWorkspaceId) return
@@ -1441,9 +1442,9 @@ export default function Applications() {
   const activeSortOption = SORT_OPTIONS.find((o) => o.value === sortBy)
 
   const {
-    items: applications, setItems: setApplications, loading, error, setError,
-    setPage, setSize, refetch: fetchApplications,
-  } = usePagedList(
+    items: applications, setItems: setApplications, loading, loadingMore, hasMore, loadMore, error, setError,
+    refetch: fetchApplications,
+  } = useInfiniteList(
     useCallback((page, size) => {
       const isClientSort = activeSortOption?.clientSide
       return getApplications({
@@ -1465,7 +1466,6 @@ export default function Applications() {
   const { data: monthlyTrendData, refetch: fetchMonthlyTrend } = useFetchOnce(getMonthlyTrend, [])
   const { data: sourceAnalysisData, refetch: fetchSourceAnalysis } = useFetchOnce(getSourceAnalysis, [])
 
-  useSearchShortcut(searchInputRef)
 
   const {
     modalOpen, setModalOpen, editTarget, deleteTarget, setDeleteTarget,
@@ -1694,11 +1694,7 @@ export default function Applications() {
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                 <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
               </svg>
-            </span>
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-app-text-muted pointer-events-none">
-              ⌘K
-            </span>
-          </div>
+            </span>          </div>
 
           <button onClick={() => setFiltersOpen((o) => !o)}
             className={`h-11 px-4 flex items-center gap-2 border rounded-xl text-sm font-medium transition whitespace-nowrap ${
@@ -1862,14 +1858,17 @@ export default function Applications() {
               <span className="ml-1 text-white/35">of {applications.length}</span>
             )}
           </p>
-          <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card overflow-x-auto">
-            <ApplicationTableHeader />
-            {displayApplications.map((a) => (
-              <ApplicationTableRow key={a.id} app={a} company={companyById[a.companyId]} {...cardProps} />
+          <div>
+            {displayApplications.map((a, i) => (
+              <ApplicationTableRow
+                key={a.id} app={a} company={companyById[a.companyId]} {...cardProps}
+                isLast={i === displayApplications.length - 1}
+                expanded={expandedId === a.id}
+                onToggleExpand={() => setExpandedId((cur) => (cur === a.id ? null : a.id))}
+              />
             ))}
           </div>
-          <Pagination page={applications.page} totalPages={applications.totalPages}
-            totalElements={applications.totalElements} size={applications.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       ) : (
         <div>
@@ -1884,8 +1883,7 @@ export default function Applications() {
               <ApplicationDirectoryCard key={a.id} app={a} company={companyById[a.companyId]} {...cardProps} />
             ))}
           </div>
-          <Pagination page={applications.page} totalPages={applications.totalPages}
-            totalElements={applications.totalElements} size={applications.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       )}
       </div>

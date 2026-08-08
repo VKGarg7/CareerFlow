@@ -77,7 +77,8 @@ export function EntityCard({ onClick, accentColor, avatarColor, avatarText, avat
   const trimmedNote = note?.trim()
   return (
     <div onClick={onClick}
-      className={`relative overflow-hidden rounded-card border border-white/[0.06] border-l-4 ${accentColor} bg-app-surface shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.1] hover:shadow-card-hover cursor-pointer`}>
+      className={`group glass-surface glass-edge corner-light gradient-border-anim elevate-float relative overflow-hidden rounded-hud border-l-4 ${accentColor} shadow-glass-1 transition-shadow duration-300 hover:-translate-y-0.5 hover:shadow-glass-hover cursor-pointer`}>
+      <div className="card-noise bg-noise" />
       <div className="flex flex-wrap sm:flex-nowrap items-start gap-4 p-6">
         {avatarSlot || (
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight ${avatarColor}`}>
@@ -128,7 +129,8 @@ export function EntityDirectoryCard({
   const trimmedNote = note?.trim()
   return (
     <div onClick={onClick} style={borderTopColor ? { borderTopColor } : undefined}
-      className={`group relative overflow-hidden rounded-card border border-white/[0.06] ${statusBarColor ? '' : 'border-t-4'} bg-app-surface shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.1] hover:shadow-card-hover flex flex-col cursor-pointer`}>
+      className={`group glass-surface glass-edge corner-light gradient-border-anim elevate-float relative overflow-hidden rounded-hud ${statusBarColor ? '' : 'border-t-4'} shadow-glass-1 transition-shadow duration-300 hover:-translate-y-0.5 hover:shadow-glass-hover flex flex-col cursor-pointer`}>
+      <div className="card-noise bg-noise" />
       {statusBarColor && <div className={`h-1 w-full ${statusBarColor}`} />}
       <div className="p-6 flex flex-col gap-3.5 flex-1">
         <div className="flex items-start gap-3">

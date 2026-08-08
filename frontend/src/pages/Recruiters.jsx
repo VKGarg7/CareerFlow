@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Alert, CircularProgress } from '@mui/material'
+import { motion } from 'framer-motion'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
@@ -8,9 +9,10 @@ import {
   VisibilityOutlined, EditOutlined, DeleteOutlineRounded,
   FormatBoldRounded, FormatItalicRounded, FormatListBulletedRounded,
   AttachFileRounded, InsertEmoticonOutlined, CalendarTodayOutlined,
+  PersonAddAltOutlined, BusinessOutlined,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
-import Pagination from '../components/Pagination'
+import InfiniteScrollSentinel from '../components/InfiniteScrollSentinel'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
@@ -19,14 +21,13 @@ import EmptyState from '../components/EmptyState'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
 import { initials, fmt, fmtDate } from '../utils/followup'
-import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
-import usePagedList from '../hooks/usePagedList'
+import useInfiniteList from '../hooks/useInfiniteList'
 import useFetchOnce from '../hooks/useFetchOnce'
 import { DrawerShell, DrawerHeader, CloseIconButton } from '../components/DrawerShell'
-import { fieldInputCls, FieldErrorText, FieldLabel, FormFooterButtons } from '../components/formKit'
-import EntityListRow from '../components/EntityListRow'
+import { fieldInputCls, FieldErrorText, FieldLabel, FormFooterButtons, FloatingField, CommandSelect, DatePickerField, StepProgress } from '../components/formKit'
+import HybridRow from '../components/HybridRow'
 import FilterSelect from '../components/FilterSelect'
 import HeaderAddButton from '../components/HeaderAddButton'
 import useCrudModals from '../hooks/useCrudModals'
@@ -76,54 +77,67 @@ function RecruiterStatusChanger({ recruiter, onStatusChanged }) {
   )
 }
 
-function RecruiterListRow({ recruiter, drawerOpen, onView, onEdit, onDelete, onNotes, onStatusChanged }) {
+function RecruiterListRow({ recruiter, isLast, expanded, onToggleExpand, onView, onEdit, onDelete, onNotes, onStatusChanged }) {
   const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
   const noteCount = recruiter.noteCount ?? 0
+  const timelineTone = cfg.dot.includes('success') ? 'success' : cfg.dot.includes('warning') ? 'warning' : cfg.dot.includes('danger') ? 'danger' : 'accent'
 
   return (
-    <EntityListRow
+    <HybridRow
       onClick={() => onView(recruiter)}
       accentBorder={cfg.border}
       avatarColor={cfg.dot}
       name={recruiter.name}
       subtitle={recruiter.jobTitle}
+      isLast={isLast}
+      timelineTone={timelineTone}
       statusSlot={<RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />}
       email={recruiter.email}
       linkedIn={recruiter.linkedIn}
+      expanded={expanded}
+      onToggleExpand={onToggleExpand}
       menuItems={[
         { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(recruiter) },
         { key: 'notes', label: `Notes${noteCount > 0 ? ` (${noteCount})` : ''}`, icon: <EditNote sx={{ fontSize: 16 }} />, onClick: () => onNotes(recruiter) },
         { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(recruiter) },
         { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(recruiter), tone: 'danger' },
       ]}
-    >
-      <div className={`w-36 min-w-0 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'md:block'}`}>
-        <p className="text-sm text-white/70 truncate">{recruiter.company || '—'}</p>
-      </div>
-
-      <div className={`w-28 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'lg:block'}`}>
-        <p className="text-[11px] text-white/35">Source</p>
-        <p className="text-sm font-medium text-white/70 truncate mt-0.5">
-          {recruiter.source ? (SOURCE_LABELS[recruiter.source] || recruiter.source) : '—'}
-        </p>
-      </div>
-
-      <div className={`w-28 shrink-0 hidden ${drawerOpen ? '2xl:block' : 'xl:block'}`}>
-        <p className="text-[11px] text-white/35">Last Contact</p>
-        <p className="text-sm font-medium text-white/70 mt-0.5">
-          {recruiter.lastContactedAt ? fmtDate(recruiter.lastContactedAt) : '—'}
-        </p>
-      </div>
-
-      <div className={`w-20 shrink-0 hidden ${drawerOpen ? '2xl:block' : 'lg:block'}`}>
-        <p className="text-[11px] text-white/35">Notes</p>
-        <p className="flex items-center gap-1 text-sm font-semibold text-white/80 mt-0.5">
-          {noteCount > 0 && <EditNote sx={{ fontSize: 13 }} className="text-app-accent-soft" />}
-          {noteCount}
-        </p>
-      </div>
-
-    </EntityListRow>
+      hidden={
+        <>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Source</p>
+            <p className="mt-0.5 truncate text-sm font-medium text-white/70">
+              {recruiter.source ? (SOURCE_LABELS[recruiter.source] || recruiter.source) : '—'}
+            </p>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Last Contact</p>
+            <p className="mt-0.5 text-sm font-medium text-white/70">
+              {recruiter.lastContactedAt ? fmtDate(recruiter.lastContactedAt) : '—'}
+            </p>
+          </div>
+        </>
+      }
+      expandedContent={
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Company</p>
+            <p className="mt-1 text-sm text-white/80">{recruiter.company || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Source</p>
+            <p className="mt-1 text-sm text-white/80">{recruiter.source ? (SOURCE_LABELS[recruiter.source] || recruiter.source) : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Notes</p>
+            <p className="mt-1 flex items-center gap-1 text-sm text-white/80">
+              {noteCount > 0 && <EditNote sx={{ fontSize: 13 }} className="text-app-accent-soft" />}
+              {noteCount > 0 ? `${noteCount} note${noteCount !== 1 ? 's' : ''}` : 'No notes yet'}
+            </p>
+          </div>
+        </div>
+      }
+    />
   )
 }
 
@@ -576,8 +590,11 @@ function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete
   )
 }
 
+const RECRUITER_STEPS = ['Contact', 'Details']
+
 function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
+  const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
@@ -591,6 +608,7 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
         status: recruiter.status || 'NEW', source: recruiter.source || '',
         lastContactedAt: recruiter.lastContactedAt || '', notes: recruiter.notes || '',
       } : EMPTY_FORM)
+      setStep(0)
       setError('')
       setFieldErrors({})
     }
@@ -601,7 +619,7 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
   const setVal = (key) => (val) => setForm((f) => ({ ...f, [key]: val }))
 
-  const validate = () => {
+  const validateContact = () => {
     const errs = {}
     if (!form.name.trim()) errs.name = 'Name is required.'
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Enter a valid email.'
@@ -610,10 +628,16 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
     return errs
   }
 
+  const goNext = () => {
+    const errs = validateContact()
+    if (Object.keys(errs).length) { setFieldErrors(errs); return }
+    setFieldErrors({})
+    setStep(1)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const errs = validate()
-    if (Object.keys(errs).length) { setFieldErrors(errs); return }
+    if (step === 0) { goNext(); return }
     setFieldErrors({})
     setSaving(true)
     setError('')
@@ -636,92 +660,66 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
     }
   }
 
-  const inputCls = (field) => fieldInputCls(!!fieldErrors[field])
-  const FieldError = ({ field }) => <FieldErrorText error={fieldErrors[field]} />
-
   return (
     <DrawerShell>
       <DrawerHeader onClose={onClose} title={recruiter ? 'Edit Recruiter Contact' : 'Add Recruiter Contact'} subtitle={recruiter ? 'Update contact information' : 'Add a new recruiter to your network'} />
+      <div className="px-6 pt-4 shrink-0">
+        <StepProgress steps={RECRUITER_STEPS} current={step} />
+      </div>
       <div className="px-6 py-5 overflow-y-auto flex-1 no-scrollbar">
         {error && <div className="mb-4 p-3 rounded-xl bg-app-danger/10 border border-app-danger/20 text-app-danger text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <FieldLabel>
-              Full Name <span className="text-app-danger">*</span>
-            </FieldLabel>
-            <input type="text" value={form.name} onChange={set('name')}
-              placeholder="e.g. Priya Sharma" className={inputCls('name')} />
-            <FieldError field="name" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <FieldLabel>Job Title</FieldLabel>
-              <input type="text" value={form.jobTitle} onChange={set('jobTitle')}
-                placeholder="Technical Recruiter" className={inputCls('jobTitle')} />
-              <FieldError field="jobTitle" />
-            </div>
-            <div>
-              <FieldLabel>Company</FieldLabel>
-              <input type="text" value={form.company} onChange={set('company')}
-                placeholder="e.g. Google" className={inputCls('company')} />
-              <FieldError field="company" />
-            </div>
-          </div>
-          <div>
-            <FieldLabel>Email</FieldLabel>
-            <input type="email" value={form.email} onChange={set('email')}
-              placeholder="priya@google.com" className={inputCls('email')} />
-            <FieldError field="email" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <FieldLabel>Phone</FieldLabel>
-              <input type="tel" value={form.phone} onChange={set('phone')}
-                placeholder="+91 98765 43210" className={inputCls('phone')} />
-              <FieldError field="phone" />
-            </div>
-            <div>
-              <FieldLabel>LinkedIn URL</FieldLabel>
-              <input type="url" value={form.linkedIn} onChange={set('linkedIn')}
-                placeholder="https://linkedin.com/in/..." className={inputCls('linkedIn')} />
-              <FieldError field="linkedIn" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <FieldLabel>Status</FieldLabel>
-              <FilterSelect
-                value={form.status}
-                onChange={setVal('status')}
-                options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
-                hideAll
-                className="w-full"
-              />
-            </div>
-            <div>
-              <FieldLabel>Source</FieldLabel>
-              <FilterSelect
-                value={form.source}
-                onChange={setVal('source')}
-                allLabel="— Select —"
-                options={Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))}
-                className="w-full"
-              />
-            </div>
-          </div>
-          <div>
-            <FieldLabel>Last Contacted</FieldLabel>
-            <input type="date" value={form.lastContactedAt} onChange={set('lastContactedAt')}
-              max={new Date().toISOString().split('T')[0]} className={inputCls('lastContactedAt')} />
-          </div>
-          <div>
-            <FieldLabel>General Notes</FieldLabel>
-            <textarea value={form.notes} onChange={set('notes')} rows={3}
-              placeholder="Background info, referrals, context..."
-              className={`${inputCls('notes')} resize-none`} />
-            <p className="text-xs text-white/35 mt-1 text-right">{form.notes.length}/2000</p>
-          </div>
-          <FormFooterButtons saving={saving} onCancel={onClose} saveLabel={recruiter ? 'Save Changes' : 'Add Recruiter'} saveFirst heightCls="py-2.5" />
+          {step === 0 ? (
+            <>
+              <FloatingField label="Full Name" required icon={<PersonAddAltOutlined sx={{ fontSize: 17 }} />}
+                value={form.name} onChange={set('name')} error={fieldErrors.name} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FloatingField label="Job Title" value={form.jobTitle} onChange={set('jobTitle')} error={fieldErrors.jobTitle} />
+                <FloatingField label="Company" icon={<BusinessOutlined sx={{ fontSize: 17 }} />} value={form.company} onChange={set('company')} error={fieldErrors.company} />
+              </div>
+              <FloatingField label="Email" type="email" icon={<Email sx={{ fontSize: 17 }} />} value={form.email} onChange={set('email')} error={fieldErrors.email} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FloatingField label="Phone" type="tel" icon={<Phone sx={{ fontSize: 17 }} />} value={form.phone} onChange={set('phone')} error={fieldErrors.phone} />
+                <FloatingField label="LinkedIn URL" type="url" icon={<LinkedIn sx={{ fontSize: 17 }} />} value={form.linkedIn} onChange={set('linkedIn')} error={fieldErrors.linkedIn} />
+              </div>
+              <div className="flex justify-end pt-2">
+                <motion.button type="button" whileHover={{ y: -1 }} whileTap={{ scale: 0.98 }} onClick={goNext}
+                  className="rounded-xl bg-app-accent px-5 py-2.5 text-sm font-semibold text-white shadow-ring-accent transition hover:brightness-110">
+                  Continue
+                </motion.button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <CommandSelect
+                  label="Status" value={form.status} onChange={setVal('status')}
+                  options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))}
+                  searchable={false}
+                />
+                <CommandSelect
+                  label="Source" value={form.source} onChange={setVal('source')}
+                  options={Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))}
+                  searchable={false}
+                />
+              </div>
+              <DatePickerField label="Last Contacted" value={form.lastContactedAt} onChange={(v) => setForm((f) => ({ ...f, lastContactedAt: v }))}
+                max={new Date().toISOString().split('T')[0]} />
+              <FloatingField label="General Notes" as="textarea" rows={3} value={form.notes} onChange={set('notes')}
+                hint={`${form.notes.length}/2000`} />
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setStep(0)}
+                  className="flex-1 py-2.5 text-sm font-semibold text-white/70 bg-white/[0.06] rounded-xl hover:bg-white/[0.10] transition">
+                  Back
+                </button>
+                <motion.button whileHover={{ y: -1 }} whileTap={{ scale: 0.98 }} type="submit" disabled={saving}
+                  className="flex-[2] flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition disabled:opacity-60 shadow-ring-accent">
+                  {saving && <CircularProgress size={14} color="inherit" />}
+                  {recruiter ? 'Save Changes' : 'Add Recruiter'}
+                </motion.button>
+              </div>
+            </>
+          )}
         </form>
       </div>
     </DrawerShell>
@@ -759,11 +757,12 @@ export default function Recruiters() {
 
   const [viewTarget, setViewTarget] = useState(null)
   const [viewFocusNotes, setViewFocusNotes] = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
 
   const {
-    items: recruiters, setItems: setRecruiters, loading, error, setError,
-    setPage, size, setSize, refetch: fetchRecruiters,
-  } = usePagedList(
+    items: recruiters, setItems: setRecruiters, loading, loadingMore, hasMore, loadMore, error, setError,
+    refetch: fetchRecruiters,
+  } = useInfiniteList(
     useCallback(
       (page, size) => getRecruiters({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
       [search, statusFilter, sortBy, order]
@@ -777,7 +776,6 @@ export default function Recruiters() {
   const { data: stats, refetch: fetchStats } = useFetchOnce(getRecruiterStats)
   const { data: sourceOptions, refetch: fetchSourceOptions } = useFetchOnce(getRecruiterSources, [])
 
-  useSearchShortcut(searchInputRef)
 
   const filteredRecruiters = useMemo(
     () => sourceFilter ? recruiters.filter((r) => r.source === sourceFilter) : recruiters,
@@ -820,7 +818,6 @@ export default function Recruiters() {
     onDelete: setDeleteTarget,
     onNotes: openNotes,
     onStatusChanged: handleStatusChanged,
-    drawerOpen,
   }
 
   return (
@@ -853,11 +850,7 @@ export default function Recruiters() {
             </span>
             <input ref={searchInputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, company, or email..."
-              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-white/25" />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-white/30 pointer-events-none">
-              ⌘K
-            </span>
-          </div>
+              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-white/25" />          </div>
 
           <button onClick={() => setFiltersOpen((o) => !o)}
             className={`h-11 px-4 flex items-center gap-2 border rounded-xl text-sm font-medium transition whitespace-nowrap ${
@@ -924,13 +917,17 @@ export default function Recruiters() {
           <h2 className="text-[18px] font-semibold text-white mb-4">
             {filteredRecruiters.length} {filteredRecruiters.length === 1 ? 'Recruiter' : 'Recruiters'}
           </h2>
-          <div className="space-y-3">
-            {filteredRecruiters.map((r) => (
-              <RecruiterListRow key={r.id} recruiter={r} {...cardProps} />
+          <div>
+            {filteredRecruiters.map((r, i) => (
+              <RecruiterListRow
+                key={r.id} recruiter={r} isLast={i === filteredRecruiters.length - 1}
+                expanded={expandedId === r.id}
+                onToggleExpand={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
+                {...cardProps}
+              />
             ))}
           </div>
-          <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
-            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       ) : (
         <div>
@@ -942,8 +939,7 @@ export default function Recruiters() {
               <DirectoryCard key={r.id} recruiter={r} {...cardProps} />
             ))}
           </div>
-          <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
-            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       )}
       </div>

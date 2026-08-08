@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { changePassword } from '../api/auth'
 import AuthPanel, { AuthBrand } from '../components/AuthSplitPanel'
-import { AuthCard, AuthField, AuthInputIcon, LockIcon, AuthErrorBanner, AuthFormSide, AuthDecoTile, EyeIcon } from '../components/AuthFormKit'
+import { AuthCard, AuthField, AuthInputIcon, LockIcon, AuthErrorBanner, AuthSuccessBanner, AuthSubmitButton, AuthFormSide, AuthDecoTile, EyeIcon } from '../components/AuthFormKit'
 import { authInputIconCls } from '../components/authStyles'
 
 const TIPS = [
@@ -87,11 +87,7 @@ export default function ChangePassword() {
             <p className="mb-4 text-sm text-white/45">Update your account password.</p>
 
             <AuthErrorBanner>{errors.general}</AuthErrorBanner>
-            {success && (
-              <div className="mb-4 rounded-xl border border-app-success/20 bg-app-success/10 px-4 py-3 text-sm text-app-success">
-                {success}
-              </div>
-            )}
+            <AuthSuccessBanner>{success}</AuthSuccessBanner>
 
             <form onSubmit={handleSubmit} className="space-y-3">
               {passwordField('Current password', 'currentPassword', 'current', '••••••••')}
@@ -102,17 +98,13 @@ export default function ChangePassword() {
                 <button
                   type="button"
                   onClick={() => navigate(-1)}
-                  className="flex-1 rounded-xl border border-white/[0.08] py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/[0.06]"
+                  className="flex-1 rounded-full border border-white/[0.08] py-3 text-sm font-semibold text-white/70 transition hover:bg-white/[0.06]"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 rounded-xl bg-app-accent py-2.5 text-sm font-semibold text-white shadow-glow shadow-app-accent/40 transition hover:brightness-110 disabled:opacity-50"
-                >
-                  {loading ? 'Saving…' : 'Save changes'}
-                </button>
+                <AuthSubmitButton loading={loading} loadingText="Saving…" className="flex-1">
+                  Save changes
+                </AuthSubmitButton>
               </div>
             </form>
           </AuthCard>

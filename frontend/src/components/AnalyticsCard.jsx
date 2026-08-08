@@ -1,7 +1,20 @@
-export default function AnalyticsCard({ className = '', children }) {
+import TiltCard from './TiltCard'
+
+const SHELL = 'glass-surface glass-edge corner-light gradient-border-anim relative overflow-hidden rounded-hud shadow-glass-1'
+
+export default function AnalyticsCard({ className = '', children, interactive = false }) {
+  if (!interactive) {
+    return (
+      <div className={`${SHELL} p-6 ${className}`}>
+        <div className="card-noise bg-noise" />
+        {children}
+      </div>
+    )
+  }
   return (
-    <div className={`relative overflow-hidden rounded-3xl border border-white/[0.03] bg-[#0B0C14] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_16px_40px_-12px_rgba(0,0,0,0.45)] p-6 ${className}`}>
+    <TiltCard className={`${SHELL} elevate-float hover:shadow-glass-hover p-6 ${className}`}>
+      <div className="card-noise bg-noise" />
       {children}
-    </div>
+    </TiltCard>
   )
 }

@@ -1,12 +1,20 @@
 import { forwardRef } from 'react'
+import { motion } from 'framer-motion'
 import { Close } from '@mui/icons-material'
+import { drawerSlideBlur } from '../lib/motion'
 
 export const DrawerShell = forwardRef(function DrawerShell({ children }, ref) {
   return (
-    <aside ref={ref} className="fixed inset-y-0 right-0 z-40 w-full max-w-sm bg-app-surface border-l border-white/[0.08] shadow-card-hover flex flex-col"
-      style={{ animation: 'drawer-in 0.24s cubic-bezier(0.16,1,0.3,1)' }}>
+    <motion.aside
+      ref={ref}
+      initial={drawerSlideBlur.initial}
+      animate={drawerSlideBlur.animate}
+      exit={drawerSlideBlur.exit}
+      transition={drawerSlideBlur.transition}
+      className="glass-surface glass-edge fixed inset-y-0 right-0 z-40 w-full max-w-sm shadow-glass-2 flex flex-col"
+    >
       {children}
-    </aside>
+    </motion.aside>
   )
 })
 

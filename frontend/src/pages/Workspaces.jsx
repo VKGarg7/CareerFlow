@@ -8,7 +8,8 @@ import {
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
-import Pagination from '../components/Pagination'
+import InfiniteScrollSentinel from '../components/InfiniteScrollSentinel'
+import HybridRow from '../components/HybridRow'
 import WorkspaceStatCards from '../components/WorkspaceStatCards'
 import { ConfirmDeleteModal } from '../components/ModalShell'
 import { getWorkspaces, addWorkspace, updateWorkspace, deleteWorkspace } from '../api/workspace'
@@ -18,10 +19,9 @@ import WorkspaceDetailModal from '../components/WorkspaceDetailModal'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
 import { fmtDate } from '../utils/followup'
 import FilterSelect from '../components/FilterSelect'
-import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
-import usePagedList from '../hooks/usePagedList'
+import useInfiniteList from '../hooks/useInfiniteList'
 import { DrawerShell } from '../components/DrawerShell'
 import { FormFooterButtons } from '../components/formKit'
 import { CloseGlyphIcon } from '../components/CloseGlyphIcon'
@@ -117,64 +117,83 @@ function WorkspaceStatusChanger({ workspace, onStatusChanged }) {
 
 const dotHex = (status) => (STATUS_CONFIG[status] || STATUS_CONFIG.ACTIVE).hex
 
-function WorkspaceListRow({ workspace, onEdit, onDelete, onView, onStatusChanged, order, onToggleOrder, compact }) {
+function WorkspaceListRow({ workspace, onEdit, onDelete, onView, onStatusChanged, order, onToggleOrder, isLast, expanded, onToggleExpand }) {
   const cfg = STATUS_CONFIG[workspace.status] || STATUS_CONFIG.ACTIVE
   const roles = workspace.targetRoles || []
   const locations = workspace.preferredLocations || []
+  const timelineTone = cfg.border.includes('success') ? 'success' : cfg.border.includes('warning') ? 'warning' : cfg.border.includes('danger') ? 'danger' : 'accent'
 
   return (
-    <div onClick={() => onView(workspace.id)}
-      className={`group relative flex items-center gap-2 sm:gap-4 min-w-0 rounded-card border border-white/[0.06] border-l-4 ${cfg.border} bg-app-surface shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.1] hover:shadow-card-hover cursor-pointer px-3 sm:px-5 py-3.5`}>
-
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight" style={{ backgroundColor: dotHex(workspace.status) }}>
-        <FolderOutlined sx={{ fontSize: 18 }} />
-      </div>
-
-      <div className={`min-w-0 shrink-0 ${compact ? 'w-24' : 'w-28 sm:w-44'}`}>
-        <p className="text-sm font-bold text-white/90 truncate">{workspace.name}</p>
-        {roles.length > 0 && <p className="text-xs text-white/40 truncate mt-0.5">{roles.join(', ')}</p>}
-      </div>
-
-      <div className={`shrink-0 min-w-0 w-[6.5rem] ${compact ? 'ml-auto' : 'sm:w-28'}`} onClick={(e) => e.stopPropagation()}>
-        <WorkspaceStatusChanger workspace={workspace} onStatusChanged={onStatusChanged} />
-      </div>
-
-      <div className={`min-w-[6rem] max-w-[10rem] flex-1 shrink basis-0 ${compact ? 'hidden' : 'hidden md:block'}`}>
-        {locations.length > 0 && (
-          <p className="flex items-center gap-1 text-xs text-white/50 truncate">
-            <PlaceOutlined sx={{ fontSize: 13 }} className="text-app-danger shrink-0" />
-            <span className="truncate">{locations.join(', ')}</span>
-          </p>
-        )}
-        {workspace.workMode && (
-          <p className="text-xs text-app-accent-soft truncate mt-0.5">{workspace.workMode}</p>
-        )}
-      </div>
-
-      <div className={`w-20 shrink-0 ${compact ? 'hidden' : 'hidden lg:block'}`}>
-        <p className="text-[11px] text-white/35">Applications Goal</p>
-        <p className="text-sm font-semibold text-white/80 mt-0.5">{workspace.goalApplicationsTarget ?? '—'}</p>
-      </div>
-
-      <div className={`w-24 shrink-0 ${compact ? 'hidden' : 'hidden xl:block'}`}>
-        <p className="text-[11px] text-white/35">Search Started</p>
-        <p className="text-sm font-medium text-white/70 mt-0.5">{workspace.searchStartDate ? fmtDate(workspace.searchStartDate) : '—'}</p>
-      </div>
-
-      <div className="ml-auto flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-        {onToggleOrder && (
-          <button onClick={onToggleOrder} title={order === 'desc' ? 'Sort ascending' : 'Sort descending'}
-            className={`items-center justify-center w-9 h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white hover:bg-white/[0.08] transition ${compact ? 'hidden' : 'hidden sm:flex'}`}>
-            <CalendarTodayOutlined sx={{ fontSize: 15 }} />
-          </button>
-        )}
-        <CardMenu items={[
-          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(workspace.id) },
-          { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(workspace) },
-          { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(workspace), tone: 'danger' },
-        ]} />
-      </div>
-    </div>
+    <HybridRow
+      onClick={() => onView(workspace.id)}
+      accentBorder={cfg.border}
+      isLast={isLast}
+      timelineTone={timelineTone}
+      logoSlot={
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-inner-highlight" style={{ backgroundColor: dotHex(workspace.status) }}>
+          <FolderOutlined sx={{ fontSize: 20 }} />
+        </div>
+      }
+      name={workspace.name}
+      subtitle={roles.length > 0 ? roles.join(', ') : undefined}
+      statusSlot={<WorkspaceStatusChanger workspace={workspace} onStatusChanged={onStatusChanged} />}
+      expanded={expanded}
+      onToggleExpand={onToggleExpand}
+      extraActions={onToggleOrder && (
+        <button onClick={onToggleOrder} title={order === 'desc' ? 'Sort ascending' : 'Sort descending'}
+          className="flex items-center justify-center w-9 h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white hover:bg-white/[0.08] transition">
+          <CalendarTodayOutlined sx={{ fontSize: 15 }} />
+        </button>
+      )}
+      menuItems={[
+        { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(workspace.id) },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(workspace) },
+        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(workspace), tone: 'danger' },
+      ]}
+      hidden={
+        <>
+          <div className="min-w-0 flex-1">
+            {locations.length > 0 && (
+              <p className="flex items-center gap-1 truncate text-xs text-white/50">
+                <PlaceOutlined sx={{ fontSize: 13 }} className="shrink-0 text-app-danger" />
+                <span className="truncate">{locations.join(', ')}</span>
+              </p>
+            )}
+            {workspace.workMode && (
+              <p className="mt-0.5 truncate text-xs text-app-accent-soft">{workspace.workMode}</p>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Applications Goal</p>
+            <p className="mt-0.5 text-sm font-semibold text-white/80">{workspace.goalApplicationsTarget ?? '—'}</p>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Search Started</p>
+            <p className="mt-0.5 text-sm font-medium text-white/70">{workspace.searchStartDate ? fmtDate(workspace.searchStartDate) : '—'}</p>
+          </div>
+        </>
+      }
+      expandedContent={
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Locations</p>
+            <p className="mt-1 text-sm text-white/80">{locations.length > 0 ? locations.join(', ') : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Work Mode</p>
+            <p className="mt-1 text-sm text-white/80">{workspace.workMode || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Applications Goal</p>
+            <p className="mt-1 text-sm text-white/80">{workspace.goalApplicationsTarget ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Search Started</p>
+            <p className="mt-1 text-sm text-white/80">{workspace.searchStartDate ? fmtDate(workspace.searchStartDate) : '—'}</p>
+          </div>
+        </div>
+      }
+    />
   )
 }
 
@@ -433,10 +452,12 @@ export default function Workspaces() {
   const [viewMode, setViewMode] = useState('grid')
   const searchInputRef = React.useRef(null)
 
+  const [expandedId, setExpandedId] = useState(null)
+
   const {
-    items: workspaces, setItems: setWorkspaces, loading, error, setError,
-    setPage, setSize, refetch: fetchWorkspaces,
-  } = usePagedList(
+    items: workspaces, setItems: setWorkspaces, loading, loadingMore, hasMore, loadMore, error, setError,
+    refetch: fetchWorkspaces,
+  } = useInfiniteList(
     useCallback(
       (page, size) => getWorkspaces({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
       [search, statusFilter, sortBy, order]
@@ -450,7 +471,6 @@ export default function Workspaces() {
   } = useCrudModals('Workspace', setSuccess, [fetchWorkspaces])
   const [viewId, setViewId] = useState(null)
 
-  useSearchShortcut(searchInputRef)
 
   const filteredWorkspaces = useMemo(() => {
     return workspaces.filter((w) => {
@@ -499,11 +519,7 @@ export default function Workspaces() {
             </span>
             <input ref={searchInputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search workspaces..."
-              className="w-full h-11 pl-11 pr-14 border border-white/[0.08] rounded-xl text-sm text-white bg-[rgba(28,28,50,0.8)] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.16] transition placeholder:text-[#7E819B]" />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-black/30 border border-white/[0.08] text-[10px] font-medium text-white/40 pointer-events-none">
-              ⌘K
-            </span>
-          </div>
+              className="w-full h-11 pl-11 pr-14 border border-white/[0.08] rounded-xl text-sm text-white bg-[rgba(28,28,50,0.8)] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.16] transition placeholder:text-[#7E819B]" />          </div>
 
           <HeaderAddButton label="Create Workspace" onClick={openAdd} drawerOpen={drawerOpen} />
         </div>
@@ -575,14 +591,17 @@ export default function Workspaces() {
           <h2 className="text-[18px] font-semibold text-app-text mb-4">
             {filteredWorkspaces.length} {filteredWorkspaces.length === 1 ? 'Workspace' : 'Workspaces'}
           </h2>
-          <div className="space-y-3">
-            {filteredWorkspaces.map((w) => (
+          <div>
+            {filteredWorkspaces.map((w, i) => (
               <WorkspaceListRow key={w.id} workspace={w} {...cardProps}
-                order={order} onToggleOrder={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))} compact={drawerOpen} />
+                order={order} onToggleOrder={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+                isLast={i === filteredWorkspaces.length - 1}
+                expanded={expandedId === w.id}
+                onToggleExpand={() => setExpandedId((cur) => (cur === w.id ? null : w.id))}
+              />
             ))}
           </div>
-          <Pagination page={workspaces.page} totalPages={workspaces.totalPages}
-            totalElements={workspaces.totalElements} size={workspaces.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       ) : (
         <div>
@@ -594,8 +613,7 @@ export default function Workspaces() {
               <WorkspaceDirectoryCard key={w.id} workspace={w} {...cardProps} />
             ))}
           </div>
-          <Pagination page={workspaces.page} totalPages={workspaces.totalPages}
-            totalElements={workspaces.totalElements} size={workspaces.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       )}
       </div>

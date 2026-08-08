@@ -8,7 +8,8 @@ import {
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import ViewToggle from '../components/ViewToggle'
-import Pagination from '../components/Pagination'
+import InfiniteScrollSentinel from '../components/InfiniteScrollSentinel'
+import HybridRow from '../components/HybridRow'
 import StatTilesBar from '../components/StatTilesBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
 import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats, getApplicationCountsByCompany, getCompanyCreationTrend, getCompanyActivitySummary } from '../api/company'
@@ -21,10 +22,9 @@ import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
 import CompanyLogo from '../components/CompanyLogo'
 import { initials, fmtDate, domainOf } from '../utils/followup'
 import FilterSelect from '../components/FilterSelect'
-import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
-import usePagedList from '../hooks/usePagedList'
+import useInfiniteList from '../hooks/useInfiniteList'
 import useFetchOnce from '../hooks/useFetchOnce'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { DrawerShell } from '../components/DrawerShell'
@@ -77,85 +77,86 @@ function CompanyStatusChanger({ company, onStatusChanged }) {
   )
 }
 
-function CompanyListRow({ company, onEdit, onDelete, onView, onStatusChanged, stats, order, onToggleOrder, compact }) {
+function CompanyListRow({ company, onEdit, onDelete, onView, onStatusChanged, stats, order, onToggleOrder, isLast, expanded, onToggleExpand }) {
   const { applicationCount, recruiter, lastActivity, nextFollowUp } = stats
   const cfg = STATUS_CONFIG[company.status] || STATUS_CONFIG.TARGETING
+  const timelineTone = cfg.border.includes('success') ? 'success' : cfg.border.includes('warning') ? 'warning' : cfg.border.includes('danger') ? 'danger' : 'accent'
 
   return (
-    <div onClick={() => onView(company.id)}
-      className={`group relative flex items-center gap-2 sm:gap-4 min-w-0 rounded-card border border-white/[0.06] border-l-4 ${cfg.border} bg-app-surface shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.1] hover:shadow-card-hover cursor-pointer px-3 sm:px-5 py-3.5`}>
-
-      <CompanyLogo name={company.name} website={company.website} dotColor={dotHex(company.status)} className="w-10 h-10 shrink-0" />
-
-      <div className={`min-w-0 shrink-0 ${compact ? 'w-24' : 'w-28 sm:w-44'}`}>
-        <p className="text-sm font-bold text-white/90 truncate flex items-center gap-1.5">
-          {company.name}
-          {company.priority && <PriorityBadge priority={company.priority} />}
-        </p>
-        {company.industry && <p className="text-xs text-white/40 truncate mt-0.5">{company.industry}</p>}
-      </div>
-
-      <div className={`shrink-0 min-w-0 w-[6.5rem] ${compact ? 'ml-auto' : 'sm:w-28'}`} onClick={(e) => e.stopPropagation()}>
-        <CompanyStatusChanger company={company} onStatusChanged={onStatusChanged} />
-      </div>
-
-      <div className={`min-w-[6rem] max-w-[10rem] flex-1 shrink basis-0 ${compact ? 'hidden' : 'hidden md:block'}`}>
-        {company.location && (
-          <p className="flex items-center gap-1 text-xs text-white/50 truncate">
-            <Place sx={{ fontSize: 13 }} className="text-app-danger shrink-0" />
-            <span className="truncate">{company.location}</span>
-          </p>
-        )}
-        {company.website && (
-          <a href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
-            target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 text-xs text-app-accent-soft hover:underline truncate mt-0.5">
-            <Language sx={{ fontSize: 13 }} className="shrink-0" />
-            <span className="truncate">{domainOf(company.website)}</span>
-          </a>
-        )}
-      </div>
-
-      <div className={`w-16 shrink-0 ${compact ? 'hidden' : 'hidden lg:block'}`}>
-        <p className="text-[11px] text-white/35">Applications</p>
-        <p className="text-sm font-semibold text-white/80 mt-0.5">{applicationCount}</p>
-      </div>
-
-      <div className={`min-w-[5rem] max-w-[8rem] flex-1 shrink basis-0 ${compact ? 'hidden' : 'hidden lg:block'}`}>
-        <p className="text-[11px] text-white/35">Recruiter</p>
-        <p className="text-sm font-semibold text-white/80 truncate mt-0.5">{recruiter ? recruiter.name : '—'}</p>
-      </div>
-
-      <div className={`w-24 shrink-0 ${compact ? 'hidden' : 'hidden xl:block'}`}>
-        <p className="text-[11px] text-white/35">Last Activity</p>
-        <p className="flex items-center gap-1.5 text-sm font-medium text-white/70 mt-0.5">
-          {lastActivity && <span className="w-1.5 h-1.5 rounded-full bg-app-success shrink-0" />}
-          {lastActivity ? fmtDate(lastActivity) : '—'}
-        </p>
-      </div>
-
-      <div className="ml-auto flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-        {onToggleOrder && (
-          <button onClick={onToggleOrder} title={order === 'desc' ? 'Sort ascending' : 'Sort descending'}
-            className={`items-center justify-center w-9 h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white hover:bg-white/[0.08] transition ${compact ? 'hidden' : 'hidden sm:flex'}`}>
-            <SwapVertRounded sx={{ fontSize: 18 }} />
-          </button>
-        )}
-        <button onClick={() => onView(company.id)} title={nextFollowUp ? `Next follow-up: ${fmtDate(nextFollowUp)}` : 'No pending follow-up'}
-          className={`items-center justify-center w-9 h-9 rounded-lg border transition ${compact ? 'hidden' : 'hidden sm:flex'} ${
-            nextFollowUp
-              ? 'border-app-accent/25 bg-app-accent/10 text-app-accent-soft hover:bg-app-accent/20'
-              : 'border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white hover:bg-white/[0.08]'
-          }`}>
-          <CalendarTodayOutlined sx={{ fontSize: 15 }} />
+    <HybridRow
+      onClick={() => onView(company.id)}
+      accentBorder={cfg.border}
+      isLast={isLast}
+      timelineTone={timelineTone}
+      logoSlot={<CompanyLogo name={company.name} website={company.website} dotColor={dotHex(company.status)} className="w-12 h-12 shrink-0" />}
+      name={<span className="flex items-center gap-1.5">{company.name}{company.priority && <PriorityBadge priority={company.priority} />}</span>}
+      subtitle={company.industry}
+      statusSlot={<CompanyStatusChanger company={company} onStatusChanged={onStatusChanged} />}
+      expanded={expanded}
+      onToggleExpand={onToggleExpand}
+      extraActions={onToggleOrder && (
+        <button onClick={onToggleOrder} title={order === 'desc' ? 'Sort ascending' : 'Sort descending'}
+          className="flex items-center justify-center w-9 h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white hover:bg-white/[0.08] transition">
+          <SwapVertRounded sx={{ fontSize: 18 }} />
         </button>
-        <CardMenu items={[
-          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(company.id) },
-          { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(company) },
-          { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(company), tone: 'danger' },
-        ]} />
-      </div>
-    </div>
+      )}
+      menuItems={[
+        { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(company.id) },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(company) },
+        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(company), tone: 'danger' },
+      ]}
+      hidden={
+        <>
+          <div className="min-w-0 flex-1">
+            {company.location && (
+              <p className="flex items-center gap-1 truncate text-xs text-white/50">
+                <Place sx={{ fontSize: 13 }} className="shrink-0 text-app-danger" />
+                <span className="truncate">{company.location}</span>
+              </p>
+            )}
+            {company.website && (
+              <a href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
+                target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                className="mt-0.5 flex items-center gap-1 truncate text-xs text-app-accent-soft hover:underline">
+                <Language sx={{ fontSize: 13 }} className="shrink-0" />
+                <span className="truncate">{domainOf(company.website)}</span>
+              </a>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Applications</p>
+            <p className="mt-0.5 text-sm font-semibold text-white/80">{applicationCount}</p>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Last Activity</p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-white/70">
+              {lastActivity && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-app-success" />}
+              {lastActivity ? fmtDate(lastActivity) : '—'}
+            </p>
+          </div>
+        </>
+      }
+      expandedContent={
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Applications</p>
+            <p className="mt-1 text-sm text-white/80">{applicationCount}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Recruiter</p>
+            <p className="mt-1 truncate text-sm text-white/80">{recruiter ? recruiter.name : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Last Activity</p>
+            <p className="mt-1 text-sm text-white/80">{lastActivity ? fmtDate(lastActivity) : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Next Follow-up</p>
+            <p className="mt-1 text-sm text-white/80">{nextFollowUp ? fmtDate(nextFollowUp) : '—'}</p>
+          </div>
+        </div>
+      }
+    />
   )
 }
 
@@ -473,10 +474,12 @@ export default function Companies() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const searchInputRef = React.useRef(null)
 
+  const [expandedId, setExpandedId] = useState(null)
+
   const {
-    items: companies, setItems: setCompanies, loading, error, setError,
-    setPage, setSize, refetch: fetchCompanies,
-  } = usePagedList(
+    items: companies, setItems: setCompanies, loading, loadingMore, hasMore, loadMore, error, setError,
+    refetch: fetchCompanies,
+  } = useInfiniteList(
     useCallback(
       (page, size) => getCompanies({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
       [search, statusFilter, sortBy, order]
@@ -502,7 +505,6 @@ export default function Companies() {
 
   const [recruiters, setRecruiters] = useState([])
 
-  useSearchShortcut(searchInputRef)
 
   useEffect(() => {
     if (workspaceLoading || !activeWorkspaceId) return
@@ -613,11 +615,7 @@ export default function Companies() {
             </span>
             <input ref={searchInputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search companies, notes, recruiters..."
-              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-app-text bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-app-text-muted/80" />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-app-text-muted pointer-events-none">
-              ⌘K
-            </span>
-          </div>
+              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-app-text bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-app-text-muted/80" />          </div>
 
           <ResearchNoteSearch onSelectCompany={openView} />
 
@@ -689,14 +687,17 @@ export default function Companies() {
           <h2 className="text-[18px] font-semibold text-app-text mb-4">
             {filteredCompanies.length} {filteredCompanies.length === 1 ? 'Company' : 'Companies'}
           </h2>
-          <div className="space-y-3">
-            {filteredCompanies.map((c) => (
+          <div>
+            {filteredCompanies.map((c, i) => (
               <CompanyListRow key={c.id} company={c} {...cardProps} stats={getCardStats(c)}
-                order={order} onToggleOrder={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))} compact={drawerOpen} />
+                order={order} onToggleOrder={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+                isLast={i === filteredCompanies.length - 1}
+                expanded={expandedId === c.id}
+                onToggleExpand={() => setExpandedId((cur) => (cur === c.id ? null : c.id))}
+              />
             ))}
           </div>
-          <Pagination page={companies.page} totalPages={companies.totalPages}
-            totalElements={companies.totalElements} size={companies.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       ) : (
         <div>
@@ -708,8 +709,7 @@ export default function Companies() {
               <CompanyDirectoryCard key={c.id} company={c} {...cardProps} stats={getCardStats(c)} />
             ))}
           </div>
-          <Pagination page={companies.page} totalPages={companies.totalPages}
-            totalElements={companies.totalElements} size={companies.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       )}
       </div>

@@ -1,8 +1,15 @@
 import { CircularProgress } from '@mui/material'
+import { motion } from 'framer-motion'
+
+export { default as FloatingField } from './premiumForm/FloatingField'
+export { default as CommandSelect } from './premiumForm/CommandSelect'
+export { default as TagInput } from './premiumForm/TagInput'
+export { default as DatePickerField } from './premiumForm/DatePickerField'
+export { default as StepProgress } from './premiumForm/StepProgress'
 
 export const fieldInputCls = (hasError) =>
-  `w-full px-4 py-2.5 border rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 transition placeholder:text-white/25 ${
-    hasError ? 'border-app-danger/40 bg-app-danger/[0.06]' : 'border-white/[0.08] hover:border-white/[0.14]'
+  `field-glass w-full px-4 py-2.5 text-sm text-white/85 bg-transparent focus:outline-none transition placeholder:text-white/25 ${
+    hasError ? 'has-error' : ''
   }`
 
 export const FieldErrorText = ({ error }) =>
@@ -19,11 +26,11 @@ export function FormFooterButtons({ saving, onCancel, saveLabel, saveFirst = fal
     </button>
   )
   const saveBtn = (
-    <button type="submit" disabled={saving} key="save"
-      className={`flex-1 ${heightCls} text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition disabled:opacity-60 flex items-center justify-center gap-2 shadow-glow shadow-app-accent/40`}>
+    <motion.button whileHover={{ y: -1 }} whileTap={{ scale: 0.98 }} type="submit" disabled={saving} key="save"
+      className={`flex-1 ${heightCls} text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition disabled:opacity-60 flex items-center justify-center gap-2 shadow-ring-accent`}>
       {saving && <CircularProgress size={14} color="inherit" />}
       {saveLabel}
-    </button>
+    </motion.button>
   )
   return (
     <div className="flex gap-3 pt-2">

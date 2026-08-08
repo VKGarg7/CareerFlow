@@ -1,12 +1,41 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { ArrowBackOutlined } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import EmptyState from '../components/EmptyState'
 import PageSpinner from '../components/PageSpinner'
 import ActionFilterSelect from '../components/ActionFilterSelect'
+import HybridRow from '../components/HybridRow'
+import { StaggerRow } from '../components/dashboard/primitives'
+import { staggerContainer } from '../lib/motion'
 import { getMyActivity } from '../api/auditLog'
 import { fmtDateTime } from '../utils/auditLog'
+
+function LogRow({ log: l, isLast }) {
+  return (
+    <HybridRow
+      accentBorder="border-l-app-accent/40"
+      avatarColor="bg-app-accent/20"
+      name={l.action.replaceAll('_', ' ')}
+      subtitle={l.description}
+      isLast={isLast}
+      timelineTone="accent"
+      statusSlot={
+        <span className="inline-flex items-center rounded-full bg-app-accent/10 px-2.5 py-1 text-[11px] font-bold text-app-accent-soft">
+          {l.action.replaceAll('_', ' ')}
+        </span>
+      }
+      hidden={
+        <div className="min-w-0 flex-1 text-right">
+          <p className="text-[11px] text-white/35">When</p>
+          <p className="mt-0.5 text-xs text-white/60">{fmtDateTime(l.occurredAt)}</p>
+        </div>
+      }
+      menuItems={[]}
+    />
+  )
+}
 
 export default function Activity() {
   const navigate = useNavigate()
@@ -64,17 +93,13 @@ export default function Activity() {
           description="Actions you take on your account will show up here."
         />
       ) : (
-        <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card divide-y divide-white/[0.05]">
-          {logs.map((l) => (
-            <div key={l.id} className="flex items-center gap-4 px-5 py-4 hover:bg-white/[0.03] transition-colors">
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-app-accent/10 text-app-accent-soft shrink-0">
-                {l.action.replaceAll('_', ' ')}
-              </span>
-              <p className="text-sm text-white/70 flex-1 min-w-0 truncate">{l.description}</p>
-              <span className="text-xs text-white/35 shrink-0">{fmtDateTime(l.occurredAt)}</span>
-            </div>
+        <motion.div initial="hidden" animate="show" variants={staggerContainer(0.03)}>
+          {logs.map((l, i) => (
+            <StaggerRow key={l.id}>
+              <LogRow log={l} isLast={i === logs.length - 1} />
+            </StaggerRow>
           ))}
-        </div>
+        </motion.div>
       )}
       </div>
     </Layout>

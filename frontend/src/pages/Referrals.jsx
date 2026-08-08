@@ -8,7 +8,7 @@ import {
   VisibilityOutlined, EditOutlined, DeleteOutlineRounded,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
-import Pagination from '../components/Pagination'
+import InfiniteScrollSentinel from '../components/InfiniteScrollSentinel'
 import ViewToggle from '../components/ViewToggle'
 import StatTilesBar from '../components/StatTilesBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
@@ -17,14 +17,13 @@ import EmptyState from '../components/EmptyState'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import { initials, fmt, fmtDate } from '../utils/followup'
-import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
 import useTransientMessage from '../hooks/useTransientMessage'
-import usePagedList from '../hooks/usePagedList'
+import useInfiniteList from '../hooks/useInfiniteList'
 import useFetchOnce from '../hooks/useFetchOnce'
 import { DrawerShell, DrawerHeader, CloseIconButton } from '../components/DrawerShell'
 import { fieldInputCls, FieldErrorText, FieldLabel, FormFooterButtons } from '../components/formKit'
-import EntityListRow from '../components/EntityListRow'
+import HybridRow from '../components/HybridRow'
 import FilterSelect from '../components/FilterSelect'
 import HeaderAddButton from '../components/HeaderAddButton'
 import useCrudModals from '../hooks/useCrudModals'
@@ -76,52 +75,68 @@ function ReferralStatusChanger({ referral, onStatusChanged }) {
   )
 }
 
-function ReferralListRow({ referral, drawerOpen, onView, onEdit, onDelete, onStatusChanged }) {
+function ReferralListRow({ referral, isLast, expanded, onToggleExpand, onView, onEdit, onDelete, onStatusChanged }) {
   const cfg = STATUS_CONFIG[referral.status] || STATUS_CONFIG.DRAFT
   const overdue = isOverdueReferral(referral)
+  const timelineTone = overdue ? 'danger' : cfg.dot.includes('success') ? 'success' : cfg.dot.includes('warning') ? 'warning' : cfg.dot.includes('danger') ? 'danger' : 'accent'
 
   return (
-    <EntityListRow
+    <HybridRow
       onClick={() => onView(referral)}
       accentBorder={cfg.border}
       avatarColor={cfg.dot}
       name={referral.referrerName}
       subtitle={referral.referrerCompany}
+      isLast={isLast}
+      timelineTone={timelineTone}
       statusSlot={<ReferralStatusChanger referral={referral} onStatusChanged={onStatusChanged} />}
       email={referral.referrerEmail}
       linkedIn={referral.referrerLinkedIn}
+      expanded={expanded}
+      onToggleExpand={onToggleExpand}
       menuItems={[
         { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(referral) },
         { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(referral) },
         { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(referral), tone: 'danger' },
       ]}
-    >
-      <div className={`w-40 min-w-0 shrink-0 ${drawerOpen ? 'hidden' : 'hidden md:block'}`}>
-        <p className="text-[11px] text-white/35">Target Role</p>
-        <p className="text-sm font-medium text-white/70 truncate mt-0.5">{referral.targetRole}</p>
-      </div>
-
-      <div className={`w-28 shrink-0 ${drawerOpen ? 'hidden' : 'hidden lg:block'}`}>
-        <p className="text-[11px] text-white/35">Requested</p>
-        <p className="text-sm font-medium text-white/70 mt-0.5">
-          {referral.requestedDate ? fmtDate(referral.requestedDate) : '—'}
-        </p>
-      </div>
-
-      <div className={`w-28 shrink-0 ${drawerOpen ? 'hidden' : 'hidden xl:block'}`}>
-        <p className="text-[11px] text-white/35">Follow-Up</p>
-        <p className={`text-sm font-medium mt-0.5 ${overdue ? 'text-app-danger font-semibold' : 'text-white/70'}`}>
-          {referral.followUpDate ? fmtDate(referral.followUpDate) : '—'}
-        </p>
-      </div>
-
-      {overdue && (
-        <span className={`shrink-0 text-[10px] font-semibold text-app-danger bg-app-danger/10 px-2 py-0.5 rounded-full ${drawerOpen ? 'hidden' : 'hidden lg:inline-flex'}`}>
-          Overdue
-        </span>
-      )}
-
-    </EntityListRow>
+      hidden={
+        <>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Target Role</p>
+            <p className="mt-0.5 truncate text-sm font-medium text-white/70">{referral.targetRole}</p>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-white/35">Follow-Up</p>
+            <p className={`mt-0.5 text-sm font-medium ${overdue ? 'font-semibold text-app-danger' : 'text-white/70'}`}>
+              {referral.followUpDate ? fmtDate(referral.followUpDate) : '—'}
+            </p>
+          </div>
+          {overdue && (
+            <span className="shrink-0 rounded-full bg-app-danger/10 px-2 py-0.5 text-[10px] font-semibold text-app-danger">
+              Overdue
+            </span>
+          )}
+        </>
+      }
+      expandedContent={
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Target Role</p>
+            <p className="mt-1 text-sm text-white/80">{referral.targetRole || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Requested</p>
+            <p className="mt-1 text-sm text-white/80">{referral.requestedDate ? fmtDate(referral.requestedDate) : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Follow-Up</p>
+            <p className={`mt-1 text-sm ${overdue ? 'font-semibold text-app-danger' : 'text-white/80'}`}>
+              {referral.followUpDate ? fmtDate(referral.followUpDate) : '—'}
+            </p>
+          </div>
+        </div>
+      }
+    />
   )
 }
 
@@ -212,7 +227,7 @@ function DetailDrawer({ open, referralId, onClose, onEdit, onDelete, onStatusCha
   const [noteText, setNoteText]     = useState('')
   const [noteSubmitting, setNoteSubmitting] = useState(false)
   const [noteError, setNoteError]   = useState('')
-  const [editingNote, setEditingNote] = useState(null)   // { id, text }
+  const [editingNote, setEditingNote] = useState(null)   
   const [editSaving, setEditSaving] = useState(false)
 
   useEffect(() => {
@@ -720,11 +735,12 @@ export default function Referrals() {
   const [viewMode, setViewMode]       = useState('list')
 
   const [viewTarget, setViewTarget]   = useState(null)
+  const [expandedId, setExpandedId]   = useState(null)
 
   const {
-    items: referrals, setItems: setReferrals, loading, error, setError,
-    setPage, size, setSize, refetch: fetchReferrals,
-  } = usePagedList(
+    items: referrals, setItems: setReferrals, loading, loadingMore, hasMore, loadMore, error, setError,
+    refetch: fetchReferrals,
+  } = useInfiniteList(
     useCallback(
       (page, size) => getReferrals({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
       [search, statusFilter, sortBy, order]
@@ -734,7 +750,6 @@ export default function Referrals() {
 
   const { data: stats, refetch: fetchStats } = useFetchOnce(getReferralStats)
 
-  useSearchShortcut(searchInputRef)
 
   const {
     modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
@@ -795,11 +810,7 @@ export default function Referrals() {
             </span>
             <input ref={searchInputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, company, role or email..."
-              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-white/25" />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-white/30 pointer-events-none">
-              ⌘K
-            </span>
-          </div>
+              className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-white/25" />          </div>
 
           <button onClick={() => setFiltersOpen((o) => !o)}
             className={`h-11 px-4 flex items-center gap-2 border rounded-xl text-sm font-medium transition whitespace-nowrap ${
@@ -864,13 +875,17 @@ export default function Referrals() {
           <h2 className="text-[18px] font-semibold text-white mb-4">
             {referrals.length} {referrals.length === 1 ? 'Request' : 'Requests'}
           </h2>
-          <div className="space-y-3">
-            {referrals.map((r) => (
-              <ReferralListRow key={r.id} referral={r} {...cardProps} />
+          <div>
+            {referrals.map((r, i) => (
+              <ReferralListRow
+                key={r.id} referral={r} isLast={i === referrals.length - 1}
+                expanded={expandedId === r.id}
+                onToggleExpand={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
+                {...cardProps}
+              />
             ))}
           </div>
-          <Pagination page={referrals.page} totalPages={referrals.totalPages}
-            totalElements={referrals.totalElements} size={referrals.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       ) : (
         <div>
@@ -882,8 +897,7 @@ export default function Referrals() {
               <DirectoryCard key={r.id} referral={r} {...cardProps} />
             ))}
           </div>
-          <Pagination page={referrals.page} totalPages={referrals.totalPages}
-            totalElements={referrals.totalElements} size={referrals.size} onPageChange={setPage} onSizeChange={setSize} />
+          <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </div>
       )}
       </div>

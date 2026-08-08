@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeftRounded, ChevronRightRounded } from '@mui/icons-material'
 import { countByStatus } from '../utils/followup'
+import { appStatusHex } from '../constants/applicationStatus'
 
 export default function StatusSummaryBar({
   items = [],
@@ -44,18 +45,7 @@ export default function StatusSummaryBar({
   const statuses = Object.entries(statusConfig)
   const allActive = activeFilter === ''
 
-  const BAR_COLORS = {
-    SAVED:               '#8B8FA3',
-    APPLIED:             '#8184F5',
-    OA_SCHEDULED:        '#F59E0B',
-    OA_CLEARED:          '#22D3EE',
-    INTERVIEW_SCHEDULED: '#A78BFA',
-    INTERVIEW_CLEARED:   '#8B5CF6',
-    OFFER_RECEIVED:      '#22C55E',
-    REJECTED:            '#F43F5E',
-    JOINED:              '#22C55E',
-  }
-  const colorOf = (key, cfg) => cfg?.hex ?? BAR_COLORS[key] ?? '#8B8FA3'
+  const colorOf = (key, cfg) => cfg?.hex ?? appStatusHex(key)
 
   const segments = statuses
     .map(([key, cfg]) => ({ key, cfg, count: counts[key] || 0 }))

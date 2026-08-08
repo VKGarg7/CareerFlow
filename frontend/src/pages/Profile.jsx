@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { CircularProgress, IconButton, Tooltip } from '@mui/material'
 import { Delete, Download, Visibility, Upload } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import EmptyState from '../components/EmptyState'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
+import AvatarRing from '../components/AvatarRing'
+import CountUp from '../components/CountUp'
+import MagneticButton from '../components/MagneticButton'
+import { Surface, StaggerRow } from '../components/dashboard/primitives'
+import { staggerContainer } from '../lib/motion'
 import { createProfile, updateProfile, updateProfileDocuments, downloadProfileDocument } from '../api/user'
 import { useProfile } from '../context/ProfileContext'
 import { profileInitial } from '../utils/followup'
 import { fmtFileSize, isAllowedDocExt, openDocInNewTab, downloadDoc } from '../utils/documents'
-import { FieldLabel } from '../components/formKit'
+import { FloatingField } from '../components/formKit'
 
 const emptyEducation  = () => ({ institution: '', degree: '', fieldOfStudy: '', startYear: '', endYear: '', cgpa: '' })
 const emptyExperience = () => ({ company: '', role: '', startDate: '', endDate: '', currentlyWorking: false, description: '' })
@@ -31,18 +37,16 @@ function Field({ label, value }) {
   )
 }
 
-function Input({ label, value, onChange, type = 'text', placeholder = '', textarea = false, required = false }) {
-  const cls = "w-full px-4 py-2.5 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition placeholder:text-white/25"
+function Input({ label, value, onChange, type = 'text', textarea = false, required = false }) {
   return (
-    <div>
-      <FieldLabel>
-        {label}{required && <span className="text-app-danger ml-0.5">*</span>}
-      </FieldLabel>
-      {textarea
-        ? <textarea rows={3} className={cls} value={value} onChange={onChange} placeholder={placeholder} required={required} />
-        : <input type={type} className={cls} value={value} onChange={onChange} placeholder={placeholder} required={required} />
-      }
-    </div>
+    <FloatingField
+      label={label}
+      value={value}
+      onChange={onChange}
+      type={type}
+      as={textarea ? 'textarea' : 'input'}
+      required={required}
+    />
   )
 }
 
@@ -150,19 +154,19 @@ export default function Profile() {
     <Layout
       headerAction={
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/change-password')}
-            className="px-4 py-2.5 text-sm font-semibold text-white/70 bg-white/[0.05] rounded-xl hover:bg-white/[0.08] active:scale-95 transition">
+          <MagneticButton onClick={() => navigate('/change-password')}
+            className="btn-liquid px-4 py-2.5 text-sm font-semibold text-white/70 bg-white/[0.05] rounded-xl hover:bg-white/[0.08] transition">
             Change Password
-          </button>
-          <button onClick={() => navigate('/activity')}
-            className="px-4 py-2.5 text-sm font-semibold text-white/70 bg-white/[0.05] rounded-xl hover:bg-white/[0.08] active:scale-95 transition">
+          </MagneticButton>
+          <MagneticButton onClick={() => navigate('/activity')}
+            className="btn-liquid px-4 py-2.5 text-sm font-semibold text-white/70 bg-white/[0.05] rounded-xl hover:bg-white/[0.08] transition">
             My Activity
-          </button>
+          </MagneticButton>
           {!editing && (
-            <button onClick={() => { setEditing(true); setError(''); setSuccess('') }}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 hover:-translate-y-0.5 active:scale-95 transition-all shadow-glow shadow-app-accent/40">
+            <MagneticButton onClick={() => { setEditing(true); setError(''); setSuccess('') }}
+              className="btn-liquid px-5 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition-colors shadow-ring-accent">
               {profile ? 'Edit Profile' : 'Create Profile'}
-            </button>
+            </MagneticButton>
           )}
         </div>
       }
@@ -209,7 +213,7 @@ export default function Profile() {
 
           <Section title="Education" onAdd={addItem('education', emptyEducation)}>
             {form.education.map((edu, i) => (
-              <div key={i} className="border border-white/[0.06] rounded-2xl p-4 space-y-3 relative bg-white/[0.02] animate-scale-in">
+              <div key={i} className="glass-surface glass-edge rounded-2xl p-4 space-y-3 relative animate-scale-in">
                 <Tooltip title="Remove">
                   <IconButton size="small" color="error" onClick={removeItem('education', i)}
                     sx={{ position: 'absolute', top: 8, right: 8 }}>
@@ -233,7 +237,7 @@ export default function Profile() {
 
           <Section title="Experience" onAdd={addItem('experience', emptyExperience)}>
             {form.experience.map((exp, i) => (
-              <div key={i} className="border border-white/[0.06] rounded-2xl p-4 space-y-3 relative bg-white/[0.02] animate-scale-in">
+              <div key={i} className="glass-surface glass-edge rounded-2xl p-4 space-y-3 relative animate-scale-in">
                 <Tooltip title="Remove">
                   <IconButton size="small" color="error" onClick={removeItem('experience', i)}
                     sx={{ position: 'absolute', top: 8, right: 8 }}>
@@ -264,7 +268,7 @@ export default function Profile() {
 
           <Section title="Projects" onAdd={addItem('projects', emptyProject)}>
             {form.projects.map((proj, i) => (
-              <div key={i} className="border border-white/[0.06] rounded-2xl p-4 space-y-3 relative bg-white/[0.02] animate-scale-in">
+              <div key={i} className="glass-surface glass-edge rounded-2xl p-4 space-y-3 relative animate-scale-in">
                 <Tooltip title="Remove">
                   <IconButton size="small" color="error" onClick={removeItem('projects', i)}
                     sx={{ position: 'absolute', top: 8, right: 8 }}>
@@ -314,9 +318,9 @@ function DocumentsSection({
   const coverLetter = profile?.coverLetter
 
   return (
-    <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card p-6 mb-6 transition-all duration-300 hover:-translate-y-[1px] hover:border-white/[0.07] hover:shadow-card-hover">
+    <Surface className="p-6 mb-6">
       <div className="flex items-center gap-2.5 mb-4 pb-2 border-b border-white/[0.06]">
-        <span className="w-7 h-7 rounded-lg bg-app-accent/10 flex items-center justify-center text-sm shrink-0">📄</span>
+        <span className="icon-embossed w-7 h-7 rounded-lg bg-app-accent/10 flex items-center justify-center text-sm shrink-0">📄</span>
         <h3 className="text-base font-semibold text-white/85">Documents</h3>
       </div>
 
@@ -346,7 +350,7 @@ function DocumentsSection({
           ) : (
             <div className="space-y-2">
               {resumes.map((r) => (
-                <div key={r.id} className="flex flex-wrap items-center gap-3 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+                <div key={r.id} className="flex flex-wrap items-center gap-3 p-3 engraved-well">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-app-accent-soft shrink-0">
                     <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
                   </svg>
@@ -399,7 +403,7 @@ function DocumentsSection({
           </div>
 
           {coverLetter ? (
-            <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+            <div className="flex flex-wrap items-center gap-3 p-3 engraved-well">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-app-accent-soft shrink-0">
                 <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
               </svg>
@@ -438,7 +442,7 @@ function DocumentsSection({
           )}
         </div>
       </div>
-    </div>
+    </Surface>
   )
 }
 
@@ -457,14 +461,12 @@ function ProfileHero({ profile }) {
   ]
 
   return (
-    <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card mb-6 animate-fade-slide-up">
-      <div className="h-24 sm:h-28 bg-gradient-to-br from-app-accent/25 via-app-accent2/15 to-transparent" />
+    <Surface className="glass-reflection-sweep relative mb-6">
+      <div className="light-rays h-24 sm:h-28 bg-gradient-to-br from-app-accent/25 via-app-purple/15 to-transparent" />
 
-      <div className="px-6 pb-6 -mt-12 sm:-mt-14">
+      <div className="relative px-6 pb-6 -mt-10 sm:-mt-11">
         <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-app-accent to-app-accent2 flex items-center justify-center text-white text-3xl font-bold shrink-0 ring-4 ring-app-surface shadow-glow shadow-app-accent/40">
-            {initial}
-          </div>
+          <AvatarRing initial={initial} size={88} className="ring-4 ring-app-surface rounded-full" />
 
           <div className="flex-1 min-w-0 sm:pb-1">
             <h2 className="text-xl sm:text-2xl font-display font-bold text-white truncate">{name}</h2>
@@ -491,16 +493,19 @@ function ProfileHero({ profile }) {
           <p className="text-sm text-white/70 leading-relaxed mt-4 max-w-3xl">{profile.bio}</p>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+        <motion.div
+          className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5"
+          initial="hidden" animate="show" variants={staggerContainer(0.05)}
+        >
           {stats.map((s) => (
-            <div key={s.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-              <p className="font-display text-xl font-bold text-white leading-none">{s.value}</p>
+            <StaggerRow key={s.label} className="engraved-well px-4 py-3">
+              <p className="font-display text-xl font-bold text-white leading-none"><CountUp value={s.value} /></p>
               <p className="text-xs text-white/40 mt-1.5">{s.label}</p>
-            </div>
+            </StaggerRow>
           ))}
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </Surface>
   )
 }
 
@@ -599,16 +604,20 @@ function Section({ title, onAdd, children }) {
 
 function Card({ title, icon, delay = 0, children }) {
   return (
-    <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card p-6 transition-all duration-300 hover:-translate-y-[1px] hover:border-white/[0.07] hover:shadow-card-hover animate-fade-slide-up"
-      style={{ animationDelay: `${delay * 60}ms`, animationFillMode: 'backwards' }}>
-      <div className="flex items-center gap-2.5 mb-4 pb-2 border-b border-white/[0.06]">
-        {icon && (
-          <span className="w-7 h-7 rounded-lg bg-app-accent/10 flex items-center justify-center text-sm shrink-0">{icon}</span>
-        )}
-        <h3 className="text-base font-semibold text-white/85">{title}</h3>
-      </div>
-      {children}
-    </div>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: delay * 0.06, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <Surface interactive className="p-6">
+        <div className="flex items-center gap-2.5 mb-4 pb-2 border-b border-white/[0.06]">
+          {icon && (
+            <span className="icon-embossed w-7 h-7 rounded-lg bg-app-accent/10 flex items-center justify-center text-sm shrink-0">{icon}</span>
+          )}
+          <h3 className="text-base font-semibold text-white/85">{title}</h3>
+        </div>
+        {children}
+      </Surface>
+    </motion.div>
   )
 }
 

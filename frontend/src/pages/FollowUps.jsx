@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
@@ -11,6 +12,10 @@ import {
 import Layout from '../components/Layout'
 import EmptyState from '../components/EmptyState'
 import { ConfirmDeleteModal } from '../components/ModalShell'
+import { Surface, StaggerRow } from '../components/dashboard/primitives'
+import CountUp from '../components/CountUp'
+import MagneticButton from '../components/MagneticButton'
+import { staggerContainer } from '../lib/motion'
 import { getAllFollowUps, updateFollowUp, deleteFollowUp, getFollowUpCounts } from '../api/followup'
 import { todayStr, fmtDate, fmtDateTime, daysLabel, initials } from '../utils/followup'
 import useTransientMessage from '../hooks/useTransientMessage'
@@ -80,20 +85,25 @@ function TabToggle({ active, onChange }) {
 
 function StatTile({ Icon, tint, value, label, onClick, active: isActive }) {
   return (
-    <button onClick={onClick}
-      className={`text-left relative overflow-hidden rounded-card border px-4 py-3.5 flex items-center gap-3 transition-all ${
-        isActive ? 'border-current' : 'border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.02]'
-      }`}
-      style={isActive ? { color: tint, background: `${tint}14` } : undefined}>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg shadow-inner-highlight"
-        style={{ background: `linear-gradient(160deg, ${tint}26, ${tint}0D)`, color: tint }}>
-        <Icon sx={{ fontSize: 18 }} />
-      </span>
-      <div className="min-w-0">
-        <p className="text-2xl font-display font-black leading-none text-white">{value}</p>
-        <p className="text-[11px] text-white/40 font-medium mt-1 truncate">{label}</p>
-      </div>
-    </button>
+    <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}>
+      <button onClick={onClick} className="block w-full text-left">
+        <Surface
+          interactive
+          className={`glass-edge relative flex items-center gap-3 px-4 py-3.5 ${isActive ? 'shadow-ring-accent' : ''}`}
+          style={isActive ? { boxShadow: `0 0 0 1px ${tint}55, 0 0 24px -6px ${tint}70` } : undefined}
+        >
+          <span className="icon-embossed relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg shadow-inner-highlight"
+            style={{ background: `linear-gradient(160deg, ${tint}26, ${tint}0D)`, color: tint }}>
+            <div className="pointer-events-none absolute inset-0 rounded-lg opacity-40 blur-md" style={{ background: tint }} />
+            <Icon sx={{ fontSize: 18 }} className="relative" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-2xl font-display font-black leading-none text-white"><CountUp value={value} /></p>
+            <p className="text-[11px] text-white/40 font-medium mt-1 truncate">{label}</p>
+          </div>
+        </Surface>
+      </button>
+    </motion.div>
   )
 }
 
@@ -113,7 +123,7 @@ function SectionHeader({ Icon, label, count, accent, collapsed, onToggle }) {
 
 function SectionEmptyRow({ title, description }) {
   return (
-    <div className="flex items-center justify-center gap-3 rounded-card border border-white/[0.04] bg-app-surface/60 py-8 px-4">
+    <Surface className="flex items-center justify-center gap-3 py-8 px-4">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-white/35">
         <EventNoteRounded sx={{ fontSize: 19 }} />
       </span>
@@ -121,7 +131,7 @@ function SectionEmptyRow({ title, description }) {
         <p className="text-sm font-semibold text-white/70">{title}</p>
         <p className="text-xs text-white/35 mt-0.5">{description}</p>
       </div>
-    </div>
+    </Surface>
   )
 }
 
@@ -135,9 +145,9 @@ function FollowUpCard({ fu, onDone, onDelete, onReschedule, onCompany }) {
     : 'border-l-app-accent/60'
 
   return (
-    <div className={`relative overflow-hidden rounded-card border border-white/[0.04] border-l-4 ${borderColor} bg-app-surface shadow-card p-4 transition-all duration-300 hover:-translate-y-[1px] hover:border-white/[0.07] hover:shadow-card-hover`}>
+    <Surface className={`border-l-4 ${borderColor} p-4`}>
       <div className="flex flex-wrap sm:flex-nowrap items-start gap-4">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight"
+        <div className="icon-embossed w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight"
           style={{ background: avatarHex(fu) }}>
           {initials(fu.companyName)}
         </div>
@@ -167,11 +177,11 @@ function FollowUpCard({ fu, onDone, onDelete, onReschedule, onCompany }) {
 
         <div className="flex gap-1.5 w-full sm:w-auto shrink-0 items-start sm:justify-end">
           <button onClick={onDone}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-app-success/20 text-app-success bg-app-success/[0.04] hover:bg-app-success hover:text-white hover:border-app-success transition-all">
+            className="btn-liquid flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-app-success/20 text-app-success bg-app-success/[0.04] hover:bg-app-success hover:text-white hover:border-app-success transition-all">
             <CheckRounded sx={{ fontSize: 14 }} /> Done
           </button>
           <button onClick={() => setEditing((e) => !e)}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${editing ? 'bg-app-warning text-white border-app-warning' : 'border-app-warning/20 text-app-warning bg-app-warning/[0.04] hover:bg-app-warning hover:text-white hover:border-app-warning'}`}>
+            className={`btn-liquid flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${editing ? 'bg-app-warning text-white border-app-warning' : 'border-app-warning/20 text-app-warning bg-app-warning/[0.04] hover:bg-app-warning hover:text-white hover:border-app-warning'}`}>
             <EventRepeatRounded sx={{ fontSize: 14 }} /> Reschedule
           </button>
           <CardMenu items={[
@@ -187,13 +197,13 @@ function FollowUpCard({ fu, onDone, onDelete, onReschedule, onCompany }) {
           onCancel={() => setEditing(false)}
         />
       )}
-    </div>
+    </Surface>
   )
 }
 
 function HistoryCard({ fu, onUndo, onDelete, onCompany }) {
   return (
-    <div className="relative overflow-hidden rounded-card border border-white/[0.04] border-l-4 border-l-app-success/60 bg-app-surface shadow-card p-4 transition-all duration-300 hover:-translate-y-[1px] hover:border-white/[0.07] hover:shadow-card-hover">
+    <Surface className="border-l-4 border-l-app-success/60 p-4">
       <div className="flex flex-wrap sm:flex-nowrap items-start gap-4">
         <div className="w-10 h-10 rounded-xl bg-app-success/10 flex items-center justify-center shrink-0">
           <CheckCircleRounded sx={{ fontSize: 20 }} className="text-app-success" />
@@ -224,7 +234,7 @@ function HistoryCard({ fu, onUndo, onDelete, onCompany }) {
 
         <div className="flex gap-1.5 w-full sm:w-auto shrink-0 items-start">
           <button onClick={onUndo}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.08] text-white/50 bg-white/[0.02] hover:bg-white/[0.08] transition-all">
+            className="btn-liquid flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.08] text-white/50 bg-white/[0.02] hover:bg-white/[0.08] transition-all">
             <UndoRounded sx={{ fontSize: 14 }} /> Undo
           </button>
           <CardMenu items={[
@@ -232,7 +242,7 @@ function HistoryCard({ fu, onUndo, onDelete, onCompany }) {
           ]} />
         </div>
       </div>
-    </div>
+    </Surface>
   )
 }
 
@@ -358,12 +368,12 @@ export default function FollowUps() {
   return (
     <Layout
       headerAction={
-        <button onClick={() => navigate('/applications')}
-          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-white/70 bg-white/[0.04] border border-white/[0.08] rounded-xl hover:bg-white/[0.08] hover:text-white transition">
+        <MagneticButton onClick={() => navigate('/applications')}
+          className="btn-liquid flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-white/70 bg-white/[0.04] border border-white/[0.08] rounded-xl hover:bg-white/[0.08] hover:text-white transition">
           <WorkOutlineRounded sx={{ fontSize: 16 }} />
           View Applications
           <ChevronRightRounded sx={{ fontSize: 16 }} />
-        </button>
+        </MagneticButton>
       }
     >
       <div className="overflow-x-hidden">
@@ -375,16 +385,19 @@ export default function FollowUps() {
       {tab === 'active' && (
         <>
           {!loading && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <motion.div
+              className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6"
+              initial="hidden" animate="show" variants={staggerContainer()}
+            >
               <StatTile Icon={EventBusyRounded}      tint="#F43F5E" value={counts.overdue}  label="Overdue"
                 onClick={() => setActiveChip(activeChip === 'overdue'  ? null : 'overdue')}  active={activeChip === 'overdue'}  />
               <StatTile Icon={TodayRounded}          tint="#F59E0B" value={counts.dueToday} label="Due Today"
                 onClick={() => setActiveChip(activeChip === 'today'    ? null : 'today')}    active={activeChip === 'today'}    />
               <StatTile Icon={EventAvailableRounded} tint="#5B5FEF" value={counts.upcoming} label="Upcoming"
                 onClick={() => setActiveChip(activeChip === 'upcoming' ? null : 'upcoming')} active={activeChip === 'upcoming'} />
-              <StatTile Icon={CheckCircleRounded}     tint="#22C55E" value={completedCount}  label="Completed"
+              <StatTile Icon={CheckCircleRounded}     tint="#10B981" value={completedCount}  label="Completed"
                 onClick={() => setTab('history')} active={false} />
-            </div>
+            </motion.div>
           )}
 
           {loading ? (
@@ -407,16 +420,18 @@ export default function FollowUps() {
                       items.length === 0 ? (
                         <SectionEmptyRow title={emptyTitle} description={emptyDescription} />
                       ) : (
-                        <div className="space-y-2">
+                        <motion.div className="space-y-2" initial="hidden" animate="show" variants={staggerContainer(0.05)}>
                           {items.map((fu) => (
-                            <FollowUpCard key={fu.id} fu={fu}
-                              onDone={() => handleDone(fu)}
-                              onDelete={() => setDeleteTarget(fu)}
-                              onReschedule={(d) => handleReschedule(fu, d)}
-                              onCompany={setCompanyDetailId}
-                            />
+                            <StaggerRow key={fu.id}>
+                              <FollowUpCard fu={fu}
+                                onDone={() => handleDone(fu)}
+                                onDelete={() => setDeleteTarget(fu)}
+                                onReschedule={(d) => handleReschedule(fu, d)}
+                                onCompany={setCompanyDetailId}
+                              />
+                            </StaggerRow>
                           ))}
-                        </div>
+                        </motion.div>
                       )
                     )}
                   </section>
@@ -458,15 +473,17 @@ export default function FollowUps() {
                     <SectionHeader Icon={CalendarMonthRounded} label={monthLabel(key)} count={items.length} accent="text-white/45"
                       collapsed={collapsed} onToggle={() => toggleSection(key)} />
                     {!collapsed && (
-                      <div className="space-y-2">
+                      <motion.div className="space-y-2" initial="hidden" animate="show" variants={staggerContainer(0.05)}>
                         {items.map((fu) => (
-                          <HistoryCard key={fu.id} fu={fu}
-                            onUndo={() => handleUndo(fu)}
-                            onDelete={() => setDeleteTarget(fu)}
-                            onCompany={setCompanyDetailId}
-                          />
+                          <StaggerRow key={fu.id}>
+                            <HistoryCard fu={fu}
+                              onUndo={() => handleUndo(fu)}
+                              onDelete={() => setDeleteTarget(fu)}
+                              onCompany={setCompanyDetailId}
+                            />
+                          </StaggerRow>
                         ))}
-                      </div>
+                      </motion.div>
                     )}
                   </section>
                 )
