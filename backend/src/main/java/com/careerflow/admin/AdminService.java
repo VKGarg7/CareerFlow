@@ -5,6 +5,7 @@ import com.careerflow.admin.dto.PlatformStatsResponse;
 import com.careerflow.application.ApplicationRepository;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.auth.AuthService;
 import com.careerflow.common.PageResponse;
 import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
@@ -43,6 +44,7 @@ public class AdminService {
     private final ReferralRequestRepository referralRepository;
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
+    private final AuthService authService;
 
     public PlatformStatsResponse getPlatformStats() {
         Map<String, Long> applicationsByStatus = applicationRepository.countByStatusGrouped().stream()
@@ -92,6 +94,7 @@ public class AdminService {
 
         target.setActive(active);
         target = userRepository.save(target);
+        authService.evictUserDetailsCache(target.getEmail());
         auditLogService.log(admin,
                 active ? AuditAction.USER_ACTIVATED : AuditAction.USER_DEACTIVATED,
                 (active ? "Activated " : "Deactivated ") + target.getEmail());
@@ -109,6 +112,7 @@ public class AdminService {
 
         target.setRole(role);
         target = userRepository.save(target);
+        authService.evictUserDetailsCache(target.getEmail());
         auditLogService.log(admin, AuditAction.USER_ROLE_CHANGED,
                 "Changed " + target.getEmail() + "'s role to " + role);
         return toResponse(target);
