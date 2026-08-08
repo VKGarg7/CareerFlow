@@ -49,6 +49,8 @@ class AuthServiceTest {
     @Mock
     private BlacklistedTokenRepository blacklistedTokenRepository;
     @Mock
+    private TokenBlacklistService tokenBlacklistService;
+    @Mock
     private PasswordResetTokenRepository passwordResetTokenRepository;
     @Mock
     private EmailService emailService;
