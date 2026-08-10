@@ -13,23 +13,23 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ApplicationRepository extends JpaRepository<JobApplication, Long> {
-    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.workspace.id = :workspaceId",
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company LEFT JOIN FETCH a.resumeLibrary LEFT JOIN FETCH a.coverLetterLibrary WHERE a.user.id = :userId AND a.workspace.id = :workspaceId",
             countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.workspace.id = :workspaceId")
     Page<JobApplication> findAllByUserIdAndWorkspaceId(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId, Pageable pageable);
 
-    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.company.id = :companyId",
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company LEFT JOIN FETCH a.resumeLibrary LEFT JOIN FETCH a.coverLetterLibrary WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.company.id = :companyId",
             countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.company.id = :companyId")
     Page<JobApplication> findAllByUserIdAndWorkspaceIdAndCompanyId(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId, @Param("companyId") Long companyId, Pageable pageable);
 
-    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.status = :status",
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company LEFT JOIN FETCH a.resumeLibrary LEFT JOIN FETCH a.coverLetterLibrary WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.status = :status",
             countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.status = :status")
     Page<JobApplication> findAllByUserIdAndWorkspaceIdAndStatus(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId, @Param("status") ApplicationStatus status, Pageable pageable);
 
-    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.source = :source",
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company LEFT JOIN FETCH a.resumeLibrary LEFT JOIN FETCH a.coverLetterLibrary WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.source = :source",
             countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.source = :source")
     Page<JobApplication> findAllByUserIdAndWorkspaceIdAndSource(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId, @Param("source") ApplicationSource source, Pageable pageable);
 
-    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.company.id = :companyId AND a.status = :status",
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company LEFT JOIN FETCH a.resumeLibrary LEFT JOIN FETCH a.coverLetterLibrary WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.company.id = :companyId AND a.status = :status",
             countQuery = "SELECT COUNT(a) FROM JobApplication a WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.company.id = :companyId AND a.status = :status")
     Page<JobApplication> findAllByUserIdAndWorkspaceIdAndCompanyIdAndStatus(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId, @Param("companyId") Long companyId, @Param("status") ApplicationStatus status, Pageable pageable);
 
@@ -37,6 +37,8 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
     Optional<JobApplication> findByResumeIdAndUserId(Long resumeId, Long userId);
     Optional<JobApplication> findByCoverLetterIdAndUserId(Long coverLetterId, Long userId);
     boolean existsByUserIdAndCompanyIdAndWorkspaceId(Long userId, Long companyId, Long workspaceId);
+    boolean existsByResumeLibraryIdAndWorkspaceId(Long resumeLibraryId, Long workspaceId);
+    boolean existsByCoverLetterLibraryIdAndWorkspaceId(Long coverLetterLibraryId, Long workspaceId);
 
     @Modifying
     @Query("UPDATE JobApplication a SET a.deletedAt = :now WHERE a.company.id = :companyId AND a.workspace.id = :workspaceId AND a.deletedAt IS NULL")
@@ -112,6 +114,26 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
     interface SourceCount {
         ApplicationSource getSource();
         Long getTotal();
+        Long getInterviews();
+        Long getOffers();
+    }
+
+    @Query("SELECT a.resumeLibrary.id AS resumeId, a.resumeLibrary.title AS resumeTitle, " +
+            "a.resumeLibrary.targetRoleCategory AS roleCategory, COUNT(a) AS total, " +
+            "SUM(CASE WHEN a.status IN (com.careerflow.application.ApplicationStatus.OA_CLEARED, com.careerflow.application.ApplicationStatus.INTERVIEW_SCHEDULED, com.careerflow.application.ApplicationStatus.INTERVIEW_CLEARED, com.careerflow.application.ApplicationStatus.OFFER_RECEIVED, com.careerflow.application.ApplicationStatus.JOINED) THEN 1L ELSE 0L END) AS oaClears, " +
+            "SUM(CASE WHEN a.status IN (com.careerflow.application.ApplicationStatus.INTERVIEW_SCHEDULED, com.careerflow.application.ApplicationStatus.INTERVIEW_CLEARED) THEN 1L ELSE 0L END) AS interviews, " +
+            "SUM(CASE WHEN a.status = com.careerflow.application.ApplicationStatus.OFFER_RECEIVED THEN 1L ELSE 0L END) AS offers " +
+            "FROM JobApplication a WHERE a.user.id = :userId AND a.workspace.id = :workspaceId AND a.resumeLibrary IS NOT NULL " +
+            "AND (:roleCategory IS NULL OR a.resumeLibrary.targetRoleCategory = :roleCategory) " +
+            "GROUP BY a.resumeLibrary.id, a.resumeLibrary.title, a.resumeLibrary.targetRoleCategory")
+    List<ResumeCount> countByResumeGroupedForUser(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId, @Param("roleCategory") String roleCategory);
+
+    interface ResumeCount {
+        Long getResumeId();
+        String getResumeTitle();
+        String getRoleCategory();
+        Long getTotal();
+        Long getOaClears();
         Long getInterviews();
         Long getOffers();
     }

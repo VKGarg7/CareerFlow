@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// One suite covering every thin API wrapper: verifies each function hits the
-// right endpoint with the right verb and params, with apiClient itself mocked.
 vi.mock('./apiClient', () => {
   const resolved = { data: { content: [] } }
   return {
@@ -19,11 +17,14 @@ import api from './apiClient'
 import * as auth from './auth'
 import * as company from './company'
 import * as application from './application'
+import * as opportunity from './opportunity'
 import * as followup from './followup'
 import * as interview from './interview'
 import * as recruiter from './recruiter'
 import * as referral from './referral'
 import * as user from './user'
+import * as resume from './resume'
+import * as coverLetter from './coverLetter'
 import * as admin from './admin'
 import * as auditLog from './auditLog'
 import * as chatbot from './chatbot'
@@ -108,6 +109,12 @@ describe('application api', () => {
     expect(config.headers['Content-Type']).toBe('multipart/form-data')
   })
 
+  it('uploadApplicationDocuments passes coverLetterLibraryId as a param', async () => {
+    await application.uploadApplicationDocuments(7, { coverLetterLibraryId: 12 })
+    const [, , config] = api.patch.mock.calls[0]
+    expect(config.params).toEqual({ coverLetterLibraryId: 12 })
+  })
+
   it('document download endpoints use blob responses', async () => {
     await application.downloadApplicationDocument(9)
     expect(api.get).toHaveBeenCalledWith('/applications/documents/9', { responseType: 'blob' })
@@ -120,6 +127,37 @@ describe('application api', () => {
     await application.getUpcomingDeadlines(14)
     expect(api.get).toHaveBeenCalledWith('/applications/weekly-trend', { params: { days: 30 } })
     expect(api.get).toHaveBeenCalledWith('/applications/deadlines', { params: { withinDays: 14 } })
+  })
+
+  it('resume-history and resume-analysis endpoints', async () => {
+    await application.getApplicationResumeHistory(50)
+    await application.getResumeAnalysis()
+    expect(api.get).toHaveBeenCalledWith('/applications/50/resume-history')
+    expect(api.get).toHaveBeenCalledWith('/applications/resume-analysis', { params: undefined })
+  })
+
+  it('getResumeAnalysis passes roleCategory as a param when given', async () => {
+    await application.getResumeAnalysis('Backend')
+    expect(api.get).toHaveBeenCalledWith('/applications/resume-analysis', { params: { roleCategory: 'Backend' } })
+  })
+})
+
+describe('opportunity api', () => {
+  it('CRUD, convert, duplicates, and resume-history routes', async () => {
+    await opportunity.getOpportunities({ page: 0 })
+    await opportunity.addOpportunity({ roleTitle: 'SDE' })
+    await opportunity.updateOpportunity(3, { roleTitle: 'Senior SDE' })
+    await opportunity.deleteOpportunity(3)
+    await opportunity.convertOpportunity(3, {})
+    await opportunity.checkOpportunityDuplicates({ roleTitle: 'SDE' })
+    await opportunity.getOpportunityResumeHistory(3)
+    expect(api.get).toHaveBeenCalledWith('/opportunities', { params: { page: 0 } })
+    expect(api.post).toHaveBeenCalledWith('/opportunities', { roleTitle: 'SDE' })
+    expect(api.patch).toHaveBeenCalledWith('/opportunities/3', { roleTitle: 'Senior SDE' })
+    expect(api.delete).toHaveBeenCalledWith('/opportunities/3')
+    expect(api.post).toHaveBeenCalledWith('/opportunities/3/convert', {})
+    expect(api.post).toHaveBeenCalledWith('/opportunities/check-duplicates', { roleTitle: 'SDE' })
+    expect(api.get).toHaveBeenCalledWith('/opportunities/3/resume-history')
   })
 })
 
@@ -206,6 +244,72 @@ describe('user api', () => {
     expect(api.get).toHaveBeenCalledWith('/users/documents/9', { params: undefined, responseType: 'blob' })
     await user.downloadProfileDocument(9, true)
     expect(api.get).toHaveBeenCalledWith('/users/documents/9', { params: { inline: true }, responseType: 'blob' })
+  })
+})
+
+describe('resume api', () => {
+  it('list/update/delete use the right verbs and paths', async () => {
+    await resume.getResumes({ page: 0 })
+    await resume.updateResume(5, { title: 'New' })
+    await resume.deleteResume(5, true)
+    expect(api.get).toHaveBeenCalledWith('/resumes', { params: { page: 0 } })
+    expect(api.patch).toHaveBeenCalledWith('/resumes/5', { title: 'New' })
+    expect(api.delete).toHaveBeenCalledWith('/resumes/5', { params: { force: true } })
+  })
+
+  it('deleteResume defaults force to false', async () => {
+    await resume.deleteResume(5)
+    expect(api.delete).toHaveBeenCalledWith('/resumes/5', { params: { force: false } })
+  })
+
+  it('addResume sends multipart form data with file and metadata parts', async () => {
+    const file = new File(['x'], 'resume.pdf')
+    await resume.addResume({ file, title: 'SDE Resume', versionTag: 'v2' })
+    const [url, fd, config] = api.post.mock.calls[0]
+    expect(url).toBe('/resumes')
+    expect(fd.get('file')).toBe(file)
+    expect(fd.get('metadata')).toBeInstanceOf(Blob)
+    expect(config.headers['Content-Type']).toBe('multipart/form-data')
+  })
+
+  it('document download endpoints use blob responses', async () => {
+    await resume.downloadResumeDocument(9)
+    expect(api.get).toHaveBeenCalledWith('/resumes/documents/9', { responseType: 'blob' })
+    await resume.viewResumeDocument(9)
+    expect(api.get).toHaveBeenCalledWith('/resumes/documents/9', { params: { inline: true }, responseType: 'blob' })
+  })
+})
+
+describe('coverLetter api', () => {
+  it('list/update/delete use the right verbs and paths', async () => {
+    await coverLetter.getCoverLetters({ page: 0 })
+    await coverLetter.updateCoverLetter(5, { title: 'New' })
+    await coverLetter.deleteCoverLetter(5, true)
+    expect(api.get).toHaveBeenCalledWith('/cover-letters', { params: { page: 0 } })
+    expect(api.patch).toHaveBeenCalledWith('/cover-letters/5', { title: 'New' })
+    expect(api.delete).toHaveBeenCalledWith('/cover-letters/5', { params: { force: true } })
+  })
+
+  it('deleteCoverLetter defaults force to false', async () => {
+    await coverLetter.deleteCoverLetter(5)
+    expect(api.delete).toHaveBeenCalledWith('/cover-letters/5', { params: { force: false } })
+  })
+
+  it('addCoverLetter sends multipart form data with file and metadata parts', async () => {
+    const file = new File(['x'], 'cover-letter.pdf')
+    await coverLetter.addCoverLetter({ file, title: 'Backend Cover Letter' })
+    const [url, fd, config] = api.post.mock.calls[0]
+    expect(url).toBe('/cover-letters')
+    expect(fd.get('file')).toBe(file)
+    expect(fd.get('metadata')).toBeInstanceOf(Blob)
+    expect(config.headers['Content-Type']).toBe('multipart/form-data')
+  })
+
+  it('document download endpoints use blob responses', async () => {
+    await coverLetter.downloadCoverLetterDocument(9)
+    expect(api.get).toHaveBeenCalledWith('/cover-letters/documents/9', { responseType: 'blob' })
+    await coverLetter.viewCoverLetterDocument(9)
+    expect(api.get).toHaveBeenCalledWith('/cover-letters/documents/9', { params: { inline: true }, responseType: 'blob' })
   })
 })
 

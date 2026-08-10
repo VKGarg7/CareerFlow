@@ -9,6 +9,9 @@ import com.careerflow.config.SecurityConfig;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.GlobalExceptionHandler;
 import com.careerflow.exception.ResourceNotFoundException;
+import com.careerflow.application.dto.ResumeAnalysisItem;
+import com.careerflow.resume.LinkAction;
+import com.careerflow.resume.dto.ResumeLinkHistoryResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -124,6 +127,37 @@ class ApplicationControllerTest extends ControllerTestSupport {
 
         verify(applicationService).deleteDocument(50L, 9L, 99L);
         verify(applicationService, never()).deleteApplication(anyLong(), anyLong());
+    }
+
+    @Test
+    void getResumeHistory_returns200_withHistoryList() throws Exception {
+        ResumeLinkHistoryResponse entry = ResumeLinkHistoryResponse.builder()
+                .id(1L).action(LinkAction.LINKED).newResumeTitle("SDE Resume").build();
+        when(applicationService.getResumeHistory(50L, 99L)).thenReturn(java.util.List.of(entry));
+
+        mockMvc.perform(get("/api/applications/{id}/resume-history", 50L).param("workspaceId", "99"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].newResumeTitle").value("SDE Resume"));
+    }
+
+    @Test
+    void getMyResumeAnalysis_returns200_withAnalysisList() throws Exception {
+        ResumeAnalysisItem item = ResumeAnalysisItem.builder().resumeId(10L).resumeTitle("SDE Resume").total(5).build();
+        when(applicationService.getMyResumeAnalysis(99L, null)).thenReturn(java.util.List.of(item));
+
+        mockMvc.perform(get("/api/applications/resume-analysis").param("workspaceId", "99"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].resumeTitle").value("SDE Resume"));
+    }
+
+    @Test
+    void getMyResumeAnalysis_passesRoleCategoryParam() throws Exception {
+        when(applicationService.getMyResumeAnalysis(99L, "Backend")).thenReturn(java.util.List.of());
+
+        mockMvc.perform(get("/api/applications/resume-analysis").param("workspaceId", "99").param("roleCategory", "Backend"))
+                .andExpect(status().isOk());
+
+        verify(applicationService).getMyResumeAnalysis(99L, "Backend");
     }
 
     @Test

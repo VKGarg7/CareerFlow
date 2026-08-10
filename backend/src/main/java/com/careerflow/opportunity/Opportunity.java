@@ -3,6 +3,8 @@ package com.careerflow.opportunity;
 import com.careerflow.application.ApplicationSource;
 import com.careerflow.company.Company;
 import com.careerflow.common.SoftDeleteEntity;
+import com.careerflow.coverletter.CoverLetter;
+import com.careerflow.resume.Resume;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import jakarta.persistence.*;
@@ -69,4 +71,19 @@ public class Opportunity extends SoftDeleteEntity {
     @Column(nullable = false)
     @Builder.Default
     private OpportunityStatus status = OpportunityStatus.SAVED;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "resume_library_id")
+    private Resume resumeLibrary;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "cover_letter_library_id")
+    private CoverLetter coverLetterLibrary;
+
+    private String portfolioLink;
+    private String githubLink;
+    private String linkedinLink;
+
+    @Column(columnDefinition = "TEXT")
+    private String questionnaireAnswers;
 }

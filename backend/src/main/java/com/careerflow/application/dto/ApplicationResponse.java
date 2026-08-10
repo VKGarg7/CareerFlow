@@ -31,6 +31,14 @@ public class ApplicationResponse {
     private String notes;
     private DocumentDto resume;
     private DocumentDto coverLetter;
+    private Long resumeLibraryId;
+    private String resumeTitle;
+    private Long coverLetterLibraryId;
+    private String coverLetterTitle;
+    private String portfolioLink;
+    private String githubLink;
+    private String linkedinLink;
+    private String questionnaireAnswers;
     private LocalDate nextFollowUpDate;
     private LocalDate nextUpcomingFollowUpDate;
     private LocalDateTime createdAt;

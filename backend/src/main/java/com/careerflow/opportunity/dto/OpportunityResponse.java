@@ -29,6 +29,17 @@ public class OpportunityResponse {
     private boolean requiresAssessment;
     private boolean hasSpecialSteps;
 
+    private Long resumeLibraryId;
+    private String resumeTitle;
+
+    private Long coverLetterLibraryId;
+    private String coverLetterTitle;
+
+    private String portfolioLink;
+    private String githubLink;
+    private String linkedinLink;
+    private String questionnaireAnswers;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

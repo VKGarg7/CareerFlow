@@ -9,18 +9,23 @@ import com.careerflow.common.WorkspaceAccessUtils;
 import com.careerflow.company.Company;
 import com.careerflow.company.CompanyRepository;
 import com.careerflow.config.FileStorageService;
+import com.careerflow.coverletter.CoverLetter;
+import com.careerflow.coverletter.CoverLetterRepository;
 import com.careerflow.document.Document;
 import com.careerflow.document.DocumentRepository;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.followup.FollowUpRepository;
+import com.careerflow.resume.Resume;
+import com.careerflow.resume.ResumeLinkHistoryRepository;
+import com.careerflow.resume.ResumeLinkService;
+import com.careerflow.resume.ResumeRepository;
 import com.careerflow.user.User;
 import com.careerflow.user.UserResumeRepository;
 import com.careerflow.workspace.Workspace;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -57,9 +62,15 @@ class ApplicationServiceTest {
     @Mock
     private UserResumeRepository userResumeRepository;
     @Mock
+    private ResumeRepository resumeRepository;
+    @Mock
+    private ResumeLinkHistoryRepository resumeLinkHistoryRepository;
+    @Mock
+    private CoverLetterRepository coverLetterRepository;
+    @Mock
     private AuditLogService auditLogService;
 
-    @InjectMocks
+    private ResumeLinkService resumeLinkService;
     private ApplicationService applicationService;
 
     private User currentUser;
@@ -76,6 +87,12 @@ class ApplicationServiceTest {
 
         lenient().when(followUpRepository.findNearestPendingFollowUpDates(anyList())).thenReturn(List.of());
         lenient().when(followUpRepository.findNearestUpcomingFollowUpDates(anyList(), any())).thenReturn(List.of());
+
+        resumeLinkService = new ResumeLinkService(resumeLinkHistoryRepository);
+        applicationService = new ApplicationService(
+                applicationRepository, companyRepository, workspaceAccessUtils, followUpRepository,
+                fileStorageService, documentRepository, securityUtils, userResumeRepository,
+                resumeRepository, resumeLinkService, coverLetterRepository, auditLogService);
     }
 
     private Workspace workspace() {
@@ -119,6 +136,53 @@ class ApplicationServiceTest {
 
         assertThat(response.getStatus()).isEqualTo(ApplicationStatus.APPLIED);
         verify(auditLogService).log(eq(currentUser), any(), anyString());
+    }
+
+    @Test
+    void addApplication_persistsAssetBundleFields() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(companyRepository.findByIdAndUserIdAndWorkspaceId(100L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(company));
+        when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
+        when(applicationRepository.save(any(JobApplication.class))).thenAnswer(invocation -> {
+            JobApplication app = invocation.getArgument(0);
+            app.setId(50L);
+            return app;
+        });
+
+        ApplicationRequest request = new ApplicationRequest();
+        request.setCompanyId(100L);
+        request.setRole("Backend Engineer");
+        request.setPortfolioLink("https://portfolio.example.com");
+        request.setGithubLink("https://github.com/example");
+        request.setLinkedinLink("https://linkedin.com/in/example");
+        request.setQuestionnaireAnswers("Q: Why us? A: Great mission.");
+
+        ApplicationResponse response = applicationService.addApplication(request, WORKSPACE_ID);
+
+        assertThat(response.getPortfolioLink()).isEqualTo("https://portfolio.example.com");
+        assertThat(response.getGithubLink()).isEqualTo("https://github.com/example");
+        assertThat(response.getLinkedinLink()).isEqualTo("https://linkedin.com/in/example");
+        assertThat(response.getQuestionnaireAnswers()).isEqualTo("Q: Why us? A: Great mission.");
+    }
+
+    @Test
+    void updateApplication_updatesAssetBundleFields_withoutClearingUnsetOnes() {
+        JobApplication application = JobApplication.builder().user(currentUser).company(company).role("Backend Engineer")
+                .portfolioLink("https://old-portfolio.com").githubLink("https://github.com/old").build();
+        application.setId(50L);
+
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
+        when(applicationRepository.save(any(JobApplication.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ApplicationUpdateRequest request = new ApplicationUpdateRequest();
+        request.setLinkedinLink("https://linkedin.com/in/new");
+
+        ApplicationResponse response = applicationService.updateApplication(50L, request, WORKSPACE_ID);
+
+        assertThat(response.getLinkedinLink()).isEqualTo("https://linkedin.com/in/new");
+        assertThat(response.getPortfolioLink()).isEqualTo("https://old-portfolio.com");
+        assertThat(response.getGithubLink()).isEqualTo("https://github.com/old");
     }
 
     @Test
@@ -177,7 +241,7 @@ class ApplicationServiceTest {
 
         MockMultipartFile badResume = new MockMultipartFile("resume", "resume.exe", "application/octet-stream", "x".getBytes());
 
-        assertThatThrownBy(() -> applicationService.uploadDocuments(50L, badResume, null, null, WORKSPACE_ID))
+        assertThatThrownBy(() -> applicationService.uploadDocuments(50L, badResume, null, null, null, null, WORKSPACE_ID))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("PDF, DOC, and DOCX");
 
@@ -202,7 +266,7 @@ class ApplicationServiceTest {
 
         MockMultipartFile resume = new MockMultipartFile("resume", "resume.pdf", "application/pdf", "x".getBytes());
 
-        applicationService.uploadDocuments(50L, resume, null, 9L, WORKSPACE_ID);
+        applicationService.uploadDocuments(50L, resume, null, 9L, null, null, WORKSPACE_ID);
 
         assertThat(application.getResume()).isNotNull();
         assertThat(application.getResume().getOriginalName()).isEqualTo("resume.pdf");
@@ -218,9 +282,137 @@ class ApplicationServiceTest {
         when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
         when(userResumeRepository.existsByUserIdAndDocumentId(1L, 9L)).thenReturn(false);
 
-        assertThatThrownBy(() -> applicationService.uploadDocuments(50L, null, null, 9L, WORKSPACE_ID))
+        assertThatThrownBy(() -> applicationService.uploadDocuments(50L, null, null, 9L, null, null, WORKSPACE_ID))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Profile resume not found");
+    }
+
+    @Test
+    void uploadDocuments_copiesFromResumeLibrary_andTracksResumeLibraryLink() {
+        JobApplication application = JobApplication.builder().user(currentUser).company(company).role("Backend Engineer").build();
+        application.setId(50L);
+
+        Document sourceDoc = Document.builder().originalName("library-resume.pdf").storedPath("resume-library/xyz.pdf")
+                .fileSize(200L).contentType("application/pdf").build();
+        sourceDoc.setId(20L);
+        Resume libraryResume = Resume.builder().user(currentUser).title("SDE Resume").document(sourceDoc).build();
+        libraryResume.setId(7L);
+
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
+        when(resumeRepository.findByIdAndUserIdAndWorkspaceId(7L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(libraryResume));
+        when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(applicationRepository.save(any(JobApplication.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        applicationService.uploadDocuments(50L, null, null, null, 7L, null, WORKSPACE_ID);
+
+        assertThat(application.getResume()).isNotNull();
+        assertThat(application.getResume().getOriginalName()).isEqualTo("library-resume.pdf");
+        assertThat(application.getResumeLibrary()).isEqualTo(libraryResume);
+        verify(fileStorageService, never()).storeDocument(any(), anyString());
+    }
+
+    @Test
+    void uploadDocuments_throwsResourceNotFoundException_whenResumeLibraryEntryNotOwned() {
+        JobApplication application = JobApplication.builder().user(currentUser).company(company).role("Backend Engineer").build();
+        application.setId(50L);
+
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
+        when(resumeRepository.findByIdAndUserIdAndWorkspaceId(7L, 1L, WORKSPACE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> applicationService.uploadDocuments(50L, null, null, null, 7L, null, WORKSPACE_ID))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Resume not found");
+    }
+
+    @Test
+    void uploadDocuments_copiesFromCoverLetterLibrary_andTracksCoverLetterLibraryLink() {
+        JobApplication application = JobApplication.builder().user(currentUser).company(company).role("Backend Engineer").build();
+        application.setId(50L);
+
+        Document sourceDoc = Document.builder().originalName("library-cover-letter.pdf").storedPath("coverletter-library/xyz.pdf")
+                .fileSize(150L).contentType("application/pdf").build();
+        sourceDoc.setId(21L);
+        CoverLetter libraryCoverLetter = CoverLetter.builder().user(currentUser).title("Backend Cover Letter").document(sourceDoc).build();
+        libraryCoverLetter.setId(8L);
+
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
+        when(coverLetterRepository.findByIdAndUserIdAndWorkspaceId(8L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(libraryCoverLetter));
+        when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(applicationRepository.save(any(JobApplication.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        applicationService.uploadDocuments(50L, null, null, null, null, 8L, WORKSPACE_ID);
+
+        assertThat(application.getCoverLetter()).isNotNull();
+        assertThat(application.getCoverLetter().getOriginalName()).isEqualTo("library-cover-letter.pdf");
+        assertThat(application.getCoverLetterLibrary()).isEqualTo(libraryCoverLetter);
+        verify(fileStorageService, never()).storeDocument(any(), anyString());
+    }
+
+    @Test
+    void uploadDocuments_throwsResourceNotFoundException_whenCoverLetterLibraryEntryNotOwned() {
+        JobApplication application = JobApplication.builder().user(currentUser).company(company).role("Backend Engineer").build();
+        application.setId(50L);
+
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
+        when(coverLetterRepository.findByIdAndUserIdAndWorkspaceId(8L, 1L, WORKSPACE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> applicationService.uploadDocuments(50L, null, null, null, null, 8L, WORKSPACE_ID))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Cover letter not found");
+    }
+
+    @Test
+    void getMyResumeAnalysis_computesOaClearsAndDefensiveRates() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        ApplicationRepository.ResumeCount row = mock(ApplicationRepository.ResumeCount.class);
+        when(row.getResumeId()).thenReturn(10L);
+        when(row.getResumeTitle()).thenReturn("SDE Resume");
+        when(row.getRoleCategory()).thenReturn("Backend");
+        when(row.getTotal()).thenReturn(4L);
+        when(row.getOaClears()).thenReturn(3L);
+        when(row.getInterviews()).thenReturn(2L);
+        when(row.getOffers()).thenReturn(1L);
+        when(applicationRepository.countByResumeGroupedForUser(1L, WORKSPACE_ID, null)).thenReturn(List.of(row));
+
+        List<com.careerflow.application.dto.ResumeAnalysisItem> result = applicationService.getMyResumeAnalysis(WORKSPACE_ID, null);
+
+        assertThat(result).hasSize(1);
+        com.careerflow.application.dto.ResumeAnalysisItem item = result.get(0);
+        assertThat(item.getRoleCategory()).isEqualTo("Backend");
+        assertThat(item.getOaClears()).isEqualTo(3L);
+        assertThat(item.getInterviewRate()).isEqualTo(0.5);
+        assertThat(item.getOfferRate()).isEqualTo(0.25);
+    }
+
+    @Test
+    void getMyResumeAnalysis_ratesAreZero_whenTotalIsZero() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        ApplicationRepository.ResumeCount row = mock(ApplicationRepository.ResumeCount.class);
+        when(row.getResumeId()).thenReturn(10L);
+        when(row.getTotal()).thenReturn(0L);
+        when(row.getOaClears()).thenReturn(0L);
+        when(row.getInterviews()).thenReturn(0L);
+        when(row.getOffers()).thenReturn(0L);
+        when(applicationRepository.countByResumeGroupedForUser(1L, WORKSPACE_ID, null)).thenReturn(List.of(row));
+
+        List<com.careerflow.application.dto.ResumeAnalysisItem> result = applicationService.getMyResumeAnalysis(WORKSPACE_ID, null);
+
+        assertThat(result.get(0).getInterviewRate()).isEqualTo(0);
+        assertThat(result.get(0).getOfferRate()).isEqualTo(0);
+    }
+
+    @Test
+    void getMyResumeAnalysis_passesRoleCategoryFilterThrough() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(applicationRepository.countByResumeGroupedForUser(1L, WORKSPACE_ID, "Backend")).thenReturn(List.of());
+
+        applicationService.getMyResumeAnalysis(WORKSPACE_ID, "Backend");
+
+        verify(applicationRepository).countByResumeGroupedForUser(1L, WORKSPACE_ID, "Backend");
     }
 
     @Test

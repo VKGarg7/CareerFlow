@@ -9,6 +9,7 @@ import com.careerflow.application.dto.MonthlyTrendItem;
 import com.careerflow.application.dto.SourceAnalysisItem;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
+import com.careerflow.common.DocumentValidation;
 import com.careerflow.common.MapCollectors;
 import com.careerflow.common.PageResponse;
 import com.careerflow.common.PaginationHelper;
@@ -21,9 +22,15 @@ import com.careerflow.config.FileStorageService;
 import com.careerflow.document.Document;
 import com.careerflow.document.DocumentDto;
 import com.careerflow.document.DocumentRepository;
-import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.ResourceNotFoundException;
+import com.careerflow.coverletter.CoverLetter;
+import com.careerflow.coverletter.CoverLetterRepository;
 import com.careerflow.followup.FollowUpRepository;
+import com.careerflow.resume.LinkedEntityType;
+import com.careerflow.resume.Resume;
+import com.careerflow.resume.ResumeLinkService;
+import com.careerflow.resume.ResumeRepository;
+import com.careerflow.resume.dto.ResumeLinkHistoryResponse;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import lombok.RequiredArgsConstructor;
@@ -51,7 +58,6 @@ public class ApplicationService {
 
     private static final Set<String> SORTABLE_FIELDS =
             Set.of("role", "applicationDate", "status", "source", "createdAt", "updatedAt");
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".pdf", ".doc", ".docx");
 
     private final ApplicationRepository applicationRepository;
     private final CompanyRepository companyRepository;
@@ -61,6 +67,9 @@ public class ApplicationService {
     private final DocumentRepository documentRepository;
     private final SecurityUtils securityUtils;
     private final com.careerflow.user.UserResumeRepository userResumeRepository;
+    private final ResumeRepository resumeRepository;
+    private final ResumeLinkService resumeLinkService;
+    private final CoverLetterRepository coverLetterRepository;
     private final AuditLogService auditLogService;
 
     public ApplicationResponse addApplication(ApplicationRequest request, Long workspaceId) {
@@ -86,6 +95,10 @@ public class ApplicationService {
                 .expectedSalary(request.getExpectedSalary())
                 .deadline(request.getDeadline())
                 .notes(request.getNotes())
+                .portfolioLink(request.getPortfolioLink())
+                .githubLink(request.getGithubLink())
+                .linkedinLink(request.getLinkedinLink())
+                .questionnaireAnswers(request.getQuestionnaireAnswers())
                 .build();
 
         application = applicationRepository.save(application);
@@ -225,6 +238,29 @@ public class ApplicationService {
                 .toList();
     }
 
+    // Grouped from JobApplication.resumeLibrary, not from an active-only resume list,
+    // so a Resume that's since been archived (INACTIVE) still appears here if it was
+    // ever used on an application — intentional, do not filter by resume status.
+    public List<com.careerflow.application.dto.ResumeAnalysisItem> getMyResumeAnalysis(Long workspaceId, String roleCategory) {
+        User user = securityUtils.getCurrentUser();
+        return applicationRepository.countByResumeGroupedForUser(user.getId(), workspaceId, roleCategory).stream()
+                .map(row -> {
+                    long total = row.getTotal();
+                    return com.careerflow.application.dto.ResumeAnalysisItem.builder()
+                        .resumeId(row.getResumeId())
+                        .resumeTitle(row.getResumeTitle())
+                        .roleCategory(row.getRoleCategory())
+                        .total(total)
+                        .oaClears(row.getOaClears())
+                        .interviews(row.getInterviews())
+                        .offers(row.getOffers())
+                        .interviewRate(total > 0 ? (double) row.getInterviews() / total : 0)
+                        .offerRate(total > 0 ? (double) row.getOffers() / total : 0)
+                        .build();
+                })
+                .toList();
+    }
+
     public ApplicationResponse updateApplication(Long id, ApplicationUpdateRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         JobApplication application = findOwned(id, user.getId(), workspaceId);
@@ -261,6 +297,14 @@ public class ApplicationService {
             application.setDeadline(request.getDeadline());
         if (request.getNotes() != null)
             application.setNotes(request.getNotes());
+        if (request.getPortfolioLink() != null)
+            application.setPortfolioLink(request.getPortfolioLink());
+        if (request.getGithubLink() != null)
+            application.setGithubLink(request.getGithubLink());
+        if (request.getLinkedinLink() != null)
+            application.setLinkedinLink(request.getLinkedinLink());
+        if (request.getQuestionnaireAnswers() != null)
+            application.setQuestionnaireAnswers(request.getQuestionnaireAnswers());
 
         application = applicationRepository.save(application);
         auditLogService.log(user, AuditAction.APPLICATION_UPDATED, "Updated application for " + describe(application));
@@ -280,36 +324,47 @@ public class ApplicationService {
         applicationRepository.softDeleteAllByCompanyId(companyId, workspaceId, LocalDateTime.now());
     }
 
+    public List<ResumeLinkHistoryResponse> getResumeHistory(Long id, Long workspaceId) {
+        User user = securityUtils.getCurrentUser();
+        findOwned(id, user.getId(), workspaceId);
+        return resumeLinkService.getHistoryFor(LinkedEntityType.APPLICATION, id);
+    }
+
     public boolean hasApplications(Long userId, Long companyId, Long workspaceId) {
         return applicationRepository.existsByUserIdAndCompanyIdAndWorkspaceId(userId, companyId, workspaceId);
     }
 
 
     public ApplicationResponse uploadDocuments(Long appId, MultipartFile resume,
-                                               MultipartFile coverLetter, Long profileResumeDocumentId, Long workspaceId) {
+                                               MultipartFile coverLetter, Long profileResumeDocumentId, Long resumeLibraryId,
+                                               Long coverLetterLibraryId, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         JobApplication application = findOwned(appId, user.getId(), workspaceId);
 
-        if (profileResumeDocumentId != null) {
+        if (resumeLibraryId != null) {
+            Resume libraryResume = resumeRepository.findByIdAndUserIdAndWorkspaceId(resumeLibraryId, user.getId(), workspaceId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Resume not found"));
+            application.setResume(copyDocument(libraryResume.getDocument()));
+            resumeLinkService.linkToApplication(application, libraryResume, user);
+        } else if (profileResumeDocumentId != null) {
             if (!userResumeRepository.existsByUserIdAndDocumentId(user.getId(), profileResumeDocumentId))
                 throw new ResourceNotFoundException("Profile resume not found");
             Document source = documentRepository.findById(profileResumeDocumentId)
                     .orElseThrow(() -> new ResourceNotFoundException("Document not found"));
-            Document copy = Document.builder()
-                    .originalName(source.getOriginalName())
-                    .storedPath(source.getStoredPath())
-                    .fileSize(source.getFileSize())
-                    .contentType(source.getContentType())
-                    .build();
-            application.setResume(documentRepository.save(copy));
+            application.setResume(copyDocument(source));
         } else if (resume != null && !resume.isEmpty()) {
-            validateExtension(resume);
+            DocumentValidation.validateExtension(resume);
             Document doc = fileStorageService.storeDocument(resume, "application-resumes");
             application.setResume(doc);
         }
 
-        if (coverLetter != null && !coverLetter.isEmpty()) {
-            validateExtension(coverLetter);
+        if (coverLetterLibraryId != null) {
+            CoverLetter libraryCoverLetter = coverLetterRepository.findByIdAndUserIdAndWorkspaceId(coverLetterLibraryId, user.getId(), workspaceId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Cover letter not found"));
+            application.setCoverLetter(copyDocument(libraryCoverLetter.getDocument()));
+            application.setCoverLetterLibrary(libraryCoverLetter);
+        } else if (coverLetter != null && !coverLetter.isEmpty()) {
+            DocumentValidation.validateExtension(coverLetter);
             Document doc = fileStorageService.storeDocument(coverLetter, "application-cover-letters");
             application.setCoverLetter(doc);
         }
@@ -324,8 +379,10 @@ public class ApplicationService {
 
         if (application.getResume() != null && documentId.equals(application.getResume().getId())) {
             application.setResume(null);
+            resumeLinkService.unlinkFromApplication(application, user);
         } else if (application.getCoverLetter() != null && documentId.equals(application.getCoverLetter().getId())) {
             application.setCoverLetter(null);
+            application.setCoverLetterLibrary(null);
         } else {
             throw new ResourceNotFoundException("Document not found");
         }
@@ -355,11 +412,13 @@ public class ApplicationService {
     }
 
 
-    private void validateExtension(MultipartFile file) {
-        String name = file.getOriginalFilename() != null ? file.getOriginalFilename() : "";
-        String ext = name.contains(".") ? name.substring(name.lastIndexOf(".")).toLowerCase() : "";
-        if (!ALLOWED_EXTENSIONS.contains(ext))
-            throw new BadRequestException("Only PDF, DOC, and DOCX files are supported");
+    private Document copyDocument(Document source) {
+        return documentRepository.save(Document.builder()
+                .originalName(source.getOriginalName())
+                .storedPath(source.getStoredPath())
+                .fileSize(source.getFileSize())
+                .contentType(source.getContentType())
+                .build());
     }
 
     private JobApplication findOwned(Long appId, Long userId, Long workspaceId) {
@@ -420,6 +479,14 @@ public class ApplicationService {
                 .notes(app.getNotes())
                 .resume(toDocumentDto(app.getResume()))
                 .coverLetter(toDocumentDto(app.getCoverLetter()))
+                .resumeLibraryId(app.getResumeLibrary() != null ? app.getResumeLibrary().getId() : null)
+                .resumeTitle(app.getResumeLibrary() != null ? app.getResumeLibrary().getTitle() : null)
+                .coverLetterLibraryId(app.getCoverLetterLibrary() != null ? app.getCoverLetterLibrary().getId() : null)
+                .coverLetterTitle(app.getCoverLetterLibrary() != null ? app.getCoverLetterLibrary().getTitle() : null)
+                .portfolioLink(app.getPortfolioLink())
+                .githubLink(app.getGithubLink())
+                .linkedinLink(app.getLinkedinLink())
+                .questionnaireAnswers(app.getQuestionnaireAnswers())
                 .nextFollowUpDate(nextFollowUpDate)
                 .nextUpcomingFollowUpDate(nextUpcomingFollowUpDate)
                 .createdAt(app.getCreatedAt())

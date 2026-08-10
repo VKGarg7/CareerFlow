@@ -112,6 +112,7 @@ public class InterviewService {
                 .questionsAsked(i.getQuestionsAsked())
                 .feedbackReceived(i.getFeedbackReceived())
                 .outcome(i.getOutcome())
+                .resumeTitle(i.getApplication().getResumeLibrary() != null ? i.getApplication().getResumeLibrary().getTitle() : null)
                 .createdAt(i.getCreatedAt())
                 .updatedAt(i.getUpdatedAt())
                 .build();

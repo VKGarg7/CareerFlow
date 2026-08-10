@@ -16,6 +16,8 @@ import FilterSelect from '../components/FilterSelect'
 import HeaderAddButton from '../components/HeaderAddButton'
 import { getOpportunities, addOpportunity, updateOpportunity, deleteOpportunity, convertOpportunity, checkOpportunityDuplicates } from '../api/opportunity'
 import { getCompanies } from '../api/company'
+import { getResumes } from '../api/resume'
+import { getCoverLetters } from '../api/coverLetter'
 import {
   getRoleFitEvaluationForOpportunity, addRoleFitEvaluation, updateRoleFitEvaluation, overrideRoleFitEvaluation,
 } from '../api/roleFitEvaluation'
@@ -96,6 +98,7 @@ const EMPTY_FORM = {
   roleCategory: '', salaryInfo: '', requisitionId: '', notes: '', status: 'SAVED',
   sourceType: '', sourceUrl: '', sourceNotes: '',
   requiresCoverLetter: false, requiresAssessment: false, hasSpecialSteps: false,
+  portfolioLink: '', githubLink: '', linkedinLink: '', questionnaireAnswers: '',
 }
 
 const MATCH_REASON_LABELS = {
@@ -148,6 +151,10 @@ function OpportunityCard({ opportunity, onEdit, onDelete, onConvert, onFit, onSt
         </div>
       )}
 
+      {opportunity.resumeTitle && (
+        <p className="text-xs text-app-accent-soft mt-2">📄 {opportunity.resumeTitle}</p>
+      )}
+
       <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-white/[0.06]">
         <button onClick={() => onFit(opportunity)}
           className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-app-accent2/20 text-app-accent-soft bg-app-accent2/[0.04] hover:bg-app-accent2 hover:text-white hover:border-app-accent2 transition">
@@ -182,6 +189,10 @@ function AddEditModal({ open, opportunity, companies, onClose, onSaved }) {
   const [error, setError] = useState('')
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
   const [duplicateMatches, setDuplicateMatches] = useState(null)
+  const [libraryResumes, setLibraryResumes] = useState([])
+  const [selectedResumeId, setSelectedResumeId] = useState('')
+  const [libraryCoverLetters, setLibraryCoverLetters] = useState([])
+  const [selectedCoverLetterId, setSelectedCoverLetterId] = useState('')
 
   React.useEffect(() => {
     if (open) {
@@ -197,9 +208,15 @@ function AddEditModal({ open, opportunity, companies, onClose, onSaved }) {
         requiresCoverLetter: !!opportunity.requiresCoverLetter,
         requiresAssessment: !!opportunity.requiresAssessment,
         hasSpecialSteps: !!opportunity.hasSpecialSteps,
+        portfolioLink: opportunity.portfolioLink || '', githubLink: opportunity.githubLink || '',
+        linkedinLink: opportunity.linkedinLink || '', questionnaireAnswers: opportunity.questionnaireAnswers || '',
       } : EMPTY_FORM)
       setError('')
       setDuplicateMatches(null)
+      setSelectedResumeId(opportunity?.resumeLibraryId ? String(opportunity.resumeLibraryId) : '')
+      setSelectedCoverLetterId(opportunity?.coverLetterLibraryId ? String(opportunity.coverLetterLibraryId) : '')
+      getResumes({ status: 'ACTIVE', size: 1000 }).then((res) => setLibraryResumes(res.data ?? [])).catch(() => {})
+      getCoverLetters({ status: 'ACTIVE', size: 1000 }).then((res) => setLibraryCoverLetters(res.data ?? [])).catch(() => {})
     }
   }, [open, opportunity])
 
@@ -222,6 +239,14 @@ function AddEditModal({ open, opportunity, companies, onClose, onSaved }) {
     requiresCoverLetter: form.requiresCoverLetter,
     requiresAssessment: form.requiresAssessment,
     hasSpecialSteps: form.hasSpecialSteps,
+    portfolioLink: form.portfolioLink.trim() || undefined,
+    githubLink: form.githubLink.trim() || undefined,
+    linkedinLink: form.linkedinLink.trim() || undefined,
+    questionnaireAnswers: form.questionnaireAnswers.trim() || undefined,
+    resumeId: selectedResumeId ? Number(selectedResumeId) : undefined,
+    unlinkResume: !selectedResumeId && opportunity?.resumeLibraryId ? true : undefined,
+    coverLetterId: selectedCoverLetterId ? Number(selectedCoverLetterId) : undefined,
+    unlinkCoverLetter: !selectedCoverLetterId && opportunity?.coverLetterLibraryId ? true : undefined,
   })
 
   const persist = async () => {
@@ -229,7 +254,16 @@ function AddEditModal({ open, opportunity, companies, onClose, onSaved }) {
     setError('')
     try {
       const payload = buildPayload()
-      opportunity ? await updateOpportunity(opportunity.id, payload) : await addOpportunity(payload)
+      if (opportunity) {
+        await updateOpportunity(opportunity.id, payload)
+      } else {
+        const { resumeId, unlinkResume, coverLetterId, unlinkCoverLetter, ...createPayload } = payload
+        const res = await addOpportunity(createPayload)
+        const followUp = {}
+        if (resumeId) followUp.resumeId = resumeId
+        if (coverLetterId) followUp.coverLetterId = coverLetterId
+        if (Object.keys(followUp).length) await updateOpportunity(res.data.id, followUp)
+      }
       onSaved()
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong.')
@@ -377,6 +411,48 @@ function AddEditModal({ open, opportunity, companies, onClose, onSaved }) {
             <FieldLabel>Notes</FieldLabel>
             <textarea value={form.notes} onChange={set('notes')} rows={3}
               placeholder="Anything worth remembering..." className={`${fieldInputCls(false)} resize-none`} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <FieldLabel>Portfolio Link <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+              <input type="text" value={form.portfolioLink} onChange={set('portfolioLink')} placeholder="https://..." className={fieldInputCls(false)} />
+            </div>
+            <div>
+              <FieldLabel>GitHub Link <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+              <input type="text" value={form.githubLink} onChange={set('githubLink')} placeholder="https://github.com/..." className={fieldInputCls(false)} />
+            </div>
+          </div>
+          <div>
+            <FieldLabel>LinkedIn Link <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+            <input type="text" value={form.linkedinLink} onChange={set('linkedinLink')} placeholder="https://linkedin.com/in/..." className={fieldInputCls(false)} />
+          </div>
+          <div>
+            <FieldLabel>Questionnaire Answers <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+            <textarea value={form.questionnaireAnswers} onChange={set('questionnaireAnswers')} rows={4}
+              placeholder="Application questionnaire questions and your answers..." className={`${fieldInputCls(false)} resize-none`} />
+          </div>
+
+          <div>
+            <FieldLabel>Resume <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+            <FilterSelect
+              value={selectedResumeId}
+              onChange={setSelectedResumeId}
+              allLabel="No resume linked"
+              options={libraryResumes.map((r) => ({ value: String(r.id), label: r.versionTag ? `${r.title} (${r.versionTag})` : r.title }))}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <FieldLabel>Cover Letter <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+            <FilterSelect
+              value={selectedCoverLetterId}
+              onChange={setSelectedCoverLetterId}
+              allLabel="No cover letter linked"
+              options={libraryCoverLetters.map((c) => ({ value: String(c.id), label: c.title }))}
+              className="w-full"
+            />
           </div>
 
           {duplicateMatches && duplicateMatches.length > 0 && (

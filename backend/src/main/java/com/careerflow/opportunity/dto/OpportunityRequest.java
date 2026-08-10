@@ -31,4 +31,9 @@ public class OpportunityRequest {
     private Boolean requiresCoverLetter;
     private Boolean requiresAssessment;
     private Boolean hasSpecialSteps;
+
+    private String portfolioLink;
+    private String githubLink;
+    private String linkedinLink;
+    private String questionnaireAnswers;
 }

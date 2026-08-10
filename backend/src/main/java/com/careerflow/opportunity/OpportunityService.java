@@ -11,6 +11,8 @@ import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.WorkspaceAccessUtils;
 import com.careerflow.company.Company;
 import com.careerflow.company.CompanyRepository;
+import com.careerflow.coverletter.CoverLetter;
+import com.careerflow.coverletter.CoverLetterRepository;
 import com.careerflow.exception.ConflictException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.opportunity.dto.DuplicateCheckRequest;
@@ -19,6 +21,13 @@ import com.careerflow.opportunity.dto.OpportunityConvertRequest;
 import com.careerflow.opportunity.dto.OpportunityRequest;
 import com.careerflow.opportunity.dto.OpportunityResponse;
 import com.careerflow.opportunity.dto.OpportunityUpdateRequest;
+import com.careerflow.resume.LinkedEntityType;
+import com.careerflow.resume.Resume;
+import com.careerflow.resume.ResumeRepository;
+import com.careerflow.resume.ResumeLinkService;
+import com.careerflow.resume.dto.ResumeLinkHistoryResponse;
+import com.careerflow.application.ApplicationRepository;
+import com.careerflow.application.JobApplication;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +54,10 @@ public class OpportunityService {
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
     private final ApplicationService applicationService;
+    private final ApplicationRepository applicationRepository;
+    private final ResumeRepository resumeRepository;
+    private final ResumeLinkService resumeLinkService;
+    private final CoverLetterRepository coverLetterRepository;
 
     public OpportunityResponse addOpportunity(OpportunityRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
@@ -69,6 +82,10 @@ public class OpportunityService {
                 .requiresCoverLetter(Boolean.TRUE.equals(request.getRequiresCoverLetter()))
                 .requiresAssessment(Boolean.TRUE.equals(request.getRequiresAssessment()))
                 .hasSpecialSteps(Boolean.TRUE.equals(request.getHasSpecialSteps()))
+                .portfolioLink(request.getPortfolioLink())
+                .githubLink(request.getGithubLink())
+                .linkedinLink(request.getLinkedinLink())
+                .questionnaireAnswers(request.getQuestionnaireAnswers())
                 .build();
 
         opportunity = opportunityRepository.save(opportunity);
@@ -125,10 +142,36 @@ public class OpportunityService {
         if (request.getRequiresCoverLetter() != null) opportunity.setRequiresCoverLetter(request.getRequiresCoverLetter());
         if (request.getRequiresAssessment() != null) opportunity.setRequiresAssessment(request.getRequiresAssessment());
         if (request.getHasSpecialSteps() != null) opportunity.setHasSpecialSteps(request.getHasSpecialSteps());
+        if (request.getPortfolioLink() != null) opportunity.setPortfolioLink(request.getPortfolioLink());
+        if (request.getGithubLink() != null) opportunity.setGithubLink(request.getGithubLink());
+        if (request.getLinkedinLink() != null) opportunity.setLinkedinLink(request.getLinkedinLink());
+        if (request.getQuestionnaireAnswers() != null) opportunity.setQuestionnaireAnswers(request.getQuestionnaireAnswers());
+
+        if (Boolean.TRUE.equals(request.getUnlinkResume())) {
+            resumeLinkService.unlinkFromOpportunity(opportunity, user);
+        } else if (request.getResumeId() != null) {
+            Resume resume = resumeRepository.findByIdAndUserIdAndWorkspaceId(request.getResumeId(), user.getId(), workspaceId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Resume not found"));
+            resumeLinkService.linkToOpportunity(opportunity, resume, user);
+        }
+
+        if (Boolean.TRUE.equals(request.getUnlinkCoverLetter())) {
+            opportunity.setCoverLetterLibrary(null);
+        } else if (request.getCoverLetterId() != null) {
+            CoverLetter coverLetter = coverLetterRepository.findByIdAndUserIdAndWorkspaceId(request.getCoverLetterId(), user.getId(), workspaceId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Cover letter not found"));
+            opportunity.setCoverLetterLibrary(coverLetter);
+        }
 
         opportunity = opportunityRepository.save(opportunity);
         auditLogService.log(user, AuditAction.OPPORTUNITY_UPDATED, "Updated opportunity for " + describe(opportunity));
         return toResponse(opportunity);
+    }
+
+    public List<ResumeLinkHistoryResponse> getResumeHistory(Long id, Long workspaceId) {
+        User user = securityUtils.getCurrentUser();
+        findOwned(id, user.getId(), workspaceId);
+        return resumeLinkService.getHistoryFor(LinkedEntityType.OPPORTUNITY, id);
     }
 
     public void deleteOpportunity(Long id, Long workspaceId) {
@@ -161,8 +204,23 @@ public class OpportunityService {
         applicationRequest.setRequiresCoverLetter(opportunity.isRequiresCoverLetter());
         applicationRequest.setRequiresAssessment(opportunity.isRequiresAssessment());
         applicationRequest.setHasSpecialSteps(opportunity.isHasSpecialSteps());
+        applicationRequest.setPortfolioLink(opportunity.getPortfolioLink());
+        applicationRequest.setGithubLink(opportunity.getGithubLink());
+        applicationRequest.setLinkedinLink(opportunity.getLinkedinLink());
+        applicationRequest.setQuestionnaireAnswers(opportunity.getQuestionnaireAnswers());
 
         ApplicationResponse applicationResponse = applicationService.addApplication(applicationRequest, workspaceId);
+
+        if (opportunity.getResumeLibrary() != null || opportunity.getCoverLetterLibrary() != null) {
+            JobApplication createdApplication = applicationRepository
+                    .findByIdAndUserIdAndWorkspaceId(applicationResponse.getId(), user.getId(), workspaceId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
+            if (opportunity.getResumeLibrary() != null)
+                resumeLinkService.linkToApplication(createdApplication, opportunity.getResumeLibrary(), user);
+            if (opportunity.getCoverLetterLibrary() != null)
+                createdApplication.setCoverLetterLibrary(opportunity.getCoverLetterLibrary());
+            applicationRepository.save(createdApplication);
+        }
 
         opportunity.setStatus(OpportunityStatus.APPLIED);
         opportunityRepository.save(opportunity);
@@ -172,12 +230,6 @@ public class OpportunityService {
         return applicationResponse;
     }
 
-    /**
-     * Surfaces likely duplicate opportunities so the caller can warn the user before
-     * save, without blocking anything server-side — the frontend decides whether to
-     * proceed. A single opportunity can match on more than one reason; results are
-     * deduplicated by opportunity id, keeping the first (highest-priority) reason.
-     */
     public List<DuplicateMatch> checkDuplicates(DuplicateCheckRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         Long excludeId = request.getExcludeOpportunityId() != null ? request.getExcludeOpportunityId() : -1L;
@@ -247,6 +299,14 @@ public class OpportunityService {
                 .requiresCoverLetter(opportunity.isRequiresCoverLetter())
                 .requiresAssessment(opportunity.isRequiresAssessment())
                 .hasSpecialSteps(opportunity.isHasSpecialSteps())
+                .resumeLibraryId(opportunity.getResumeLibrary() != null ? opportunity.getResumeLibrary().getId() : null)
+                .resumeTitle(opportunity.getResumeLibrary() != null ? opportunity.getResumeLibrary().getTitle() : null)
+                .coverLetterLibraryId(opportunity.getCoverLetterLibrary() != null ? opportunity.getCoverLetterLibrary().getId() : null)
+                .coverLetterTitle(opportunity.getCoverLetterLibrary() != null ? opportunity.getCoverLetterLibrary().getTitle() : null)
+                .portfolioLink(opportunity.getPortfolioLink())
+                .githubLink(opportunity.getGithubLink())
+                .linkedinLink(opportunity.getLinkedinLink())
+                .questionnaireAnswers(opportunity.getQuestionnaireAnswers())
                 .createdAt(opportunity.getCreatedAt())
                 .updatedAt(opportunity.getUpdatedAt())
                 .build();
