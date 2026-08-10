@@ -17,6 +17,8 @@ import Recruiters from './pages/Recruiters'
 import FollowUps from './pages/FollowUps'
 import Referrals from './pages/Referrals'
 import Goals from './pages/Goals'
+import ResumeLibrary from './pages/ResumeLibrary'
+import CoverLetterLibrary from './pages/CoverLetterLibrary'
 import Opportunities from './pages/Opportunities'
 import AdminDashboard from './pages/AdminDashboard'
 import Activity from './pages/Activity'
@@ -125,6 +127,22 @@ export default function App() {
           element={
             <PrivateRoute>
               <Goals />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/resumes"
+          element={
+            <PrivateRoute>
+              <ResumeLibrary />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/cover-letters"
+          element={
+            <PrivateRoute>
+              <CoverLetterLibrary />
             </PrivateRoute>
           }
         />

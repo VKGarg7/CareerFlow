@@ -1,7 +1,9 @@
 package com.careerflow.opportunity;
 
+import com.careerflow.application.ApplicationRepository;
 import com.careerflow.application.ApplicationService;
 import com.careerflow.application.ApplicationSource;
+import com.careerflow.application.JobApplication;
 import com.careerflow.application.dto.ApplicationRequest;
 import com.careerflow.application.dto.ApplicationResponse;
 import com.careerflow.audit.AuditLogService;
@@ -9,6 +11,8 @@ import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.WorkspaceAccessUtils;
 import com.careerflow.company.Company;
 import com.careerflow.company.CompanyRepository;
+import com.careerflow.coverletter.CoverLetter;
+import com.careerflow.coverletter.CoverLetterRepository;
 import com.careerflow.exception.ConflictException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.opportunity.dto.DuplicateCheckRequest;
@@ -17,12 +21,15 @@ import com.careerflow.opportunity.dto.OpportunityConvertRequest;
 import com.careerflow.opportunity.dto.OpportunityRequest;
 import com.careerflow.opportunity.dto.OpportunityResponse;
 import com.careerflow.opportunity.dto.OpportunityUpdateRequest;
+import com.careerflow.resume.Resume;
+import com.careerflow.resume.ResumeLinkHistoryRepository;
+import com.careerflow.resume.ResumeLinkService;
+import com.careerflow.resume.ResumeRepository;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -51,8 +58,16 @@ class OpportunityServiceTest {
     private AuditLogService auditLogService;
     @Mock
     private ApplicationService applicationService;
+    @Mock
+    private ApplicationRepository applicationRepository;
+    @Mock
+    private ResumeRepository resumeRepository;
+    @Mock
+    private ResumeLinkHistoryRepository resumeLinkHistoryRepository;
+    @Mock
+    private CoverLetterRepository coverLetterRepository;
 
-    @InjectMocks
+    private ResumeLinkService resumeLinkService;
     private OpportunityService opportunityService;
 
     private User currentUser;
@@ -63,6 +78,12 @@ class OpportunityServiceTest {
     void setUp() {
         currentUser = new User();
         currentUser.setId(1L);
+
+        resumeLinkService = new ResumeLinkService(resumeLinkHistoryRepository);
+        opportunityService = new OpportunityService(
+                opportunityRepository, companyRepository, workspaceAccessUtils, securityUtils,
+                auditLogService, applicationService, applicationRepository, resumeRepository, resumeLinkService,
+                coverLetterRepository);
     }
 
     private Workspace workspace() {
@@ -153,6 +174,92 @@ class OpportunityServiceTest {
     }
 
     @Test
+    void addOpportunity_persistsAssetBundleFields() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(companyRepository.findByIdAndUserIdAndWorkspaceId(COMPANY_ID, 1L, WORKSPACE_ID))
+                .thenReturn(Optional.of(company()));
+        when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
+        when(opportunityRepository.save(any(Opportunity.class))).thenAnswer(invocation -> {
+            Opportunity opportunity = invocation.getArgument(0);
+            opportunity.setId(11L);
+            return opportunity;
+        });
+
+        OpportunityRequest request = request();
+        request.setPortfolioLink("https://portfolio.example.com");
+        request.setGithubLink("https://github.com/example");
+        request.setLinkedinLink("https://linkedin.com/in/example");
+        request.setQuestionnaireAnswers("Q: Why us? A: Great mission.");
+
+        OpportunityResponse response = opportunityService.addOpportunity(request, WORKSPACE_ID);
+
+        assertThat(response.getPortfolioLink()).isEqualTo("https://portfolio.example.com");
+        assertThat(response.getGithubLink()).isEqualTo("https://github.com/example");
+        assertThat(response.getLinkedinLink()).isEqualTo("https://linkedin.com/in/example");
+        assertThat(response.getQuestionnaireAnswers()).isEqualTo("Q: Why us? A: Great mission.");
+    }
+
+    @Test
+    void updateOpportunity_updatesAssetBundleFields_withoutClearingUnsetOnes() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        Opportunity existing = opportunity(6L, OpportunityStatus.SAVED);
+        existing.setPortfolioLink("https://old-portfolio.com");
+        existing.setGithubLink("https://github.com/old");
+        when(opportunityRepository.findByIdAndUserIdAndWorkspaceId(6L, 1L, WORKSPACE_ID))
+                .thenReturn(Optional.of(existing));
+        when(opportunityRepository.save(any(Opportunity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OpportunityUpdateRequest update = new OpportunityUpdateRequest();
+        update.setLinkedinLink("https://linkedin.com/in/new");
+
+        OpportunityResponse response = opportunityService.updateOpportunity(6L, update, WORKSPACE_ID);
+
+        assertThat(response.getLinkedinLink()).isEqualTo("https://linkedin.com/in/new");
+        assertThat(response.getPortfolioLink()).isEqualTo("https://old-portfolio.com");
+        assertThat(response.getGithubLink()).isEqualTo("https://github.com/old");
+    }
+
+    @Test
+    void updateOpportunity_linksCoverLetterFromLibrary() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        Opportunity existing = opportunity(4L, OpportunityStatus.SAVED);
+        when(opportunityRepository.findByIdAndUserIdAndWorkspaceId(4L, 1L, WORKSPACE_ID))
+                .thenReturn(Optional.of(existing));
+        when(opportunityRepository.save(any(Opportunity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CoverLetter coverLetter = CoverLetter.builder().title("Backend Cover Letter").build();
+        coverLetter.setId(11L);
+        when(coverLetterRepository.findByIdAndUserIdAndWorkspaceId(11L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(coverLetter));
+
+        OpportunityUpdateRequest update = new OpportunityUpdateRequest();
+        update.setCoverLetterId(11L);
+
+        OpportunityResponse response = opportunityService.updateOpportunity(4L, update, WORKSPACE_ID);
+
+        assertThat(response.getCoverLetterLibraryId()).isEqualTo(11L);
+        assertThat(response.getCoverLetterTitle()).isEqualTo("Backend Cover Letter");
+    }
+
+    @Test
+    void updateOpportunity_unlinksCoverLetter() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        CoverLetter coverLetter = CoverLetter.builder().title("Backend Cover Letter").build();
+        coverLetter.setId(11L);
+        Opportunity existing = opportunity(4L, OpportunityStatus.SAVED);
+        existing.setCoverLetterLibrary(coverLetter);
+        when(opportunityRepository.findByIdAndUserIdAndWorkspaceId(4L, 1L, WORKSPACE_ID))
+                .thenReturn(Optional.of(existing));
+        when(opportunityRepository.save(any(Opportunity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OpportunityUpdateRequest update = new OpportunityUpdateRequest();
+        update.setUnlinkCoverLetter(true);
+
+        OpportunityResponse response = opportunityService.updateOpportunity(4L, update, WORKSPACE_ID);
+
+        assertThat(response.getCoverLetterLibraryId()).isNull();
+    }
+
+    @Test
     void deleteOpportunity_softDeletesOpportunity() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
         Opportunity existing = opportunity(5L, OpportunityStatus.SAVED);
@@ -226,6 +333,53 @@ class OpportunityServiceTest {
         opportunityService.convertToApplication(11L, convertRequest, WORKSPACE_ID);
 
         verify(applicationService).addApplication(argThat(req -> req.getSource() == ApplicationSource.REFERRAL), eq(WORKSPACE_ID));
+    }
+
+    @Test
+    void updateOpportunity_linksResumeFromLibrary() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        Opportunity existing = opportunity(3L, OpportunityStatus.SAVED);
+        when(opportunityRepository.findByIdAndUserIdAndWorkspaceId(3L, 1L, WORKSPACE_ID))
+                .thenReturn(Optional.of(existing));
+        when(opportunityRepository.save(any(Opportunity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Resume resume = Resume.builder().title("SDE Resume").build();
+        resume.setId(10L);
+        when(resumeRepository.findByIdAndUserIdAndWorkspaceId(10L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(resume));
+
+        OpportunityUpdateRequest update = new OpportunityUpdateRequest();
+        update.setResumeId(10L);
+
+        OpportunityResponse response = opportunityService.updateOpportunity(3L, update, WORKSPACE_ID);
+
+        assertThat(response.getResumeLibraryId()).isEqualTo(10L);
+        assertThat(response.getResumeTitle()).isEqualTo("SDE Resume");
+    }
+
+    @Test
+    void convertToApplication_carriesLinkedResumeForward() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        Resume resume = Resume.builder().title("SDE Resume").build();
+        resume.setId(10L);
+        Opportunity existing = opportunity(7L, OpportunityStatus.READY_TO_APPLY);
+        existing.setResumeLibrary(resume);
+        when(opportunityRepository.findByIdAndUserIdAndWorkspaceId(7L, 1L, WORKSPACE_ID))
+                .thenReturn(Optional.of(existing));
+        when(opportunityRepository.save(any(Opportunity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ApplicationResponse applicationResponse = ApplicationResponse.builder().id(50L).build();
+        when(applicationService.addApplication(any(ApplicationRequest.class), eq(WORKSPACE_ID)))
+                .thenReturn(applicationResponse);
+
+        JobApplication createdApplication = JobApplication.builder().build();
+        createdApplication.setId(50L);
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID))
+                .thenReturn(Optional.of(createdApplication));
+
+        opportunityService.convertToApplication(7L, new OpportunityConvertRequest(), WORKSPACE_ID);
+
+        assertThat(createdApplication.getResumeLibrary()).isEqualTo(resume);
+        verify(applicationRepository).save(createdApplication);
     }
 
     @Test

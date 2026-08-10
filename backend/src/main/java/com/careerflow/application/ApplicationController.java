@@ -8,6 +8,7 @@ import com.careerflow.application.dto.DailyTrendItem;
 import com.careerflow.application.dto.MonthlyTrendItem;
 import com.careerflow.application.dto.SourceAnalysisItem;
 import com.careerflow.common.PageResponse;
+import com.careerflow.resume.dto.ResumeLinkHistoryResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -65,6 +66,13 @@ public class ApplicationController {
         return ResponseEntity.ok(applicationService.getMySourceAnalysis(workspaceId));
     }
 
+    @GetMapping("/resume-analysis")
+    public ResponseEntity<List<com.careerflow.application.dto.ResumeAnalysisItem>> getMyResumeAnalysis(
+            @RequestParam(required = false) String roleCategory,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getMyResumeAnalysis(workspaceId, roleCategory));
+    }
+
     @GetMapping("/weekly-trend")
     public ResponseEntity<List<DailyTrendItem>> getMyWeeklyTrend(
             @RequestParam(defaultValue = "14") int days,
@@ -105,8 +113,17 @@ public class ApplicationController {
             @RequestPart(required = false) MultipartFile resume,
             @RequestPart(required = false) MultipartFile coverLetter,
             @RequestParam(required = false) Long profileResumeDocumentId,
+            @RequestParam(required = false) Long resumeLibraryId,
+            @RequestParam(required = false) Long coverLetterLibraryId,
             @RequestParam Long workspaceId) {
-        return ResponseEntity.ok(applicationService.uploadDocuments(id, resume, coverLetter, profileResumeDocumentId, workspaceId));
+        return ResponseEntity.ok(applicationService.uploadDocuments(id, resume, coverLetter, profileResumeDocumentId, resumeLibraryId, coverLetterLibraryId, workspaceId));
+    }
+
+    @GetMapping("/{id}/resume-history")
+    public ResponseEntity<List<ResumeLinkHistoryResponse>> getResumeHistory(
+            @PathVariable Long id,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getResumeHistory(id, workspaceId));
     }
 
     @GetMapping("/documents/{documentId}")

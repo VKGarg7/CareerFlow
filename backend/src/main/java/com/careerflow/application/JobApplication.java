@@ -2,7 +2,9 @@ package com.careerflow.application;
 
 import com.careerflow.common.SoftDeleteEntity;
 import com.careerflow.company.Company;
+import com.careerflow.coverletter.CoverLetter;
 import com.careerflow.document.Document;
+import com.careerflow.resume.Resume;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import jakarta.persistence.*;
@@ -83,4 +85,19 @@ public class JobApplication extends SoftDeleteEntity {
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "cover_letter_id")
     private Document coverLetter;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "resume_library_id")
+    private Resume resumeLibrary;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "cover_letter_library_id")
+    private CoverLetter coverLetterLibrary;
+
+    private String portfolioLink;
+    private String githubLink;
+    private String linkedinLink;
+
+    @Column(columnDefinition = "TEXT")
+    private String questionnaireAnswers;
 }

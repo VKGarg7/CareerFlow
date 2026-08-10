@@ -10,6 +10,8 @@ import com.careerflow.opportunity.dto.DuplicateCheckRequest;
 import com.careerflow.opportunity.dto.DuplicateMatch;
 import com.careerflow.opportunity.dto.OpportunityRequest;
 import com.careerflow.opportunity.dto.OpportunityResponse;
+import com.careerflow.resume.LinkAction;
+import com.careerflow.resume.dto.ResumeLinkHistoryResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -149,6 +151,17 @@ class OpportunityControllerTest extends ControllerTestSupport {
                 .andExpect(status().isBadRequest());
 
         verify(opportunityService, never()).checkDuplicates(any(), anyLong());
+    }
+
+    @Test
+    void getResumeHistory_returns200_withHistoryList() throws Exception {
+        ResumeLinkHistoryResponse entry = ResumeLinkHistoryResponse.builder()
+                .id(1L).action(LinkAction.LINKED).newResumeTitle("SDE Resume").build();
+        when(opportunityService.getResumeHistory(5L, 99L)).thenReturn(java.util.List.of(entry));
+
+        mockMvc.perform(get("/api/opportunities/{id}/resume-history", 5L).param("workspaceId", "99"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].newResumeTitle").value("SDE Resume"));
     }
 
     @Test

@@ -9,6 +9,7 @@ import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.interview.dto.InterviewRequest;
 import com.careerflow.interview.dto.InterviewResponse;
 import com.careerflow.interview.dto.InterviewUpdateRequest;
+import com.careerflow.resume.Resume;
 import com.careerflow.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -116,6 +117,26 @@ class InterviewServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getId()).isEqualTo(9L);
+    }
+
+    @Test
+    void getForApplication_includesResumeTitle_whenApplicationHasLinkedResume() {
+        Resume resume = Resume.builder().title("SDE Resume").build();
+        resume.setId(10L);
+        application.setResumeLibrary(resume);
+
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(50L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
+
+        Interview interview = Interview.builder().application(application).user(currentUser)
+                .scheduledAt(LocalDateTime.now()).build();
+        interview.setId(9L);
+        when(interviewRepository.findAllByUserIdAndApplicationIdOrderByScheduledAtAsc(1L, 50L))
+                .thenReturn(List.of(interview));
+
+        List<InterviewResponse> result = interviewService.getForApplication(50L, WORKSPACE_ID);
+
+        assertThat(result.get(0).getResumeTitle()).isEqualTo("SDE Resume");
     }
 
     @Test

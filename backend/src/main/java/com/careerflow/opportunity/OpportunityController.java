@@ -8,6 +8,7 @@ import com.careerflow.opportunity.dto.OpportunityConvertRequest;
 import com.careerflow.opportunity.dto.OpportunityRequest;
 import com.careerflow.opportunity.dto.OpportunityResponse;
 import com.careerflow.opportunity.dto.OpportunityUpdateRequest;
+import com.careerflow.resume.dto.ResumeLinkHistoryResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -64,6 +65,13 @@ public class OpportunityController {
             @Valid @RequestBody DuplicateCheckRequest request,
             @RequestParam Long workspaceId) {
         return ResponseEntity.ok(opportunityService.checkDuplicates(request, workspaceId));
+    }
+
+    @GetMapping("/{id}/resume-history")
+    public ResponseEntity<List<ResumeLinkHistoryResponse>> getResumeHistory(
+            @PathVariable Long id,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(opportunityService.getResumeHistory(id, workspaceId));
     }
 
     @PostMapping("/{id}/convert")

@@ -25,4 +25,9 @@ public class ApplicationUpdateRequest {
     private ApplicationStatus status;
     private String expectedSalary;
     private String notes;
+
+    private String portfolioLink;
+    private String githubLink;
+    private String linkedinLink;
+    private String questionnaireAnswers;
 }

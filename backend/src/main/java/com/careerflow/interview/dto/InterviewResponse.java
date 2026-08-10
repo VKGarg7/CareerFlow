@@ -23,6 +23,7 @@ public class InterviewResponse {
     private String questionsAsked;
     private String feedbackReceived;
     private InterviewOutcome outcome;
+    private String resumeTitle;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

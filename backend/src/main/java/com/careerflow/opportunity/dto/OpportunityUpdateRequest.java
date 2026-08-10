@@ -25,4 +25,15 @@ public class OpportunityUpdateRequest {
     private Boolean requiresCoverLetter;
     private Boolean requiresAssessment;
     private Boolean hasSpecialSteps;
+
+    private Long resumeId;
+    private Boolean unlinkResume;
+
+    private Long coverLetterId;
+    private Boolean unlinkCoverLetter;
+
+    private String portfolioLink;
+    private String githubLink;
+    private String linkedinLink;
+    private String questionnaireAnswers;
 }

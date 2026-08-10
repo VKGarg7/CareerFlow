@@ -6,7 +6,7 @@ import {
   Menu, Close, NotificationsNoneOutlined, Handshake,
   AdminPanelSettingsOutlined, FolderOutlined, KeyboardArrowDownRounded,
   BusinessCenterOutlined, HandshakeOutlined, PersonAddAltOutlined,
-  FlagOutlined, BookmarkAddedOutlined,
+  FlagOutlined, BookmarkAddedOutlined, DescriptionOutlined, ArticleOutlined,
 } from '@mui/icons-material'
 import { useProfile } from '../context/ProfileContext'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -23,6 +23,8 @@ const PAGE_META = {
   '/recruiters':   { title: 'Recruiters',   sub: 'Your network of contacts' },
   '/referrals':    { title: 'Referrals',    sub: 'Who’s vouching for you' },
   '/goals':        { title: 'Goals',        sub: 'Track progress toward your targets' },
+  '/resumes':      { title: 'Resume Library', sub: 'Your resume versions, ready to attach' },
+  '/cover-letters': { title: 'Cover Letter Library', sub: 'Your cover letter versions, ready to attach' },
   '/profile':      { title: 'Profile',      sub: 'Your public-facing story' },
   '/admin':        { title: 'Admin',        sub: 'Workspace administration' },
   '/activity':     { title: 'Activity',     sub: 'Everything that’s happened' },
@@ -39,6 +41,8 @@ const NAV = [
   { to: '/recruiters',   Icon: PeopleOutlined,            label: 'Recruiters'   },
   { to: '/referrals',    Icon: Handshake,                 label: 'Referrals'    },
   { to: '/goals',        Icon: FlagOutlined,              label: 'Goals'        },
+  { to: '/resumes',      Icon: DescriptionOutlined,       label: 'Resume Library' },
+  { to: '/cover-letters', Icon: ArticleOutlined,          label: 'Cover Letter Library' },
 ]
 
 const ADMIN_NAV = { to: '/admin', Icon: AdminPanelSettingsOutlined, label: 'Admin' }

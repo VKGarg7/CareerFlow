@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react'
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
@@ -14,7 +14,9 @@ import Pagination from '../components/Pagination'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ModalShell, ConfirmDeleteModal } from '../components/ModalShell'
-import { getApplications, addApplication, updateApplication, deleteApplication, uploadApplicationDocuments, downloadApplicationDocument, viewApplicationDocument, getApplicationStats, getApplicationRoles, getMonthlyTrend, getSourceAnalysis } from '../api/application'
+import { getApplications, addApplication, updateApplication, deleteApplication, uploadApplicationDocuments, downloadApplicationDocument, viewApplicationDocument, getApplicationStats, getApplicationRoles, getMonthlyTrend, getSourceAnalysis, getApplicationResumeHistory, getResumeAnalysis } from '../api/application'
+import { getResumes } from '../api/resume'
+import { getCoverLetters } from '../api/coverLetter'
 import { getCompanies } from '../api/company'
 import { getProfile } from '../api/user'
 import { getFollowUpsForApplication, createFollowUp, updateFollowUp, deleteFollowUp } from '../api/followup'
@@ -58,6 +60,7 @@ const EMPTY_FORM = {
   applicationDate: todayStr(),
   deadline: '',
   source: '', status: 'SAVED', expectedSalary: '', notes: '',
+  portfolioLink: '', githubLink: '', linkedinLink: '', questionnaireAnswers: '',
 }
 
 function AppStatusChanger({ app, onStatusChanged }) {
@@ -305,7 +308,6 @@ function ApplicationTableHeader() {
 const triggerDocDownload = (doc) => downloadDoc((d) => downloadApplicationDocument(d.id), doc)
 const triggerDocView     = (doc) => openDocInNewTab((d) => viewApplicationDocument(d.id), doc)
 
-// ─── Detail (View) Modal ──────────────────────────────────────────────────────
 function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete, onStatusChanged, onCompany }) {
   const [app, setApp] = useState(initialApp)
   const [interviews, setInterviews] = useState([])
@@ -482,8 +484,26 @@ function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete
               <DetailField label="Source" value={SOURCE_LABELS[app.source] || app.source} />
               <DetailField label="Expected CTC" value={app.expectedSalary} />
               <DetailField label="Deadline" value={app.deadline ? fmtDate(app.deadline) : null} />
+              <DetailField label="Portfolio" value={app.portfolioLink && (
+                <a href={app.portfolioLink} target="_blank" rel="noreferrer" className="text-app-accent-soft hover:underline">{app.portfolioLink}</a>
+              )} />
+              <DetailField label="GitHub" value={app.githubLink && (
+                <a href={app.githubLink} target="_blank" rel="noreferrer" className="text-app-accent-soft hover:underline">{app.githubLink}</a>
+              )} />
+              <DetailField label="LinkedIn" value={app.linkedinLink && (
+                <a href={app.linkedinLink} target="_blank" rel="noreferrer" className="text-app-accent-soft hover:underline">{app.linkedinLink}</a>
+              )} />
             </div>
           </div>
+
+          {app.questionnaireAnswers && (
+            <div>
+              <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest mb-2">Questionnaire Answers</p>
+              <div className="bg-white/[0.03] rounded-xl px-4 py-3">
+                <p className="text-sm text-white/75 whitespace-pre-wrap leading-relaxed">{app.questionnaireAnswers}</p>
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -507,7 +527,7 @@ function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete
                   {app.resume && (
                     <button onClick={() => triggerDocView(app.resume)}
                       className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-app-accent/10 text-app-accent-soft rounded-lg hover:bg-app-accent/20 transition font-medium">
-                      📄 {app.resume.originalName || 'Resume'}
+                      📄 {app.resumeTitle || app.resume.originalName || 'Resume'}
                     </button>
                   )}
                   {app.coverLetter && (
@@ -522,9 +542,14 @@ function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete
 
             <div>
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest">
-                  Interview Rounds {interviews.length > 0 && `(${interviews.length})`}
-                </p>
+                <div>
+                  <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest">
+                    Interview Rounds {interviews.length > 0 && `(${interviews.length})`}
+                  </p>
+                  {app.resumeTitle && (
+                    <p className="text-[11px] text-white/30 mt-0.5">📄 Applied with: {app.resumeTitle}</p>
+                  )}
+                </div>
                 <button
                   onClick={() => { setShowAddForm(v => !v); setAddError('') }}
                   className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border transition ${
@@ -693,6 +718,12 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
   const [coverLetterError, setCoverLetterError] = useState('')
   const [profileResumes, setProfileResumes] = useState([])
   const [selectedProfileResumeDocId, setSelectedProfileResumeDocId] = useState('')
+  const [libraryResumes, setLibraryResumes] = useState([])
+  const [selectedLibraryResumeId, setSelectedLibraryResumeId] = useState('')
+  const [resumeHistory, setResumeHistory] = useState([])
+  const [showResumeHistory, setShowResumeHistory] = useState(false)
+  const [libraryCoverLetters, setLibraryCoverLetters] = useState([])
+  const [selectedLibraryCoverLetterId, setSelectedLibraryCoverLetterId] = useState('')
 
   useEffect(() => {
     if (open) {
@@ -704,6 +735,8 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
         deadline: app.deadline || '',
         source: app.source || '', status: app.status || 'APPLIED',
         expectedSalary: app.expectedSalary || '', notes: app.notes || '',
+        portfolioLink: app.portfolioLink || '', githubLink: app.githubLink || '',
+        linkedinLink: app.linkedinLink || '', questionnaireAnswers: app.questionnaireAnswers || '',
       } : EMPTY_FORM)
       setResumeFile(null)
       setResumeError('')
@@ -711,7 +744,16 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
       setCoverLetterError('')
       setError('')
       setSelectedProfileResumeDocId('')
+      setSelectedLibraryResumeId('')
+      setSelectedLibraryCoverLetterId('')
+      setResumeHistory([])
+      setShowResumeHistory(false)
       getProfile().then((res) => setProfileResumes(res.data?.resumes ?? [])).catch(() => {})
+      getResumes({ status: 'ACTIVE', size: 1000 }).then((res) => setLibraryResumes(res.data ?? [])).catch(() => {})
+      getCoverLetters({ status: 'ACTIVE', size: 1000 }).then((res) => setLibraryCoverLetters(res.data ?? [])).catch(() => {})
+      if (app?.id) {
+        getApplicationResumeHistory(app.id).then((res) => setResumeHistory(res.data ?? [])).catch(() => {})
+      }
     }
   }, [open, app])
 
@@ -729,6 +771,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
     setResumeError('')
     setResumeFile(file)
     setSelectedProfileResumeDocId('')
+    setSelectedLibraryResumeId('')
   }
 
   const handleCoverLetterChange = (e) => {
@@ -741,6 +784,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
     }
     setCoverLetterError('')
     setCoverLetterFile(file)
+    setSelectedLibraryCoverLetterId('')
   }
 
   const handleRemoveResume = async () => {
@@ -783,6 +827,10 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
         source: form.source || undefined, status: form.status || undefined,
         expectedSalary: form.expectedSalary.trim() || undefined,
         notes: form.notes.trim() || undefined,
+        portfolioLink: form.portfolioLink.trim() || undefined,
+        githubLink: form.githubLink.trim() || undefined,
+        linkedinLink: form.linkedinLink.trim() || undefined,
+        questionnaireAnswers: form.questionnaireAnswers.trim() || undefined,
       }
       let savedId
       if (liveApp) {
@@ -792,12 +840,16 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
         const res = await addApplication(payload)
         savedId = res.data.id
       }
-      if (selectedProfileResumeDocId) {
+      if (selectedLibraryResumeId) {
+        await uploadApplicationDocuments(savedId, { resumeLibraryId: Number(selectedLibraryResumeId) })
+      } else if (selectedProfileResumeDocId) {
         await uploadApplicationDocuments(savedId, { profileResumeDocumentId: Number(selectedProfileResumeDocId) })
       } else if (resumeFile) {
         await uploadApplicationDocuments(savedId, { resume: resumeFile })
       }
-      if (coverLetterFile) {
+      if (selectedLibraryCoverLetterId) {
+        await uploadApplicationDocuments(savedId, { coverLetterLibraryId: Number(selectedLibraryCoverLetterId) })
+      } else if (coverLetterFile) {
         await uploadApplicationDocuments(savedId, { coverLetter: coverLetterFile })
       }
       onSaved()
@@ -883,6 +935,26 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
               placeholder="Referral contact, interview prep notes..." className={`${inputCls} resize-none`} />
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <FieldLabel>Portfolio Link <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+              <input type="text" value={form.portfolioLink} onChange={set('portfolioLink')} placeholder="https://..." className={inputCls} />
+            </div>
+            <div>
+              <FieldLabel>GitHub Link <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+              <input type="text" value={form.githubLink} onChange={set('githubLink')} placeholder="https://github.com/..." className={inputCls} />
+            </div>
+          </div>
+          <div>
+            <FieldLabel>LinkedIn Link <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+            <input type="text" value={form.linkedinLink} onChange={set('linkedinLink')} placeholder="https://linkedin.com/in/..." className={inputCls} />
+          </div>
+          <div>
+            <FieldLabel>Questionnaire Answers <span className="text-white/30 normal-case font-normal">(optional)</span></FieldLabel>
+            <textarea value={form.questionnaireAnswers} onChange={set('questionnaireAnswers')} rows={4}
+              placeholder="Application questionnaire questions and your answers..." className={`${inputCls} resize-none`} />
+          </div>
+
           <div>
             <FieldLabel>
               Resume <span className="text-white/30 normal-case font-normal">(PDF, DOC, DOCX)</span>
@@ -895,7 +967,10 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
                 </svg>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white/80 truncate">{liveApp.resume.originalName}</p>
-                  <p className="text-xs text-white/35">{fmtFileSize(liveApp.resume.fileSize)}</p>
+                  <p className="text-xs text-white/35">
+                    {fmtFileSize(liveApp.resume.fileSize)}
+                    {liveApp.resumeTitle && ` · from library: ${liveApp.resumeTitle}`}
+                  </p>
                 </div>
                 <button type="button"
                   onClick={() => triggerDocView(liveApp.resume)}
@@ -917,14 +992,52 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
               </div>
             )}
 
+            {resumeHistory.length > 0 && (
+              <div className="mb-2">
+                <button type="button" onClick={() => setShowResumeHistory((s) => !s)}
+                  className="text-xs font-semibold text-white/40 hover:text-white/70 transition">
+                  {showResumeHistory ? 'Hide' : 'Show'} resume history ({resumeHistory.length})
+                </button>
+                {showResumeHistory && (
+                  <ul className="mt-2 space-y-1.5">
+                    {resumeHistory.map((h) => (
+                      <li key={h.id} className="text-xs text-white/40">
+                        <span className="text-white/60 font-medium">{h.action}</span>
+                        {h.previousResumeTitle && <span> from "{h.previousResumeTitle}"</span>}
+                        {h.newResumeTitle && <span> to "{h.newResumeTitle}"</span>}
+                        {' — '}{fmtDate(h.createdAt)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
             {!liveApp?.resume && (
               <>
+                {libraryResumes.length > 0 && (
+                  <div className="mb-2">
+                    <label className="block text-xs text-white/40 mb-1">Select from resume library</label>
+                    <select
+                      value={selectedLibraryResumeId}
+                      onChange={(e) => { setSelectedLibraryResumeId(e.target.value); setSelectedProfileResumeDocId(''); setResumeFile(null) }}
+                      className="w-full px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition">
+                      <option value="" className="bg-app-surface text-white">— choose a resume —</option>
+                      {libraryResumes.map((r) => (
+                        <option key={r.id} value={r.id} className="bg-app-surface text-white">
+                          {r.title}{r.versionTag ? ` (${r.versionTag})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {profileResumes.length > 0 && (
                   <div className="mb-2">
                     <label className="block text-xs text-white/40 mb-1">Select from profile</label>
                     <select
                       value={selectedProfileResumeDocId}
-                      onChange={(e) => { setSelectedProfileResumeDocId(e.target.value); setResumeFile(null) }}
+                      onChange={(e) => { setSelectedProfileResumeDocId(e.target.value); setSelectedLibraryResumeId(''); setResumeFile(null) }}
                       className="w-full px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition">
                       <option value="" className="bg-app-surface text-white">— choose a resume —</option>
                       {profileResumes.map((r) => (
@@ -934,7 +1047,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
                   </div>
                 )}
 
-                {profileResumes.length > 0 && (
+                {(libraryResumes.length > 0 || profileResumes.length > 0) && (
                   <div className="flex items-center gap-2 mb-2">
                     <div className="flex-1 h-px bg-white/[0.08]" />
                     <span className="text-xs text-white/35">or upload new</span>
@@ -999,6 +1112,28 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
             )}
             {!liveApp?.coverLetter && (
               <div className="space-y-2">
+                {libraryCoverLetters.length > 0 && (
+                  <div>
+                    <label className="block text-xs text-white/40 mb-1">Select from cover letter library</label>
+                    <select
+                      value={selectedLibraryCoverLetterId}
+                      onChange={(e) => { setSelectedLibraryCoverLetterId(e.target.value); setCoverLetterFile(null) }}
+                      className="w-full px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition">
+                      <option value="" className="bg-app-surface text-white">— choose a cover letter —</option>
+                      {libraryCoverLetters.map((c) => (
+                        <option key={c.id} value={c.id} className="bg-app-surface text-white">{c.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {libraryCoverLetters.length > 0 && !selectedLibraryCoverLetterId && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-px bg-white/[0.08]" />
+                    <span className="text-xs text-white/35">or upload new</span>
+                    <div className="flex-1 h-px bg-white/[0.08]" />
+                  </div>
+                )}
+                {!selectedLibraryCoverLetterId && (
                 <label className="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-white/[0.10] hover:border-app-accent2/40 cursor-pointer transition">
                   <input type="file" accept=".pdf,.doc,.docx" onChange={handleCoverLetterChange} className="sr-only" />
                   {coverLetterFile ? (
@@ -1014,6 +1149,7 @@ function AddEditModal({ open, app, companies, onClose, onSaved }) {
                     <span className="text-sm text-white/35">Click to upload cover letter</span>
                   )}
                 </label>
+                )}
                 {coverLetterError && <p className="text-xs text-app-danger">{coverLetterError}</p>}
               </div>
             )}
@@ -1460,13 +1596,22 @@ export default function Applications() {
   const { data: roleOptionsData, refetch: fetchRoleOptions } = useFetchOnce(getApplicationRoles, [])
   const { data: monthlyTrendData, refetch: fetchMonthlyTrend } = useFetchOnce(getMonthlyTrend, [])
   const { data: sourceAnalysisData, refetch: fetchSourceAnalysis } = useFetchOnce(getSourceAnalysis, [])
+  const [resumeRoleCategoryFilter, setResumeRoleCategoryFilter] = useState('')
+  const { data: allResumeAnalysis, refetch: fetchAllResumeAnalysis } = useFetchOnce(getResumeAnalysis, [])
+  const { data: resumeAnalysis, refetch: fetchResumeAnalysis } = useFetchOnce(
+    useCallback(() => getResumeAnalysis(resumeRoleCategoryFilter || undefined), [resumeRoleCategoryFilter]), []
+  )
+  const resumeRoleCategoryOptions = useMemo(
+    () => [...new Set(allResumeAnalysis.map((r) => r.roleCategory).filter(Boolean))].sort(),
+    [allResumeAnalysis]
+  )
 
   useSearchShortcut(searchInputRef)
 
   const {
     modalOpen, setModalOpen, editTarget, deleteTarget, setDeleteTarget,
     openAdd, openEdit, handleSaved, handleDeleted,
-  } = useCrudModals('Application', setSuccess, [fetchApplications, fetchAllApplications, fetchStats, fetchRoleOptions, fetchMonthlyTrend, fetchSourceAnalysis])
+  } = useCrudModals('Application', setSuccess, [fetchApplications, fetchAllApplications, fetchStats, fetchRoleOptions, fetchMonthlyTrend, fetchSourceAnalysis, fetchResumeAnalysis, fetchAllResumeAnalysis])
   const openView     = (a) => { setViewTarget(a) }
   const openFollowUp = (a) => { setFollowUpTarget(a) }
 
@@ -1671,6 +1816,55 @@ export default function Applications() {
                 searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
               }}
             />
+          )}
+
+          {allResumeAnalysis.length > 0 && (
+            <AnalyticsCard>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Resume Performance</p>
+                {resumeRoleCategoryOptions.length > 0 && (
+                  <FilterSelect value={resumeRoleCategoryFilter} onChange={setResumeRoleCategoryFilter}
+                    allLabel="All Role Categories" className="w-48"
+                    options={resumeRoleCategoryOptions.map((c) => ({ value: c, label: c }))} />
+                )}
+              </div>
+              {resumeAnalysis.length === 0 ? (
+                <p className="py-10 text-center text-xs text-white/30">No resumes match this filter</p>
+              ) : (
+              <div className="mt-5 overflow-x-auto">
+                <div className="min-w-[36rem]">
+                  <div className="grid grid-cols-[1fr_5rem_5rem_5rem_5rem_5rem_5rem] gap-4 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-white/25">
+                    <span>Resume</span>
+                    <span className="text-center">Applications</span>
+                    <span className="text-center">OA Cleared</span>
+                    <span className="text-center">Interviews</span>
+                    <span className="text-center">Offers</span>
+                    <span className="text-center">Interview Rate</span>
+                    <span className="text-center">Offer Rate</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {resumeAnalysis.map((r) => {
+                      const lowSample = r.total < 3
+                      return (
+                        <div key={r.resumeId} className="grid grid-cols-[1fr_5rem_5rem_5rem_5rem_5rem_5rem] items-center gap-4 rounded-xl px-3 py-2.5 hover:bg-white/[0.03] transition-colors">
+                          <span className="truncate text-sm font-semibold text-white/85" title={lowSample ? 'Small sample size — take these rates with caution' : undefined}>
+                            {r.resumeTitle}
+                            {lowSample && <span className="ml-1.5 text-[10px] font-normal text-white/25">(low sample)</span>}
+                          </span>
+                          <span className="text-center text-sm font-bold tabular-nums text-white/70">{r.total}</span>
+                          <span className="justify-self-center rounded-lg bg-app-warning/15 px-2 py-1 text-center text-xs font-semibold tabular-nums text-app-warning">{r.oaClears}</span>
+                          <span className="justify-self-center rounded-lg bg-app-viz/15 px-2 py-1 text-center text-xs font-semibold tabular-nums text-app-viz-soft">{r.interviews}</span>
+                          <span className="justify-self-center rounded-lg bg-app-viz-success/15 px-2 py-1 text-center text-xs font-semibold tabular-nums text-app-viz-success">{r.offers}</span>
+                          <span className={`text-center text-xs font-semibold tabular-nums ${lowSample ? 'text-white/35' : 'text-white/70'}`}>{(r.interviewRate * 100).toFixed(0)}%</span>
+                          <span className={`text-center text-xs font-semibold tabular-nums ${lowSample ? 'text-white/35' : 'text-white/70'}`}>{(r.offerRate * 100).toFixed(0)}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+              )}
+            </AnalyticsCard>
           )}
         </div>
       )}
