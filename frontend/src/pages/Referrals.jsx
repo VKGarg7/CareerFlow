@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Alert, CircularProgress } from '@mui/material'
+import { CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
   Search, KeyboardArrowDown, LinkedIn, Email,
-  Close, OpenInNew, Work, FilterListRounded,
-  VisibilityOutlined, EditOutlined, DeleteOutlineRounded,
+  OpenInNew, Work, FilterListRounded,
+  VisibilityOutlined, EditOutlined, DeleteOutlineRounded, VerifiedOutlined,
 } from '@mui/icons-material'
 import Layout from '../components/Layout'
 import Pagination from '../components/Pagination'
@@ -16,6 +16,7 @@ import { getReferrals, getReferral, addReferral, updateReferral, deleteReferral,
 import EmptyState from '../components/EmptyState'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
 import InlineStatusChanger from '../components/InlineStatusChanger'
+import ContactPicker from '../components/ContactPicker'
 import { initials, fmt, fmtDate } from '../utils/followup'
 import useSearchShortcut from '../hooks/useSearchShortcut'
 import useAddQueryParam from '../hooks/useAddQueryParam'
@@ -30,21 +31,18 @@ import HeaderAddButton from '../components/HeaderAddButton'
 import useCrudModals from '../hooks/useCrudModals'
 
 const STATUS_CONFIG = {
-  DRAFT:          { label: 'Draft',          badge: 'bg-white/[0.06] text-white/60',           border: 'border-l-white/10',    dot: 'bg-white/40',     hex: '#8B8FA3' },
-  REQUESTED:      { label: 'Requested',      badge: 'bg-app-accent/10 text-app-accent-soft',   border: 'border-l-app-accent',  dot: 'bg-app-accent',   hex: '#5B5FEF' },
-  ACKNOWLEDGED:   { label: 'Acknowledged',   badge: 'bg-app-warning/10 text-app-warning',      border: 'border-l-app-warning', dot: 'bg-app-warning',  hex: '#F59E0B' },
-  REFERRED:       { label: 'Referred',       badge: 'bg-app-accent2/10 text-app-accent-soft',  border: 'border-l-app-accent2', dot: 'bg-app-accent2',  hex: '#8B5CF6' },
-  INTERVIEWING:   { label: 'Interviewing',   badge: 'bg-app-accent2/10 text-app-accent-soft',  border: 'border-l-app-accent2', dot: 'bg-app-accent2',  hex: '#8B5CF6' },
-  OFFER_RECEIVED: { label: 'Offer Received', badge: 'bg-app-success/10 text-app-success',      border: 'border-l-app-success', dot: 'bg-app-success',  hex: '#22C55E' },
-  REJECTED:       { label: 'Rejected',       badge: 'bg-app-danger/10 text-app-danger',        border: 'border-l-app-danger',  dot: 'bg-app-danger',   hex: '#F43F5E' },
-  WITHDRAWN:      { label: 'Withdrawn',      badge: 'bg-app-warning/10 text-app-warning',      border: 'border-l-app-warning', dot: 'bg-app-warning',  hex: '#F59E0B' },
-  DECLINED:       { label: 'Declined',       badge: 'bg-app-danger/10 text-app-danger',        border: 'border-l-app-danger',  dot: 'bg-app-danger',   hex: '#F43F5E' },
+  PLANNED:            { label: 'Planned',            badge: 'bg-white/[0.06] text-white/60',           border: 'border-l-white/10',    dot: 'bg-white/40',     hex: '#8B8FA3' },
+  OUTREACH_SENT:       { label: 'Outreach Sent',       badge: 'bg-app-accent/10 text-app-accent-soft',   border: 'border-l-app-accent',  dot: 'bg-app-accent',   hex: '#5B5FEF' },
+  AWAITING_RESPONSE:   { label: 'Awaiting Response',   badge: 'bg-app-warning/10 text-app-warning',      border: 'border-l-app-warning', dot: 'bg-app-warning',  hex: '#F59E0B' },
+  REFERRAL_AGREED:     { label: 'Referral Agreed',     badge: 'bg-app-accent2/10 text-app-accent-soft',  border: 'border-l-app-accent2', dot: 'bg-app-accent2',  hex: '#8B5CF6' },
+  REFERRAL_SUBMITTED:  { label: 'Referral Submitted',  badge: 'bg-app-success/10 text-app-success',      border: 'border-l-app-success', dot: 'bg-app-success',  hex: '#22C55E' },
+  REFERRAL_DECLINED:   { label: 'Referral Declined',   badge: 'bg-app-danger/10 text-app-danger',        border: 'border-l-app-danger',  dot: 'bg-app-danger',   hex: '#F43F5E' },
+  NO_RESPONSE:         { label: 'No Response',         badge: 'bg-white/[0.06] text-white/40',           border: 'border-l-white/10',    dot: 'bg-white/30',     hex: '#8B8FA3' },
+  ROLE_CLOSED:         { label: 'Role Closed',         badge: 'bg-white/[0.06] text-white/40',           border: 'border-l-white/10',    dot: 'bg-white/30',     hex: '#6B7280' },
 }
 
 const SORT_OPTIONS = [
   { value: 'createdAt',       label: 'Date Added'    },
-  { value: 'referrerName',    label: 'Referrer Name' },
-  { value: 'referrerCompany', label: 'Company'       },
   { value: 'targetRole',      label: 'Role'          },
   { value: 'status',          label: 'Status'        },
   { value: 'requestedDate',   label: 'Requested Date' },
@@ -53,23 +51,22 @@ const SORT_OPTIONS = [
 ]
 
 const EMPTY_FORM = {
-  referrerName: '', referrerEmail: '', referrerLinkedIn: '',
-  referrerCompany: '', referrerJobTitle: '',
+  contact: null,
   targetRole: '', jobPostingUrl: '',
   relationshipContext: '', messageToReferrer: '',
-  status: 'DRAFT', requestedDate: '', followUpDate: '', notes: '',
+  status: 'PLANNED', requestedDate: '', followUpDate: '', referralDate: '', proofUrl: '', notes: '',
 }
 
 const isOverdueReferral = (referral) => !!referral.followUpDate
   && new Date(referral.followUpDate) < new Date()
-  && !['REFERRED', 'INTERVIEWING', 'OFFER_RECEIVED', 'REJECTED', 'WITHDRAWN', 'DECLINED'].includes(referral.status)
+  && !['REFERRAL_SUBMITTED', 'REFERRAL_DECLINED', 'NO_RESPONSE', 'ROLE_CLOSED'].includes(referral.status)
 
 function ReferralStatusChanger({ referral, onStatusChanged }) {
   return (
     <InlineStatusChanger
       item={referral}
       statusConfig={STATUS_CONFIG}
-      defaultStatus="DRAFT"
+      defaultStatus="PLANNED"
       updateFn={updateReferral}
       onStatusChanged={onStatusChanged}
     />
@@ -77,19 +74,20 @@ function ReferralStatusChanger({ referral, onStatusChanged }) {
 }
 
 function ReferralListRow({ referral, drawerOpen, onView, onEdit, onDelete, onStatusChanged }) {
-  const cfg = STATUS_CONFIG[referral.status] || STATUS_CONFIG.DRAFT
+  const cfg = STATUS_CONFIG[referral.status] || STATUS_CONFIG.PLANNED
   const overdue = isOverdueReferral(referral)
+  const contact = referral.contact || {}
 
   return (
     <EntityListRow
       onClick={() => onView(referral)}
       accentBorder={cfg.border}
       avatarColor={cfg.dot}
-      name={referral.referrerName}
-      subtitle={referral.referrerCompany}
+      name={contact.name}
+      subtitle={contact.company}
       statusSlot={<ReferralStatusChanger referral={referral} onStatusChanged={onStatusChanged} />}
-      email={referral.referrerEmail}
-      linkedIn={referral.referrerLinkedIn}
+      email={contact.email}
+      linkedIn={contact.linkedIn}
       menuItems={[
         { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(referral) },
         { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(referral) },
@@ -126,26 +124,27 @@ function ReferralListRow({ referral, drawerOpen, onView, onEdit, onDelete, onSta
 }
 
 function DirectoryCard({ referral, onView, onEdit, onDelete, onStatusChanged }) {
-  const cfg = STATUS_CONFIG[referral.status] || STATUS_CONFIG.DRAFT
+  const cfg = STATUS_CONFIG[referral.status] || STATUS_CONFIG.PLANNED
   const overdue = isOverdueReferral(referral)
+  const contact = referral.contact || {}
 
   return (
     <EntityDirectoryCard
       onClick={() => onView(referral)}
       statusBarColor={cfg.dot}
       avatarColor={cfg.dot}
-      avatarText={initials(referral.referrerName)}
+      avatarText={initials(contact.name)}
       titleSlot={
         <>
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-bold text-white/90 truncate leading-tight">{referral.referrerName}</p>
+            <p className="text-sm font-bold text-white/90 truncate leading-tight">{contact.name}</p>
             <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.badge}`}>
               {cfg.label}
             </span>
           </div>
-          {(referral.referrerJobTitle || referral.referrerCompany) && (
+          {(contact.jobTitle || contact.company) && (
             <p className="text-xs text-white/50 truncate mt-0.5">
-              {[referral.referrerJobTitle, referral.referrerCompany].filter(Boolean).join(' @ ')}
+              {[contact.jobTitle, contact.company].filter(Boolean).join(' @ ')}
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2 mt-1.5" onClick={(e) => e.stopPropagation()}>
@@ -169,14 +168,14 @@ function DirectoryCard({ referral, onView, onEdit, onDelete, onStatusChanged }) 
       }
       chips={
         <div className="flex items-center gap-2 w-full">
-          {referral.referrerEmail && (
-            <a href={`mailto:${referral.referrerEmail}`} title={referral.referrerEmail}
+          {contact.email && (
+            <a href={`mailto:${contact.email}`} title={contact.email}
               className="p-1.5 rounded-lg text-white/35 hover:text-app-accent-soft hover:bg-app-accent/10 transition">
               <Email sx={{ fontSize: 15 }} />
             </a>
           )}
-          {referral.referrerLinkedIn && (
-            <a href={referral.referrerLinkedIn} target="_blank" rel="noreferrer" title="LinkedIn"
+          {contact.linkedIn && (
+            <a href={contact.linkedIn} target="_blank" rel="noreferrer" title="LinkedIn"
               className="p-1.5 rounded-lg text-white/35 hover:text-app-accent-soft hover:bg-app-accent/10 transition">
               <LinkedIn sx={{ fontSize: 15 }} />
             </a>
@@ -203,45 +202,45 @@ function DirectoryCard({ referral, onView, onEdit, onDelete, onStatusChanged }) 
   )
 }
 
+const Row = ({ label, value }) =>
+  value ? (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-sm text-white/85 break-words">{value}</p>
+    </div>
+  ) : null
+
 function DetailDrawer({ open, referralId, onClose, onEdit, onDelete, onStatusChanged }) {
   const [referral, setReferral]     = useState(null)
-  const [loading, setLoading]       = useState(false)
+  const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState('')
 
   const [history, setHistory]       = useState([])
   const [noteText, setNoteText]     = useState('')
   const [noteSubmitting, setNoteSubmitting] = useState(false)
   const [noteError, setNoteError]   = useState('')
-  const [editingNote, setEditingNote] = useState(null)   // { id, text }
+  const [editingNote, setEditingNote] = useState(null)
   const [editSaving, setEditSaving] = useState(false)
 
   useEffect(() => {
     if (!open || !referralId) return
-    setLoading(true)
-    setError('')
-    setReferral(null)
-    setHistory([])
-    setNoteText('')
-    setNoteError('')
-    setEditingNote(null)
+    let cancelled = false
     getReferral(referralId)
-      .then((res) => { setReferral(res.data); setHistory(res.data.statusHistory ?? []) })
-      .catch(() => setError('Failed to load referral details.'))
-      .finally(() => setLoading(false))
+      .then((res) => {
+        if (cancelled) return
+        setReferral(res.data)
+        setHistory(res.data.statusHistory ?? [])
+      })
+      .catch(() => { if (!cancelled) setError('Failed to load referral details.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [open, referralId])
 
   if (!open) return null
 
-  const cfg = referral ? (STATUS_CONFIG[referral.status] || STATUS_CONFIG.DRAFT) : STATUS_CONFIG.DRAFT
+  const cfg = referral ? (STATUS_CONFIG[referral.status] || STATUS_CONFIG.PLANNED) : STATUS_CONFIG.PLANNED
   const overdue = referral ? isOverdueReferral(referral) : false
-
-  const Row = ({ label, value }) =>
-    value ? (
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold text-white/35 uppercase tracking-wide mb-1">{label}</p>
-        <p className="text-sm text-white/85 break-words">{value}</p>
-      </div>
-    ) : null
+  const contact = referral?.contact || {}
 
   const handleAddNote = async () => {
     if (!noteText.trim()) return
@@ -275,6 +274,7 @@ function DetailDrawer({ open, referralId, onClose, onEdit, onDelete, onStatusCha
       const res = await manageNote(referral.id, { action: 'DELETE', noteId: historyId })
       setHistory(res.data)
     } catch {
+      // best-effort delete; UI stays in sync via the next successful mutation
     }
   }
 
@@ -289,18 +289,18 @@ function DetailDrawer({ open, referralId, onClose, onEdit, onDelete, onStatusCha
         ) : referral ? (
           <div className="flex items-start gap-3">
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight ${cfg.dot}`}>
-              {initials(referral.referrerName)}
+              {initials(contact.name)}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-bold text-white leading-tight truncate">{referral.referrerName}</h2>
+                <h2 className="text-base font-bold text-white leading-tight truncate">{contact.name}</h2>
                 <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.badge}`}>
                   {cfg.label}
                 </span>
               </div>
-              {(referral.referrerJobTitle || referral.referrerCompany) && (
+              {(contact.jobTitle || contact.company) && (
                 <p className="text-sm text-white/50 mt-0.5 truncate">
-                  {[referral.referrerJobTitle, referral.referrerCompany].filter(Boolean).join(' @ ')}
+                  {[contact.jobTitle, contact.company].filter(Boolean).join(' @ ')}
                 </p>
               )}
               {overdue && (
@@ -343,14 +343,14 @@ function DetailDrawer({ open, referralId, onClose, onEdit, onDelete, onStatusCha
           <div>
             <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Contact</p>
             <div className="space-y-2">
-              <Row label="Email" value={referral.referrerEmail && (
-                <a href={`mailto:${referral.referrerEmail}`}
+              <Row label="Email" value={contact.email && (
+                <a href={`mailto:${contact.email}`}
                   className="text-app-accent-soft hover:underline flex items-center gap-1.5 truncate">
-                  <Email sx={{ fontSize: 14 }} className="shrink-0" /><span className="truncate">{referral.referrerEmail}</span>
+                  <Email sx={{ fontSize: 14 }} className="shrink-0" /><span className="truncate">{contact.email}</span>
                 </a>
               )} />
-              <Row label="LinkedIn" value={referral.referrerLinkedIn && (
-                <a href={referral.referrerLinkedIn} target="_blank" rel="noreferrer"
+              <Row label="LinkedIn" value={contact.linkedIn && (
+                <a href={contact.linkedIn} target="_blank" rel="noreferrer"
                   className="text-app-accent-soft hover:underline flex items-center gap-1.5">
                   <LinkedIn sx={{ fontSize: 14 }} className="shrink-0" />View Profile
                 </a>
@@ -367,6 +367,13 @@ function DetailDrawer({ open, referralId, onClose, onEdit, onDelete, onStatusCha
                     {fmtDate(referral.followUpDate)}{overdue ? ' — overdue' : ''}
                   </span>
                 : null} />
+              <Row label="Referred On" value={referral.referralDate ? fmtDate(referral.referralDate) : null} />
+              <Row label="Proof" value={referral.proofUrl && (
+                <a href={referral.proofUrl} target="_blank" rel="noreferrer"
+                  className="text-app-accent-soft hover:underline flex items-center gap-1.5">
+                  <VerifiedOutlined sx={{ fontSize: 14 }} className="shrink-0" />View Proof
+                </a>
+              )} />
               <Row label="Added on" value={referral.createdAt ? fmtDate(referral.createdAt) : null} />
               <Row label="Last updated" value={referral.updatedAt ? fmt(referral.updatedAt) : null} />
             </div>
@@ -458,7 +465,7 @@ function DetailDrawer({ open, referralId, onClose, onEdit, onDelete, onStatusCha
                     )
                   }
 
-                  const toCfg = STATUS_CONFIG[entry.toStatus] || STATUS_CONFIG.DRAFT
+                  const toCfg = STATUS_CONFIG[entry.toStatus] || STATUS_CONFIG.PLANNED
                   return (
                     <div key={entry.id} className="flex gap-3">
                       <div className="flex flex-col items-center shrink-0 pt-1">
@@ -527,32 +534,22 @@ function DetailDrawer({ open, referralId, onClose, onEdit, onDelete, onStatusCha
 }
 
 function AddEditDrawer({ open, referral, onClose, onSaved }) {
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [form, setForm] = useState(() => referral ? {
+    contact:              referral.contact || null,
+    targetRole:           referral.targetRole          || '',
+    jobPostingUrl:        referral.jobPostingUrl       || '',
+    relationshipContext:  referral.relationshipContext || '',
+    messageToReferrer:    referral.messageToReferrer   || '',
+    status:               referral.status              || 'PLANNED',
+    requestedDate:        referral.requestedDate       || '',
+    followUpDate:         referral.followUpDate        || '',
+    referralDate:         referral.referralDate        || '',
+    proofUrl:             referral.proofUrl            || '',
+    notes:                referral.notes               || '',
+  } : EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-
-  useEffect(() => {
-    if (open) {
-      setForm(referral ? {
-        referrerName:        referral.referrerName        || '',
-        referrerEmail:       referral.referrerEmail       || '',
-        referrerLinkedIn:    referral.referrerLinkedIn    || '',
-        referrerCompany:     referral.referrerCompany     || '',
-        referrerJobTitle:    referral.referrerJobTitle    || '',
-        targetRole:          referral.targetRole          || '',
-        jobPostingUrl:       referral.jobPostingUrl       || '',
-        relationshipContext: referral.relationshipContext || '',
-        messageToReferrer:   referral.messageToReferrer   || '',
-        status:              referral.status              || 'DRAFT',
-        requestedDate:       referral.requestedDate       || '',
-        followUpDate:        referral.followUpDate        || '',
-        notes:               referral.notes               || '',
-      } : EMPTY_FORM)
-      setError('')
-      setFieldErrors({})
-    }
-  }, [open, referral])
 
   if (!open) return null
 
@@ -561,23 +558,22 @@ function AddEditDrawer({ open, referral, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.contact) { setFieldErrors({ contact: 'Please select a contact.' }); return }
     setSaving(true)
     setError('')
     setFieldErrors({})
     const payload = {
-      referrerName:        form.referrerName.trim()        || undefined,
-      referrerEmail:       form.referrerEmail.trim()       || undefined,
-      referrerLinkedIn:    form.referrerLinkedIn.trim()    || undefined,
-      referrerCompany:     form.referrerCompany.trim()     || undefined,
-      referrerJobTitle:    form.referrerJobTitle.trim()    || undefined,
-      targetRole:          form.targetRole.trim()          || undefined,
-      jobPostingUrl:       form.jobPostingUrl.trim()       || undefined,
-      relationshipContext: form.relationshipContext.trim() || undefined,
-      messageToReferrer:   form.messageToReferrer.trim()   || undefined,
-      status:              form.status                     || undefined,
-      requestedDate:       form.requestedDate              || undefined,
-      followUpDate:        form.followUpDate               || undefined,
-      notes:               form.notes.trim()               || undefined,
+      contactId:            form.contact.id,
+      targetRole:           form.targetRole.trim()          || undefined,
+      jobPostingUrl:        form.jobPostingUrl.trim()       || undefined,
+      relationshipContext:  form.relationshipContext.trim() || undefined,
+      messageToReferrer:    form.messageToReferrer.trim()   || undefined,
+      status:               form.status                     || undefined,
+      requestedDate:        form.requestedDate              || undefined,
+      followUpDate:         form.followUpDate               || undefined,
+      referralDate:         form.referralDate               || undefined,
+      proofUrl:             form.proofUrl.trim()            || undefined,
+      notes:                form.notes.trim()               || undefined,
     }
     try {
       referral ? await updateReferral(referral.id, payload) : await addReferral(payload)
@@ -592,7 +588,6 @@ function AddEditDrawer({ open, referral, onClose, onSaved }) {
   }
 
   const inputCls = (field) => fieldInputCls(!!fieldErrors[field])
-  const FieldError = ({ field }) => <FieldErrorText error={fieldErrors[field]} />
 
   return (
     <DrawerShell>
@@ -601,40 +596,13 @@ function AddEditDrawer({ open, referral, onClose, onSaved }) {
         {error && <div className="mb-4 p-3 rounded-xl bg-app-danger/10 border border-app-danger/20 text-app-danger text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
 
-          <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Referrer Details</p>
+          <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Referrer</p>
           <div>
             <FieldLabel>
-              Full Name <span className="text-app-danger">*</span>
+              Contact <span className="text-app-danger">*</span>
             </FieldLabel>
-            <input type="text" value={form.referrerName} onChange={set('referrerName')}
-              placeholder="Jane Doe" maxLength={100} className={inputCls('referrerName')} required />
-            <FieldError field="referrerName" />
-          </div>
-          <div>
-            <FieldLabel>
-              Company <span className="text-app-danger">*</span>
-            </FieldLabel>
-            <input type="text" value={form.referrerCompany} onChange={set('referrerCompany')}
-              placeholder="Google" maxLength={150} className={inputCls('referrerCompany')} required />
-            <FieldError field="referrerCompany" />
-          </div>
-          <div>
-            <FieldLabel>Job Title</FieldLabel>
-            <input type="text" value={form.referrerJobTitle} onChange={set('referrerJobTitle')}
-              placeholder="Senior Engineer" maxLength={100} className={inputCls('referrerJobTitle')} />
-            <FieldError field="referrerJobTitle" />
-          </div>
-          <div>
-            <FieldLabel>Email</FieldLabel>
-            <input type="email" value={form.referrerEmail} onChange={set('referrerEmail')}
-              placeholder="jane@google.com" maxLength={150} className={inputCls('referrerEmail')} />
-            <FieldError field="referrerEmail" />
-          </div>
-          <div>
-            <FieldLabel>LinkedIn URL</FieldLabel>
-            <input type="url" value={form.referrerLinkedIn} onChange={set('referrerLinkedIn')}
-              placeholder="https://linkedin.com/in/..." maxLength={300} className={inputCls('referrerLinkedIn')} />
-            <FieldError field="referrerLinkedIn" />
+            <ContactPicker value={form.contact} onChange={setVal('contact')} placeholder="Search your contacts…" />
+            <FieldErrorText error={fieldErrors.contact} />
           </div>
 
           <p className="text-xs font-bold text-white/40 uppercase tracking-wider pt-1">Role Details</p>
@@ -644,13 +612,13 @@ function AddEditDrawer({ open, referral, onClose, onSaved }) {
             </FieldLabel>
             <input type="text" value={form.targetRole} onChange={set('targetRole')}
               placeholder="Software Engineer – Backend" maxLength={150} className={inputCls('targetRole')} required />
-            <FieldError field="targetRole" />
+            <FieldErrorText error={fieldErrors.targetRole} />
           </div>
           <div>
             <FieldLabel>Job Posting URL</FieldLabel>
             <input type="url" value={form.jobPostingUrl} onChange={set('jobPostingUrl')}
               placeholder="https://careers.google.com/..." maxLength={500} className={inputCls('jobPostingUrl')} />
-            <FieldError field="jobPostingUrl" />
+            <FieldErrorText error={fieldErrors.jobPostingUrl} />
           </div>
 
           <p className="text-xs font-bold text-white/40 uppercase tracking-wider pt-1">Context & Message</p>
@@ -692,6 +660,18 @@ function AddEditDrawer({ open, referral, onClose, onSaved }) {
                 className={inputCls('followUpDate')} />
             </div>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <FieldLabel>Referral Date</FieldLabel>
+              <input type="date" value={form.referralDate} onChange={set('referralDate')}
+                className={inputCls('referralDate')} />
+            </div>
+            <div>
+              <FieldLabel>Proof URL</FieldLabel>
+              <input type="url" value={form.proofUrl} onChange={set('proofUrl')}
+                placeholder="Screenshot / confirmation link" className={inputCls('proofUrl')} />
+            </div>
+          </div>
           <div>
             <FieldLabel>Notes</FieldLabel>
             <textarea value={form.notes} onChange={set('notes')} rows={2}
@@ -723,7 +703,7 @@ export default function Referrals() {
 
   const {
     items: referrals, setItems: setReferrals, loading, error, setError,
-    setPage, size, setSize, refetch: fetchReferrals,
+    setPage, setSize, refetch: fetchReferrals,
   } = usePagedList(
     useCallback(
       (page, size) => getReferrals({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
@@ -794,7 +774,7 @@ export default function Referrals() {
               <Search fontSize="small" />
             </span>
             <input ref={searchInputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, company, role or email..."
+              placeholder="Search by contact name, company, or role..."
               className="w-full h-11 pl-11 pr-16 border border-white/[0.06] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.12] transition placeholder:text-white/25" />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.04] text-[11px] font-medium text-white/30 pointer-events-none">
               ⌘K
@@ -888,7 +868,7 @@ export default function Referrals() {
       )}
       </div>
 
-      <AddEditDrawer open={modalOpen} referral={editTarget}
+      <AddEditDrawer key={editTarget?.id ?? 'new'} open={modalOpen} referral={editTarget}
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
 
       <ConfirmDeleteModal
@@ -897,11 +877,12 @@ export default function Referrals() {
         onConfirm={async () => { await deleteReferral(deleteTarget.id); handleDeleted() }}
         title="Delete Referral Request"
         message={deleteTarget && (
-          <>Remove referral request from <span className="font-semibold text-white/80">{deleteTarget.referrerName}</span> for <span className="font-semibold text-white/80">{deleteTarget.targetRole}</span>?</>
+          <>Remove referral request from <span className="font-semibold text-white/80">{deleteTarget.contact?.name}</span> for <span className="font-semibold text-white/80">{deleteTarget.targetRole}</span>?</>
         )}
       />
 
       <DetailDrawer
+        key={viewTarget}
         open={viewTarget !== null}
         referralId={viewTarget}
         onClose={() => setViewTarget(null)}
