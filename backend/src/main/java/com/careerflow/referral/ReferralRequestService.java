@@ -1,5 +1,7 @@
 package com.careerflow.referral;
 
+import com.careerflow.application.ApplicationRepository;
+import com.careerflow.application.JobApplication;
 import com.careerflow.audit.AuditAction;
 import com.careerflow.audit.AuditLogService;
 import com.careerflow.common.PageResponse;
@@ -7,9 +9,14 @@ import com.careerflow.common.PaginationHelper;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.StatusCountsResponse;
 import com.careerflow.common.WorkspaceAccessUtils;
+import com.careerflow.contact.Contact;
+import com.careerflow.contact.ContactRepository;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
+import com.careerflow.opportunity.Opportunity;
+import com.careerflow.opportunity.OpportunityRepository;
+import com.careerflow.referral.dto.ReferralContactSummary;
 import com.careerflow.referral.dto.ReferralNoteActionRequest;
 import com.careerflow.referral.dto.ReferralRequestDto;
 import com.careerflow.referral.dto.ReferralResponse;
@@ -33,12 +40,14 @@ import java.util.Set;
 public class ReferralRequestService {
 
     private static final Set<String> SORTABLE_FIELDS = Set.of(
-            "referrerName", "referrerCompany", "targetRole",
-            "status", "requestedDate", "followUpDate", "createdAt", "updatedAt"
+            "targetRole", "status", "requestedDate", "followUpDate", "referralDate", "createdAt", "updatedAt"
     );
 
     private final ReferralRequestRepository referralRepository;
     private final ReferralStatusHistoryRepository historyRepository;
+    private final ContactRepository contactRepository;
+    private final OpportunityRepository opportunityRepository;
+    private final ApplicationRepository applicationRepository;
     private final WorkspaceAccessUtils workspaceAccessUtils;
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
@@ -47,26 +56,30 @@ public class ReferralRequestService {
     @Transactional
     public ReferralResponse create(ReferralRequestDto req, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
-        checkDuplicate(workspaceId, req.getReferrerEmail(), req.getTargetRole(), null);
         Workspace workspace = workspaceAccessUtils.getOwnedWorkspace(workspaceId, user.getId());
+        Contact contact = findOwnedContact(req.getContactId(), user.getId(), workspaceId);
+        checkDuplicate(workspaceId, contact.getId(), req.getTargetRole(), null);
 
-        ReferralStatus initialStatus = req.getStatus() != null ? req.getStatus() : ReferralStatus.DRAFT;
+        Opportunity opportunity = resolveOpportunity(req.getOpportunityId(), user.getId(), workspaceId);
+        JobApplication application = resolveApplication(req.getApplicationId(), user.getId(), workspaceId);
+
+        ReferralStatus initialStatus = req.getStatus() != null ? req.getStatus() : ReferralStatus.PLANNED;
 
         ReferralRequest referral = ReferralRequest.builder()
                 .user(user)
                 .workspace(workspace)
-                .referrerName(req.getReferrerName().trim())
-                .referrerEmail(normalizeEmail(req.getReferrerEmail()))
-                .referrerLinkedIn(blank(req.getReferrerLinkedIn()))
-                .referrerCompany(req.getReferrerCompany().trim())
-                .referrerJobTitle(blank(req.getReferrerJobTitle()))
+                .contact(contact)
                 .targetRole(req.getTargetRole().trim())
+                .opportunity(opportunity)
+                .application(application)
                 .jobPostingUrl(blank(req.getJobPostingUrl()))
                 .relationshipContext(blank(req.getRelationshipContext()))
                 .messageToReferrer(blank(req.getMessageToReferrer()))
                 .status(initialStatus)
                 .requestedDate(req.getRequestedDate())
                 .followUpDate(req.getFollowUpDate())
+                .referralDate(req.getReferralDate())
+                .proofUrl(blank(req.getProofUrl()))
                 .notes(blank(req.getNotes()))
                 .build();
 
@@ -110,29 +123,25 @@ public class ReferralRequestService {
         User user = securityUtils.getCurrentUser();
         ReferralRequest referral = findOwned(id, user.getId(), workspaceId);
 
-        if (req.getReferrerName() != null && !req.getReferrerName().isBlank())
-            referral.setReferrerName(req.getReferrerName().trim());
-
-        if (req.getReferrerEmail() != null) {
-            String newEmail = normalizeEmail(req.getReferrerEmail());
-            checkDuplicate(workspaceId, newEmail, referral.getTargetRole(), id);
-            referral.setReferrerEmail(newEmail);
+        if (req.getContactId() != null) {
+            Contact contact = findOwnedContact(req.getContactId(), user.getId(), workspaceId);
+            String targetRole = req.getTargetRole() != null && !req.getTargetRole().isBlank()
+                    ? req.getTargetRole().trim() : referral.getTargetRole();
+            checkDuplicate(workspaceId, contact.getId(), targetRole, id);
+            referral.setContact(contact);
         }
-
-        if (req.getReferrerLinkedIn() != null)
-            referral.setReferrerLinkedIn(req.getReferrerLinkedIn().isBlank() ? null : req.getReferrerLinkedIn());
-
-        if (req.getReferrerCompany() != null && !req.getReferrerCompany().isBlank())
-            referral.setReferrerCompany(req.getReferrerCompany().trim());
-
-        if (req.getReferrerJobTitle() != null)
-            referral.setReferrerJobTitle(req.getReferrerJobTitle().isBlank() ? null : req.getReferrerJobTitle());
 
         if (req.getTargetRole() != null && !req.getTargetRole().isBlank()) {
             String newRole = req.getTargetRole().trim();
-            checkDuplicate(workspaceId, referral.getReferrerEmail(), newRole, id);
+            checkDuplicate(workspaceId, referral.getContact().getId(), newRole, id);
             referral.setTargetRole(newRole);
         }
+
+        if (req.getOpportunityId() != null)
+            referral.setOpportunity(req.getOpportunityId() == 0 ? null : resolveOpportunity(req.getOpportunityId(), user.getId(), workspaceId));
+
+        if (req.getApplicationId() != null)
+            referral.setApplication(req.getApplicationId() == 0 ? null : resolveApplication(req.getApplicationId(), user.getId(), workspaceId));
 
         if (req.getJobPostingUrl() != null)
             referral.setJobPostingUrl(req.getJobPostingUrl().isBlank() ? null : req.getJobPostingUrl());
@@ -158,6 +167,12 @@ public class ReferralRequestService {
 
         if (req.getFollowUpDate() != null)
             referral.setFollowUpDate(req.getFollowUpDate());
+
+        if (req.getReferralDate() != null)
+            referral.setReferralDate(req.getReferralDate());
+
+        if (req.getProofUrl() != null)
+            referral.setProofUrl(req.getProofUrl().isBlank() ? null : req.getProofUrl());
 
         if (req.getNotes() != null)
             referral.setNotes(req.getNotes().isBlank() ? null : req.getNotes());
@@ -254,44 +269,54 @@ public class ReferralRequestService {
                 .orElseThrow(() -> new ResourceNotFoundException("Referral request not found"));
     }
 
-    private String describe(ReferralRequest referral) {
-        return referral.getTargetRole() + " via " + referral.getReferrerName();
+    private Contact findOwnedContact(Long contactId, Long userId, Long workspaceId) {
+        return contactRepository.findByIdAndUserIdAndWorkspaceId(contactId, userId, workspaceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Contact not found"));
     }
 
-    private void checkDuplicate(Long workspaceId, String email, String role, Long excludeId) {
-        if (email == null || email.isBlank() || role == null || role.isBlank()) return;
+    private Opportunity resolveOpportunity(Long opportunityId, Long userId, Long workspaceId) {
+        if (opportunityId == null) return null;
+        return opportunityRepository.findByIdAndUserIdAndWorkspaceId(opportunityId, userId, workspaceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Opportunity not found"));
+    }
+
+    private JobApplication resolveApplication(Long applicationId, Long userId, Long workspaceId) {
+        if (applicationId == null) return null;
+        return applicationRepository.findByIdAndUserIdAndWorkspaceId(applicationId, userId, workspaceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
+    }
+
+    private String describe(ReferralRequest referral) {
+        return referral.getTargetRole() + " via " + referral.getContact().getName();
+    }
+
+    private void checkDuplicate(Long workspaceId, Long contactId, String role, Long excludeId) {
+        if (contactId == null || role == null || role.isBlank()) return;
         boolean exists = excludeId == null
-                ? referralRepository.existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(workspaceId, email, role)
-                : referralRepository.existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCaseAndIdNot(workspaceId, email, role, excludeId);
+                ? referralRepository.existsByWorkspaceIdAndContactIdAndTargetRoleIgnoreCase(workspaceId, contactId, role)
+                : referralRepository.existsByWorkspaceIdAndContactIdAndTargetRoleIgnoreCaseAndIdNot(workspaceId, contactId, role, excludeId);
         if (exists)
             throw new DuplicateResourceException(
-                    "A referral request for role '" + role + "' from '" + email + "' already exists");
+                    "A referral request for role '" + role + "' from this contact already exists");
     }
 
     private void validateStatusTransition(ReferralStatus current, ReferralStatus next) {
         if (current == next) return;
 
-        if (isTerminal(current) && next != ReferralStatus.DRAFT)
+        if (isTerminal(current) && next != ReferralStatus.PLANNED)
             throw new BadRequestException(
                     "Cannot move from '" + current + "' to '" + next
-                    + "'. Terminal statuses can only be re-opened to DRAFT.");
+                    + "'. Terminal statuses can only be re-opened to PLANNED.");
 
-        if (next == ReferralStatus.REFERRED
-                && current != ReferralStatus.REQUESTED
-                && current != ReferralStatus.ACKNOWLEDGED)
-            throw new BadRequestException("Status can only be set to REFERRED after REQUESTED or ACKNOWLEDGED.");
-
-        if (next == ReferralStatus.INTERVIEWING && current != ReferralStatus.REFERRED)
-            throw new BadRequestException("Status can only be set to INTERVIEWING after REFERRED.");
-
-        if (next == ReferralStatus.OFFER_RECEIVED && current != ReferralStatus.INTERVIEWING)
-            throw new BadRequestException("Status can only be set to OFFER_RECEIVED after INTERVIEWING.");
+        if (next == ReferralStatus.REFERRAL_SUBMITTED
+                && current != ReferralStatus.REFERRAL_AGREED)
+            throw new BadRequestException("Status can only be set to REFERRAL_SUBMITTED after REFERRAL_AGREED.");
     }
 
     private boolean isTerminal(ReferralStatus status) {
-        return status == ReferralStatus.REJECTED
-                || status == ReferralStatus.WITHDRAWN
-                || status == ReferralStatus.DECLINED;
+        return status == ReferralStatus.REFERRAL_DECLINED
+                || status == ReferralStatus.NO_RESPONSE
+                || status == ReferralStatus.ROLE_CLOSED;
     }
 
     private ReferralStatus parseStatus(String status) {
@@ -303,12 +328,6 @@ public class ReferralRequestService {
         }
     }
 
-    private String normalizeEmail(String email) {
-        if (email == null) return null;
-        String trimmed = email.trim();
-        return trimmed.isEmpty() ? null : trimmed.toLowerCase();
-    }
-
     private String blank(String value) {
         if (value == null) return null;
         String trimmed = value.trim();
@@ -316,20 +335,28 @@ public class ReferralRequestService {
     }
 
     private ReferralResponse toResponse(ReferralRequest r, List<ReferralStatusHistoryResponse> history) {
+        Contact contact = r.getContact();
         return ReferralResponse.builder()
                 .id(r.getId())
-                .referrerName(r.getReferrerName())
-                .referrerEmail(r.getReferrerEmail())
-                .referrerLinkedIn(r.getReferrerLinkedIn())
-                .referrerCompany(r.getReferrerCompany())
-                .referrerJobTitle(r.getReferrerJobTitle())
+                .contact(ReferralContactSummary.builder()
+                        .id(contact.getId())
+                        .name(contact.getName())
+                        .email(contact.getEmail())
+                        .linkedIn(contact.getLinkedIn())
+                        .company(contact.getCompany() != null ? contact.getCompany().getName() : contact.getCompanyName())
+                        .jobTitle(contact.getJobTitle())
+                        .build())
                 .targetRole(r.getTargetRole())
+                .opportunityId(r.getOpportunity() != null ? r.getOpportunity().getId() : null)
+                .applicationId(r.getApplication() != null ? r.getApplication().getId() : null)
                 .jobPostingUrl(r.getJobPostingUrl())
                 .relationshipContext(r.getRelationshipContext())
                 .messageToReferrer(r.getMessageToReferrer())
                 .status(r.getStatus())
                 .requestedDate(r.getRequestedDate())
                 .followUpDate(r.getFollowUpDate())
+                .referralDate(r.getReferralDate())
+                .proofUrl(r.getProofUrl())
                 .notes(r.getNotes())
                 .createdAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())

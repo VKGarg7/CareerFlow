@@ -12,7 +12,7 @@ import Pagination from '../components/Pagination'
 import StatTilesBar from '../components/StatTilesBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
 import { getCompanies, addCompany, updateCompany, deleteCompany, getCompanyStats, getApplicationCountsByCompany, getCompanyCreationTrend, getCompanyActivitySummary } from '../api/company'
-import { getRecruiters } from '../api/recruiter'
+import { getContacts } from '../api/contact'
 import EmptyState from '../components/EmptyState'
 import CompanyDetailModal from '../components/CompanyDetailModal'
 import ResearchNoteSearch from '../components/ResearchNoteSearch'
@@ -506,7 +506,7 @@ export default function Companies() {
 
   useEffect(() => {
     if (workspaceLoading || !activeWorkspaceId) return
-    getRecruiters({ size: 1000 }).then((r) => setRecruiters(r.data || [])).catch(() => {})
+    getContacts({ size: 1000 }).then((r) => setRecruiters(r.data || [])).catch(() => {})
   }, [activeWorkspaceId, workspaceLoading])
 
   const statsByCompany = activitySummaryByCompany
@@ -514,7 +514,7 @@ export default function Companies() {
   const recruiterByCompanyName = React.useMemo(() => {
     const map = {}
     for (const r of recruiters) {
-      const key = r.company?.trim().toLowerCase()
+      const key = r.companyName?.trim().toLowerCase()
       if (key && !map[key]) map[key] = r
     }
     return map
@@ -529,7 +529,7 @@ export default function Companies() {
     [companies]
   )
   const recruiterOptions = useMemo(
-    () => [...new Map(recruiters.filter((r) => r.company?.trim()).map((r) => [r.id, r])).values()]
+    () => [...new Map(recruiters.filter((r) => r.companyName?.trim()).map((r) => [r.id, r])).values()]
       .sort((a, b) => a.name.localeCompare(b.name)),
     [recruiters]
   )

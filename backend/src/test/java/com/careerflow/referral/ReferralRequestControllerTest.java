@@ -6,6 +6,7 @@ import com.careerflow.config.SecurityConfig;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.GlobalExceptionHandler;
 import com.careerflow.exception.ResourceNotFoundException;
+import com.careerflow.referral.dto.ReferralContactSummary;
 import com.careerflow.referral.dto.ReferralNoteActionRequest;
 import com.careerflow.referral.dto.ReferralRequestDto;
 import com.careerflow.referral.dto.ReferralResponse;
@@ -49,11 +50,14 @@ class ReferralRequestControllerTest extends ControllerTestSupport {
     @Test
     void create_returns201_withCreatedReferral() throws Exception {
         ReferralRequestDto request = new ReferralRequestDto();
-        request.setReferrerName("Alex");
-        request.setReferrerCompany("Acme");
+        request.setContactId(5L);
         request.setTargetRole("Backend Engineer");
 
-        ReferralResponse response = ReferralResponse.builder().id(1L).status(ReferralStatus.DRAFT).build();
+        ReferralResponse response = ReferralResponse.builder()
+                .id(1L)
+                .status(ReferralStatus.PLANNED)
+                .contact(ReferralContactSummary.builder().id(5L).name("Alex").build())
+                .build();
         when(referralRequestService.create(any(ReferralRequestDto.class), anyLong())).thenReturn(response);
 
         mockMvc.perform(post("/api/referrals")
@@ -61,12 +65,26 @@ class ReferralRequestControllerTest extends ControllerTestSupport {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(1));
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.status").value("PLANNED"));
     }
 
     @Test
-    void create_returns400_whenRequiredFieldMissing() throws Exception {
+    void create_returns400_whenContactIdMissing() throws Exception {
         ReferralRequestDto request = new ReferralRequestDto();
+        request.setTargetRole("Backend Engineer");
+
+        mockMvc.perform(post("/api/referrals")
+                        .param("workspaceId", "99")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void create_returns400_whenTargetRoleMissing() throws Exception {
+        ReferralRequestDto request = new ReferralRequestDto();
+        request.setContactId(5L);
 
         mockMvc.perform(post("/api/referrals")
                         .param("workspaceId", "99")
@@ -78,10 +96,10 @@ class ReferralRequestControllerTest extends ControllerTestSupport {
     @Test
     void update_returns400_whenStatusTransitionInvalid() throws Exception {
         ReferralUpdateRequest request = new ReferralUpdateRequest();
-        request.setStatus(ReferralStatus.OFFER_RECEIVED);
+        request.setStatus(ReferralStatus.REFERRAL_SUBMITTED);
 
         when(referralRequestService.update(eq(9L), any(ReferralUpdateRequest.class), anyLong()))
-                .thenThrow(new BadRequestException("Status can only be set to OFFER_RECEIVED after INTERVIEWING."));
+                .thenThrow(new BadRequestException("Status can only be set to REFERRAL_SUBMITTED after REFERRAL_AGREED."));
 
         mockMvc.perform(patch("/api/referrals/{id}", 9L)
                         .param("workspaceId", "99")

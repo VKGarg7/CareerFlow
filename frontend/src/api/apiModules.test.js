@@ -20,7 +20,7 @@ import * as application from './application'
 import * as opportunity from './opportunity'
 import * as followup from './followup'
 import * as interview from './interview'
-import * as recruiter from './recruiter'
+import * as contact from './contact'
 import * as referral from './referral'
 import * as user from './user'
 import * as resume from './resume'
@@ -190,18 +190,18 @@ describe('interview api', () => {
   })
 })
 
-describe('recruiter api', () => {
+describe('contact api', () => {
   it('CRUD and stats routes', async () => {
-    await recruiter.getRecruiters({ page: 0 })
-    await recruiter.addRecruiter({ name: 'Jane' })
-    await recruiter.updateRecruiter(4, { name: 'Janet' })
-    await recruiter.deleteRecruiter(4)
-    await recruiter.getRecruiterStats()
-    expect(api.get).toHaveBeenCalledWith('/recruiters', { params: { page: 0 } })
-    expect(api.post).toHaveBeenCalledWith('/recruiters', { name: 'Jane' })
-    expect(api.patch).toHaveBeenCalledWith('/recruiters/4', { name: 'Janet' })
-    expect(api.delete).toHaveBeenCalledWith('/recruiters/4')
-    expect(api.get).toHaveBeenCalledWith('/recruiters/stats')
+    await contact.getContacts({ page: 0 })
+    await contact.addContact({ name: 'Jane' })
+    await contact.updateContact(4, { name: 'Janet' })
+    await contact.deleteContact(4)
+    await contact.getContactStats()
+    expect(api.get).toHaveBeenCalledWith('/contacts', { params: { page: 0 } })
+    expect(api.post).toHaveBeenCalledWith('/contacts', { name: 'Jane' })
+    expect(api.patch).toHaveBeenCalledWith('/contacts/4', { name: 'Janet' })
+    expect(api.delete).toHaveBeenCalledWith('/contacts/4', { params: { force: false } })
+    expect(api.get).toHaveBeenCalledWith('/contacts/stats')
   })
 })
 

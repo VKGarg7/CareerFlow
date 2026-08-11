@@ -11,7 +11,7 @@ import com.careerflow.goal.dto.GoalRequest;
 import com.careerflow.goal.dto.GoalResponse;
 import com.careerflow.goal.dto.GoalUpdateRequest;
 import com.careerflow.interview.InterviewRepository;
-import com.careerflow.recruiter.RecruiterContactRepository;
+import com.careerflow.contact.ContactRepository;
 import com.careerflow.referral.ReferralRequestRepository;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
@@ -30,11 +30,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-/**
- * Unit tests for {@link GoalService} using JUnit 5 + Mockito.
- * Dependencies are mocked so the service logic is verified in isolation,
- * without spinning up Spring context or a database.
- */
 @SuppressWarnings("null")
 @ExtendWith(MockitoExtension.class)
 class GoalServiceTest {
@@ -50,7 +45,7 @@ class GoalServiceTest {
     @Mock
     private ApplicationRepository applicationRepository;
     @Mock
-    private RecruiterContactRepository recruiterContactRepository;
+    private ContactRepository contactRepository;
     @Mock
     private ReferralRequestRepository referralRequestRepository;
     @Mock
@@ -135,7 +130,7 @@ class GoalServiceTest {
                 .build();
         goal.setId(7L);
         when(goalRepository.findByIdAndUserIdAndWorkspaceId(7L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(goal));
-        when(recruiterContactRepository.countByUserIdAndWorkspaceIdAndCreatedAtBetween(1L, WORKSPACE_ID, START, END))
+        when(contactRepository.countByUserIdAndWorkspaceIdAndCreatedAtBetween(1L, WORKSPACE_ID, START, END))
                 .thenReturn(5L);
         when(goalRepository.save(any(Goal.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

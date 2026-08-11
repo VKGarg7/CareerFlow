@@ -13,7 +13,7 @@ import Profile from './pages/Profile'
 import Workspaces from './pages/Workspaces'
 import Companies from './pages/Companies'
 import Applications from './pages/Applications'
-import Recruiters from './pages/Recruiters'
+import Contacts from './pages/Contacts'
 import FollowUps from './pages/FollowUps'
 import Referrals from './pages/Referrals'
 import Goals from './pages/Goals'
@@ -99,10 +99,10 @@ export default function App() {
           }
         />
         <Route
-          path="/recruiters"
+          path="/contacts"
           element={
             <PrivateRoute>
-              <Recruiters />
+              <Contacts />
             </PrivateRoute>
           }
         />

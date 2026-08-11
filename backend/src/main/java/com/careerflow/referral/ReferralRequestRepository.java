@@ -19,11 +19,11 @@ public interface ReferralRequestRepository extends JpaRepository<ReferralRequest
 
     Optional<ReferralRequest> findByIdAndUserIdAndWorkspaceId(Long id, Long userId, Long workspaceId);
 
-    boolean existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(
-            Long workspaceId, String referrerEmail, String targetRole);
+    boolean existsByWorkspaceIdAndContactIdAndTargetRoleIgnoreCase(
+            Long workspaceId, Long contactId, String targetRole);
 
-    boolean existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCaseAndIdNot(
-            Long workspaceId, String referrerEmail, String targetRole, Long excludeId);
+    boolean existsByWorkspaceIdAndContactIdAndTargetRoleIgnoreCaseAndIdNot(
+            Long workspaceId, Long contactId, String targetRole, Long excludeId);
 
     @Modifying
     @Query(value = "UPDATE referral_requests SET workspace_id = :workspaceId WHERE user_id = :userId AND workspace_id IS NULL", nativeQuery = true)
@@ -32,9 +32,9 @@ public interface ReferralRequestRepository extends JpaRepository<ReferralRequest
     @Query("""
             SELECT r FROM ReferralRequest r
             WHERE r.user.id = :userId AND r.workspace.id = :workspaceId
-              AND (LOWER(r.referrerName)    LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(r.referrerCompany) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(r.referrerEmail)   LIKE LOWER(CONCAT('%', :q, '%'))
+              AND (LOWER(r.contact.name)    LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(r.contact.companyName) LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(r.contact.email)   LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(r.targetRole)      LIKE LOWER(CONCAT('%', :q, '%')))
             """)
     Page<ReferralRequest> searchByUserId(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId, @Param("q") String q, Pageable pageable);
@@ -43,9 +43,9 @@ public interface ReferralRequestRepository extends JpaRepository<ReferralRequest
             SELECT r FROM ReferralRequest r
             WHERE r.user.id = :userId AND r.workspace.id = :workspaceId
               AND r.status = :status
-              AND (LOWER(r.referrerName)    LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(r.referrerCompany) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(r.referrerEmail)   LIKE LOWER(CONCAT('%', :q, '%'))
+              AND (LOWER(r.contact.name)    LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(r.contact.companyName) LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(r.contact.email)   LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(r.targetRole)      LIKE LOWER(CONCAT('%', :q, '%')))
             """)
     Page<ReferralRequest> searchByUserIdAndStatus(

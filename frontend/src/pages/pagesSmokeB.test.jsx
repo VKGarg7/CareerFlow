@@ -26,8 +26,10 @@ const apiStub = () =>
 
 vi.mock('../api/company', () => apiStub())
 vi.mock('../api/application', () => apiStub())
-vi.mock('../api/recruiter', () => apiStub())
+vi.mock('../api/contact', () => apiStub())
 vi.mock('../api/referral', () => apiStub())
+vi.mock('../api/outreachEvent', () => apiStub())
+vi.mock('../api/contactFollowUpRecommendation', () => apiStub())
 vi.mock('../api/followup', () => apiStub())
 vi.mock('../api/interview', () => apiStub())
 vi.mock('../api/user', () => apiStub())
@@ -54,8 +56,6 @@ vi.mock('@mui/material', () => ({
 vi.mock('recharts', () => componentStub(({ children }) => <div>{children}</div>))
 
 vi.mock('../context/ProfileContext', () => {
-  // Must be one stable object: a fresh object per call retriggers profile-keyed
-  // effects on every render and loops until the worker dies.
   const stableProfileCtx = {
     profile: { firstName: 'Jane', email: 'jane@x.com', resumes: [], education: [], experience: [], projects: [] },
     setProfile: vi.fn(),
@@ -83,8 +83,6 @@ vi.mock('../context/WorkspaceContext', () => {
   }
 })
 
-// Import paths must be literal so Vite can resolve them; a variable dynamic
-// import hangs vite-node.
 const smoke = async (pageModule) => {
   const { default: Page } = await pageModule
   const { container } = render(
@@ -99,7 +97,7 @@ const smoke = async (pageModule) => {
 }
 
 describe('page smoke tests (batch B)', () => {
-  it('Recruiters renders', async () => { await smoke(import('./Recruiters')) })
+  it('Contacts renders', async () => { await smoke(import('./Contacts')) })
   it('Referrals renders', async () => { await smoke(import('./Referrals')) })
   it('FollowUps renders', async () => { await smoke(import('./FollowUps')) })
 })

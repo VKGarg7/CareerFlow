@@ -1,11 +1,16 @@
 package com.careerflow.referral;
 
+import com.careerflow.application.ApplicationRepository;
 import com.careerflow.audit.AuditLogService;
 import com.careerflow.common.SecurityUtils;
 import com.careerflow.common.WorkspaceAccessUtils;
+import com.careerflow.contact.Contact;
+import com.careerflow.contact.ContactRepository;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.DuplicateResourceException;
 import com.careerflow.exception.ResourceNotFoundException;
+import com.careerflow.opportunity.Opportunity;
+import com.careerflow.opportunity.OpportunityRepository;
 import com.careerflow.referral.dto.ReferralNoteActionRequest;
 import com.careerflow.referral.dto.ReferralRequestDto;
 import com.careerflow.referral.dto.ReferralResponse;
@@ -40,6 +45,12 @@ class ReferralRequestServiceTest {
     @Mock
     private ReferralStatusHistoryRepository historyRepository;
     @Mock
+    private ContactRepository contactRepository;
+    @Mock
+    private OpportunityRepository opportunityRepository;
+    @Mock
+    private ApplicationRepository applicationRepository;
+    @Mock
     private WorkspaceAccessUtils workspaceAccessUtils;
     @Mock
     private SecurityUtils securityUtils;
@@ -51,6 +62,7 @@ class ReferralRequestServiceTest {
 
     private User currentUser;
     private static final Long WORKSPACE_ID = 99L;
+    private static final Long CONTACT_ID = 5L;
 
     @BeforeEach
     void setUp() {
@@ -64,20 +76,42 @@ class ReferralRequestServiceTest {
         return workspace;
     }
 
+    private Contact contact() {
+        Contact contact = Contact.builder().user(currentUser).name("Alex").companyName("Acme").build();
+        contact.setId(CONTACT_ID);
+        return contact;
+    }
+
     private ReferralRequestDto validCreateDto() {
         ReferralRequestDto dto = new ReferralRequestDto();
-        dto.setReferrerName("Alex");
-        dto.setReferrerCompany("Acme");
+        dto.setContactId(CONTACT_ID);
         dto.setTargetRole("Backend Engineer");
-        dto.setReferrerEmail("alex@acme.com");
         return dto;
     }
 
+    private void stubOwnedContact() {
+        when(contactRepository.findByIdAndUserIdAndWorkspaceId(CONTACT_ID, 1L, WORKSPACE_ID)).thenReturn(Optional.of(contact()));
+    }
+
     @Test
-    void create_throwsDuplicateResourceException_whenSameEmailAndRoleAlreadyExists() {
+    void create_throwsResourceNotFoundException_whenContactNotOwned() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(referralRepository.existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(
-                WORKSPACE_ID, "alex@acme.com", "Backend Engineer")).thenReturn(true);
+        when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
+        when(contactRepository.findByIdAndUserIdAndWorkspaceId(CONTACT_ID, 1L, WORKSPACE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> referralRequestService.create(validCreateDto(), WORKSPACE_ID))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(referralRepository, never()).save(any());
+    }
+
+    @Test
+    void create_throwsDuplicateResourceException_whenSameContactAndRoleAlreadyExists() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
+        stubOwnedContact();
+        when(referralRepository.existsByWorkspaceIdAndContactIdAndTargetRoleIgnoreCase(
+                WORKSPACE_ID, CONTACT_ID, "Backend Engineer")).thenReturn(true);
 
         assertThatThrownBy(() -> referralRequestService.create(validCreateDto(), WORKSPACE_ID))
                 .isInstanceOf(DuplicateResourceException.class);
@@ -86,11 +120,12 @@ class ReferralRequestServiceTest {
     }
 
     @Test
-    void create_savesWithDraftStatus_whenStatusNotProvided() {
+    void create_savesWithPlannedStatus_whenStatusNotProvided() {
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
-        when(referralRepository.existsByWorkspaceIdAndReferrerEmailIgnoreCaseAndTargetRoleIgnoreCase(any(), any(), any()))
-                .thenReturn(false);
         when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
+        stubOwnedContact();
+        when(referralRepository.existsByWorkspaceIdAndContactIdAndTargetRoleIgnoreCase(any(), any(), any()))
+                .thenReturn(false);
         when(referralRepository.save(any(ReferralRequest.class))).thenAnswer(invocation -> {
             ReferralRequest referral = invocation.getArgument(0);
             referral.setId(11L);
@@ -100,8 +135,50 @@ class ReferralRequestServiceTest {
         ReferralResponse response = referralRequestService.create(validCreateDto(), WORKSPACE_ID);
 
         assertThat(response.getId()).isEqualTo(11L);
-        assertThat(response.getStatus()).isEqualTo(ReferralStatus.DRAFT);
+        assertThat(response.getStatus()).isEqualTo(ReferralStatus.PLANNED);
+        assertThat(response.getContact().getId()).isEqualTo(CONTACT_ID);
         verify(historyRepository).save(any(ReferralStatusHistory.class));
+    }
+
+    @Test
+    void create_resolvesOptionalOpportunityAndApplication_whenProvided() {
+        Opportunity opportunity = new Opportunity();
+        opportunity.setId(21L);
+
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
+        stubOwnedContact();
+        when(referralRepository.existsByWorkspaceIdAndContactIdAndTargetRoleIgnoreCase(any(), any(), any()))
+                .thenReturn(false);
+        when(opportunityRepository.findByIdAndUserIdAndWorkspaceId(21L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(opportunity));
+        when(referralRepository.save(any(ReferralRequest.class))).thenAnswer(invocation -> {
+            ReferralRequest referral = invocation.getArgument(0);
+            referral.setId(12L);
+            return referral;
+        });
+
+        ReferralRequestDto dto = validCreateDto();
+        dto.setOpportunityId(21L);
+
+        ReferralResponse response = referralRequestService.create(dto, WORKSPACE_ID);
+
+        assertThat(response.getOpportunityId()).isEqualTo(21L);
+    }
+
+    @Test
+    void create_throwsResourceNotFoundException_whenOpportunityNotOwned() {
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(workspaceAccessUtils.getOwnedWorkspace(WORKSPACE_ID, 1L)).thenReturn(workspace());
+        stubOwnedContact();
+        when(referralRepository.existsByWorkspaceIdAndContactIdAndTargetRoleIgnoreCase(any(), any(), any()))
+                .thenReturn(false);
+        when(opportunityRepository.findByIdAndUserIdAndWorkspaceId(21L, 1L, WORKSPACE_ID)).thenReturn(Optional.empty());
+
+        ReferralRequestDto dto = validCreateDto();
+        dto.setOpportunityId(21L);
+
+        assertThatThrownBy(() -> referralRequestService.create(dto, WORKSPACE_ID))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
@@ -125,8 +202,8 @@ class ReferralRequestServiceTest {
     @Test
     void update_recordsHistory_onlyWhenStatusActuallyChanges() {
         ReferralRequest referral = ReferralRequest.builder()
-                .user(currentUser).referrerName("Alex").referrerCompany("Acme")
-                .targetRole("Backend Engineer").status(ReferralStatus.DRAFT).build();
+                .user(currentUser).contact(contact()).targetRole("Backend Engineer")
+                .status(ReferralStatus.PLANNED).build();
         referral.setId(9L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
@@ -135,31 +212,51 @@ class ReferralRequestServiceTest {
         when(historyRepository.findAllByReferralIdAndUserId(eq(9L), eq(1L), any())).thenReturn(List.of());
 
         ReferralUpdateRequest sameStatusRequest = new ReferralUpdateRequest();
-        sameStatusRequest.setStatus(ReferralStatus.DRAFT);
+        sameStatusRequest.setStatus(ReferralStatus.PLANNED);
         referralRequestService.update(9L, sameStatusRequest, WORKSPACE_ID);
         verify(historyRepository, never()).save(any());
 
         ReferralUpdateRequest changedStatusRequest = new ReferralUpdateRequest();
-        changedStatusRequest.setStatus(ReferralStatus.REQUESTED);
+        changedStatusRequest.setStatus(ReferralStatus.OUTREACH_SENT);
         referralRequestService.update(9L, changedStatusRequest, WORKSPACE_ID);
         verify(historyRepository, times(1)).save(any(ReferralStatusHistory.class));
     }
 
+    @Test
+    void update_linksOptionalApplication() {
+        ReferralRequest referral = ReferralRequest.builder()
+                .user(currentUser).contact(contact()).targetRole("Backend Engineer")
+                .status(ReferralStatus.PLANNED).build();
+        referral.setId(9L);
+
+        com.careerflow.application.JobApplication application = new com.careerflow.application.JobApplication();
+        application.setId(33L);
+
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(referralRepository.findByIdAndUserIdAndWorkspaceId(9L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(referral));
+        when(applicationRepository.findByIdAndUserIdAndWorkspaceId(33L, 1L, WORKSPACE_ID)).thenReturn(Optional.of(application));
+        when(referralRepository.save(any(ReferralRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReferralUpdateRequest request = new ReferralUpdateRequest();
+        request.setApplicationId(33L);
+
+        ReferralResponse response = referralRequestService.update(9L, request, WORKSPACE_ID);
+
+        assertThat(response.getApplicationId()).isEqualTo(33L);
+    }
+
     @ParameterizedTest(name = "{0} -> {1} should be rejected")
     @CsvSource({
-            "REJECTED, REQUESTED",
-            "WITHDRAWN, ACKNOWLEDGED",
-            "DECLINED, REFERRED",
-            "DRAFT, REFERRED",
-            "ACKNOWLEDGED, INTERVIEWING",
-            "DRAFT, INTERVIEWING",
-            "REQUESTED, OFFER_RECEIVED",
-            "REFERRED, OFFER_RECEIVED"
+            "REFERRAL_DECLINED, OUTREACH_SENT",
+            "NO_RESPONSE, AWAITING_RESPONSE",
+            "ROLE_CLOSED, REFERRAL_AGREED",
+            "PLANNED, REFERRAL_SUBMITTED",
+            "OUTREACH_SENT, REFERRAL_SUBMITTED",
+            "AWAITING_RESPONSE, REFERRAL_SUBMITTED"
     })
     void update_rejectsInvalidStatusTransitions(ReferralStatus current, ReferralStatus next) {
         ReferralRequest referral = ReferralRequest.builder()
-                .user(currentUser).referrerName("Alex").referrerCompany("Acme")
-                .targetRole("Backend Engineer").status(current).build();
+                .user(currentUser).contact(contact()).targetRole("Backend Engineer").status(current).build();
         referral.setId(9L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
@@ -174,18 +271,17 @@ class ReferralRequestServiceTest {
 
     @ParameterizedTest(name = "{0} -> {1} should be allowed")
     @CsvSource({
-            "REQUESTED, REFERRED",
-            "ACKNOWLEDGED, REFERRED",
-            "REFERRED, INTERVIEWING",
-            "INTERVIEWING, OFFER_RECEIVED",
-            "REJECTED, DRAFT",
-            "WITHDRAWN, DRAFT",
-            "DECLINED, DRAFT"
+            "PLANNED, OUTREACH_SENT",
+            "OUTREACH_SENT, AWAITING_RESPONSE",
+            "AWAITING_RESPONSE, REFERRAL_AGREED",
+            "REFERRAL_AGREED, REFERRAL_SUBMITTED",
+            "REFERRAL_DECLINED, PLANNED",
+            "NO_RESPONSE, PLANNED",
+            "ROLE_CLOSED, PLANNED"
     })
     void update_allowsValidStatusTransitions(ReferralStatus current, ReferralStatus next) {
         ReferralRequest referral = ReferralRequest.builder()
-                .user(currentUser).referrerName("Alex").referrerCompany("Acme")
-                .targetRole("Backend Engineer").status(current).build();
+                .user(currentUser).contact(contact()).targetRole("Backend Engineer").status(current).build();
         referral.setId(9L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
@@ -217,7 +313,7 @@ class ReferralRequestServiceTest {
     @Test
     void manageNote_edit_throwsBadRequestException_whenEntryIsNotUserAddedNote() {
         ReferralStatusHistory entry = ReferralStatusHistory.builder()
-                .fromStatus(ReferralStatus.DRAFT).toStatus(ReferralStatus.REQUESTED).noteOnly(false).build();
+                .fromStatus(ReferralStatus.PLANNED).toStatus(ReferralStatus.OUTREACH_SENT).noteOnly(false).build();
         entry.setId(3L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
@@ -261,8 +357,7 @@ class ReferralRequestServiceTest {
     @Test
     void delete_softDeletes_whenOwned() {
         ReferralRequest referral = ReferralRequest.builder()
-                .user(currentUser).referrerName("Alex").referrerCompany("Acme")
-                .targetRole("Backend Engineer").build();
+                .user(currentUser).contact(contact()).targetRole("Backend Engineer").build();
         referral.setId(9L);
 
         when(securityUtils.getCurrentUser()).thenReturn(currentUser);
