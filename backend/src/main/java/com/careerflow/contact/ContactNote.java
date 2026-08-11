@@ -1,4 +1,4 @@
-package com.careerflow.recruiter;
+package com.careerflow.contact;
 
 import com.careerflow.common.BaseEntity;
 import com.careerflow.user.User;
@@ -7,16 +7,16 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 @Entity
-@Table(name = "recruiter_notes")
+@Table(name = "contact_notes")
 @Getter
 @Setter
 @NoArgsConstructor
 @SuperBuilder
-public class RecruiterNote extends BaseEntity {
+public class ContactNote extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "recruiter_contact_id", nullable = false)
-    private RecruiterContact recruiterContact;
+    @JoinColumn(name = "contact_id", nullable = false)
+    private Contact contact;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)

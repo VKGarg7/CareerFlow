@@ -1,7 +1,9 @@
-package com.careerflow.recruiter.dto;
+package com.careerflow.contact.dto;
 
-import com.careerflow.recruiter.RecruiterSource;
-import com.careerflow.recruiter.RecruiterStatus;
+import com.careerflow.contact.ContactRelationshipType;
+import com.careerflow.contact.ContactSource;
+import com.careerflow.contact.ContactStatus;
+import com.careerflow.contact.RelationshipStrength;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -14,9 +16,9 @@ import java.time.LocalDate;
 
 @Getter
 @Setter
-public class RecruiterContactRequest {
+public class ContactRequest {
 
-    @NotBlank(message = "Recruiter name is required")
+    @NotBlank(message = "Contact name is required")
     @Size(max = 100, message = "Name must be 100 characters or fewer")
     private String name;
 
@@ -34,17 +36,25 @@ public class RecruiterContactRequest {
     @Size(max = 300, message = "LinkedIn URL must be 300 characters or fewer")
     private String linkedIn;
 
-    @Size(max = 150, message = "Company must be 150 characters or fewer")
-    private String company;
+    // Optional FK to an existing Company record
+    private Long companyId;
+
+    // Free-text fallback when no Company record exists yet
+    @Size(max = 150, message = "Company name must be 150 characters or fewer")
+    private String companyName;
 
     @Size(max = 100, message = "Job title must be 100 characters or fewer")
     private String jobTitle;
 
-    private RecruiterStatus status;
+    private ContactStatus status;
 
-    private RecruiterSource source;
+    private ContactRelationshipType relationshipType;
 
-    private LocalDate lastContactedAt;
+    private RelationshipStrength relationshipStrength;
+
+    private ContactSource source;
+
+    private LocalDate lastInteractionDate;
 
     @Size(max = 2000, message = "Notes must be 2000 characters or fewer")
     private String notes;

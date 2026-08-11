@@ -1,6 +1,6 @@
-package com.careerflow.recruiter;
+package com.careerflow.contact;
 
-public enum RecruiterSource {
+public enum ContactSource {
     LINKEDIN,
     EMAIL,
     REFERRAL,

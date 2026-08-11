@@ -14,7 +14,7 @@ import com.careerflow.goal.dto.GoalRequest;
 import com.careerflow.goal.dto.GoalResponse;
 import com.careerflow.goal.dto.GoalUpdateRequest;
 import com.careerflow.interview.InterviewRepository;
-import com.careerflow.recruiter.RecruiterContactRepository;
+import com.careerflow.contact.ContactRepository;
 import com.careerflow.referral.ReferralRequestRepository;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
@@ -37,7 +37,7 @@ public class GoalService {
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
     private final ApplicationRepository applicationRepository;
-    private final RecruiterContactRepository recruiterContactRepository;
+    private final ContactRepository contactRepository;
     private final ReferralRequestRepository referralRequestRepository;
     private final InterviewRepository interviewRepository;
     private final CompanyRepository companyRepository;
@@ -112,7 +112,7 @@ public class GoalService {
         return switch (goal.getMetricType()) {
             case APPLICATIONS -> applicationRepository.countByUserIdAndWorkspaceIdAndApplicationDateBetween(
                     userId, workspaceId, goal.getStartDate(), goal.getEndDate());
-            case RECRUITER_OUTREACH -> recruiterContactRepository.countByUserIdAndWorkspaceIdAndCreatedAtBetween(
+            case RECRUITER_OUTREACH -> contactRepository.countByUserIdAndWorkspaceIdAndCreatedAtBetween(
                     userId, workspaceId, goal.getStartDate(), goal.getEndDate());
             case REFERRALS -> referralRequestRepository.countByUserIdAndWorkspaceIdAndCreatedAtBetween(
                     userId, workspaceId, goal.getStartDate(), goal.getEndDate());

@@ -1,4 +1,4 @@
-package com.careerflow.recruiter.dto;
+package com.careerflow.contact.dto;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -7,9 +7,9 @@ import java.time.LocalDateTime;
 
 @Getter
 @Builder
-public class RecruiterNoteResponse {
+public class ContactNoteResponse {
     private Long id;
-    private Long recruiterId;
+    private Long contactId;
     private String content;
     private boolean edited;
     private LocalDateTime createdAt;

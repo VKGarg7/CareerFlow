@@ -1,7 +1,9 @@
-package com.careerflow.recruiter.dto;
+package com.careerflow.contact.dto;
 
-import com.careerflow.recruiter.RecruiterSource;
-import com.careerflow.recruiter.RecruiterStatus;
+import com.careerflow.contact.ContactRelationshipType;
+import com.careerflow.contact.ContactSource;
+import com.careerflow.contact.ContactStatus;
+import com.careerflow.contact.RelationshipStrength;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
@@ -14,9 +16,7 @@ import java.time.LocalDate;
 
 @Getter
 @Setter
-public class RecruiterContactUpdateRequest {
-
-    // ── Recruiter fields ──────────────────────────────────────────────────────
+public class ContactUpdateRequest {
 
     @Size(max = 100, message = "Name must be 100 characters or fewer")
     private String name;
@@ -35,22 +35,26 @@ public class RecruiterContactUpdateRequest {
     @Size(max = 300, message = "LinkedIn URL must be 300 characters or fewer")
     private String linkedIn;
 
-    @Size(max = 150, message = "Company must be 150 characters or fewer")
-    private String company;
+    private Long companyId;
+
+    @Size(max = 150, message = "Company name must be 150 characters or fewer")
+    private String companyName;
 
     @Size(max = 100, message = "Job title must be 100 characters or fewer")
     private String jobTitle;
 
-    private RecruiterStatus status;
+    private ContactStatus status;
 
-    private RecruiterSource source;
+    private ContactRelationshipType relationshipType;
 
-    private LocalDate lastContactedAt;
+    private RelationshipStrength relationshipStrength;
+
+    private ContactSource source;
+
+    private LocalDate lastInteractionDate;
 
     @Size(max = 2000, message = "Notes must be 2000 characters or fewer")
     private String notes;
-
-    // ── Note operations (at most one per request) ─────────────────────────────
 
     @Size(max = 1000, message = "Note must be 1000 characters or fewer")
     private String addNote;
@@ -58,5 +62,5 @@ public class RecruiterContactUpdateRequest {
     private Long deleteNoteId;
 
     @Valid
-    private RecruiterNoteEditRequest editNote;
+    private ContactNoteEditRequest editNote;
 }

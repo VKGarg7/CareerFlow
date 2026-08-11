@@ -1,4 +1,4 @@
-package com.careerflow.recruiter.dto;
+package com.careerflow.contact.dto;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
@@ -8,7 +8,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class RecruiterNoteEditRequest {
+public class ContactNoteEditRequest {
 
     @NotNull(message = "Note id is required for editing")
     private Long id;

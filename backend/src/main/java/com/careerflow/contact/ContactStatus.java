@@ -1,6 +1,6 @@
-package com.careerflow.recruiter;
+package com.careerflow.contact;
 
-public enum RecruiterStatus {
+public enum ContactStatus {
     NEW,
     REACHED_OUT,
     RESPONDED,
