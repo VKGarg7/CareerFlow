@@ -12,21 +12,20 @@ import java.util.List;
 @Builder
 public class ReferralResponse {
     private Long id;
-    private String referrerName;
-    private String referrerEmail;
-    private String referrerLinkedIn;
-    private String referrerCompany;
-    private String referrerJobTitle;
+    private ReferralContactSummary contact;
     private String targetRole;
+    private Long opportunityId;
+    private Long applicationId;
     private String jobPostingUrl;
     private String relationshipContext;
     private String messageToReferrer;
     private ReferralStatus status;
     private LocalDate requestedDate;
     private LocalDate followUpDate;
+    private LocalDate referralDate;
+    private String proofUrl;
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    // Null in list responses; populated on single-fetch and after status changes
     private List<ReferralStatusHistoryResponse> statusHistory;
 }

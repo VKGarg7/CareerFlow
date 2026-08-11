@@ -1,6 +1,9 @@
 package com.careerflow.referral;
 
+import com.careerflow.application.JobApplication;
 import com.careerflow.common.SoftDeleteEntity;
+import com.careerflow.contact.Contact;
+import com.careerflow.opportunity.Opportunity;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import jakarta.persistence.*;
@@ -14,7 +17,8 @@ import java.time.LocalDate;
 @Table(name = "referral_requests", indexes = {
         @Index(name = "idx_referral_requests_user_deleted", columnList = "user_id, deleted_at"),
         @Index(name = "idx_referral_requests_status", columnList = "status"),
-        @Index(name = "idx_referral_requests_workspace", columnList = "workspace_id")
+        @Index(name = "idx_referral_requests_workspace", columnList = "workspace_id"),
+        @Index(name = "idx_referral_requests_contact", columnList = "contact_id")
 })
 @SQLRestriction("deleted_at IS NULL")
 @Getter
@@ -27,49 +31,45 @@ public class ReferralRequest extends SoftDeleteEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // Nullable for now: backfilled by WorkspaceBackfillRunner on boot, then
-    // tightened to nullable = false once every existing row is confirmed backfilled.
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "workspace_id")
     private Workspace workspace;
 
-    // ── Referrer info ──────────────────────────────────────────────────────────
-    @Column(nullable = false)
-    private String referrerName;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "contact_id", nullable = false)
+    private Contact contact;
 
-    private String referrerEmail;
-
-    private String referrerLinkedIn;
-
-    @Column(nullable = false)
-    private String referrerCompany;
-
-    private String referrerJobTitle;
-
-    // ── Role being applied for via referral ────────────────────────────────────
     @Column(nullable = false)
     private String targetRole;
 
-    // ── Optional link to a job posting ────────────────────────────────────────
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "opportunity_id")
+    private Opportunity opportunity;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "application_id")
+    private JobApplication application;
+
     private String jobPostingUrl;
 
-    // ── Relationship context ───────────────────────────────────────────────────
     @Column(columnDefinition = "TEXT")
     private String relationshipContext;
 
-    // ── Message sent to referrer ───────────────────────────────────────────────
     @Column(columnDefinition = "TEXT")
     private String messageToReferrer;
 
-    // ── Tracking ───────────────────────────────────────────────────────────────
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private ReferralStatus status = ReferralStatus.DRAFT;
+    private ReferralStatus status = ReferralStatus.PLANNED;
 
     private LocalDate requestedDate;
 
     private LocalDate followUpDate;
+
+    private LocalDate referralDate;
+
+    private String proofUrl;
 
     @Column(columnDefinition = "TEXT")
     private String notes;
