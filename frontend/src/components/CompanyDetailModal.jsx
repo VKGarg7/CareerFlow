@@ -164,7 +164,7 @@ function MoreActionsMenu() {
     { key: 'application', label: 'Add Application', icon: WorkOutlineOutlined, to: '/applications' },
     { key: 'referral', label: 'Add Referral', icon: HandshakeOutlined, to: '/referrals' },
     { key: 'followup', label: 'Add Follow-up', icon: NotificationsNoneOutlined, to: '/follow-ups' },
-    { key: 'recruiter', label: 'Add Recruiter', icon: PeopleOutlined, to: '/recruiters' },
+    { key: 'recruiter', label: 'Add Contact', icon: PeopleOutlined, to: '/contacts' },
   ]
 
   const pos = useFloatingMenu(open, triggerRef, { width: 208, flipThreshold: Infinity })

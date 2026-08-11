@@ -26,7 +26,7 @@ const apiStub = () =>
 
 vi.mock('../api/company', () => apiStub())
 vi.mock('../api/application', () => apiStub())
-vi.mock('../api/recruiter', () => apiStub())
+vi.mock('../api/contact', () => apiStub())
 vi.mock('../api/referral', () => apiStub())
 vi.mock('../api/followup', () => apiStub())
 vi.mock('../api/interview', () => apiStub())

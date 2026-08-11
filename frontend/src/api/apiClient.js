@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const apiClient = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api' })
 
-const WORKSPACE_SCOPED_PREFIXES = ['/companies', '/applications', '/recruiters', '/referrals', '/follow-ups', '/interviews', '/chat/sessions', '/goals', '/research-notes', '/opportunities', '/role-fit-evaluations', '/strategy-items', '/resumes', '/cover-letters']
+const WORKSPACE_SCOPED_PREFIXES = ['/companies', '/applications', '/contacts', '/referrals', '/follow-ups', '/interviews', '/chat/sessions', '/goals', '/research-notes', '/opportunities', '/role-fit-evaluations', '/strategy-items', '/resumes', '/cover-letters', '/outreach-events', '/contact-follow-up-recommendations']
 
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')

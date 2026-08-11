@@ -2,10 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
-// Smoke tests: every remaining page must mount and settle without crashing, with
-// all API modules stubbed. A flexible response body (an array carrying object
-// fields) satisfies both list-shaped (`res.data.map`) and stats-shaped
-// (`res.data.byStatus`) consumers.
 const flexibleBody = () =>
   Object.assign([], {
     total: 0, byStatus: {}, content: [],
@@ -26,7 +22,7 @@ const apiStub = () =>
 
 vi.mock('../api/company', () => apiStub())
 vi.mock('../api/application', () => apiStub())
-vi.mock('../api/recruiter', () => apiStub())
+vi.mock('../api/contact', () => apiStub())
 vi.mock('../api/referral', () => apiStub())
 vi.mock('../api/followup', () => apiStub())
 vi.mock('../api/interview', () => apiStub())
@@ -54,8 +50,6 @@ vi.mock('@mui/material', () => ({
 vi.mock('recharts', () => componentStub(({ children }) => <div>{children}</div>))
 
 vi.mock('../context/ProfileContext', () => {
-  // Must be one stable object: a fresh object per call retriggers profile-keyed
-  // effects on every render and loops until the worker dies.
   const stableProfileCtx = {
     profile: { firstName: 'Jane', email: 'jane@x.com', resumes: [], education: [], experience: [], projects: [] },
     setProfile: vi.fn(),
@@ -69,7 +63,6 @@ vi.mock('../context/ProfileContext', () => {
 })
 
 vi.mock('../context/WorkspaceContext', () => {
-  // Same stable-object requirement as ProfileContext above.
   const stableWorkspaceCtx = {
     workspaces: [{ id: 1, name: 'Default', isDefault: true }],
     activeWorkspaceId: '1',
@@ -84,8 +77,6 @@ vi.mock('../context/WorkspaceContext', () => {
   }
 })
 
-// Import paths must be literal so Vite can resolve them; a variable dynamic
-// import hangs vite-node.
 const smoke = async (pageModule) => {
   const { default: Page } = await pageModule
   const { container } = render(

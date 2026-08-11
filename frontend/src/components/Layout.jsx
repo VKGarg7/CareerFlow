@@ -20,7 +20,7 @@ const PAGE_META = {
   '/opportunities': { title: 'Opportunities', sub: 'Roles you’re evaluating before you apply' },
   '/applications': { title: 'Applications', sub: 'Track every role through the pipeline' },
   '/follow-ups':   { title: 'Follow-Ups',   sub: 'Stay ahead of every thread' },
-  '/recruiters':   { title: 'Recruiters',   sub: 'Your network of contacts' },
+  '/contacts':     { title: 'Contacts',     sub: 'Your network of contacts' },
   '/referrals':    { title: 'Referrals',    sub: 'Who’s vouching for you' },
   '/goals':        { title: 'Goals',        sub: 'Track progress toward your targets' },
   '/resumes':      { title: 'Resume Library', sub: 'Your resume versions, ready to attach' },
@@ -38,7 +38,7 @@ const NAV = [
   { to: '/opportunities', Icon: BookmarkAddedOutlined,    label: 'Opportunities' },
   { to: '/applications', Icon: WorkOutlined,              label: 'Applications' },
   { to: '/follow-ups',   Icon: NotificationsNoneOutlined, label: 'Follow-Ups'   },
-  { to: '/recruiters',   Icon: PeopleOutlined,            label: 'Recruiters'   },
+  { to: '/contacts',     Icon: PeopleOutlined,            label: 'Contacts'     },
   { to: '/referrals',    Icon: Handshake,                 label: 'Referrals'    },
   { to: '/goals',        Icon: FlagOutlined,              label: 'Goals'        },
   { to: '/resumes',      Icon: DescriptionOutlined,       label: 'Resume Library' },
@@ -50,7 +50,7 @@ const ADMIN_NAV = { to: '/admin', Icon: AdminPanelSettingsOutlined, label: 'Admi
 const QUICK_ACTIONS = [
   { to: '/applications?add=1', Icon: BusinessCenterOutlined, label: 'Log Application', key: 'A' },
   { to: '/companies?add=1',    Icon: BusinessOutlined,       label: 'Add Company',     key: 'C' },
-  { to: '/recruiters?add=1',   Icon: PersonAddAltOutlined,   label: 'Add Recruiter',   key: 'R' },
+  { to: '/contacts?add=1',     Icon: PersonAddAltOutlined,   label: 'Add Contact',     key: 'R' },
   { to: '/referrals?add=1',    Icon: HandshakeOutlined,      label: 'New Referral',    key: 'N' },
 ]
 

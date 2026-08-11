@@ -20,7 +20,7 @@ import { useProfile } from '../context/ProfileContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { getCompanies, getCompanyStats } from '../api/company'
 import { getApplications, getApplicationStats, getWeeklyTrend, getUpcomingDeadlines } from '../api/application'
-import { getRecruiters, getRecruiterStats } from '../api/recruiter'
+import { getContacts, getContactStats } from '../api/contact'
 import { getUpcomingFollowUps } from '../api/followup'
 
 const STATUS_CFG = {
@@ -66,7 +66,6 @@ function Surface({ className = '', children, interactive = false }) {
 
 function WeeklyTrendChart({ dailyTrend }) {
   const data = useMemo(() => {
-    // dailyTrend covers the last 14 days; show only the most recent 7 for the chart.
     const last7 = dailyTrend.slice(-7)
     return last7.map((d) => {
       const date = new Date(`${d.date}T00:00:00`)
@@ -242,7 +241,6 @@ function ProfileWidget({ checklist, percentage, onNavigate }) {
   )
 }
 
-// ─── List-style widget shell ───────────────────────────────────────────────────
 function ListWidget({ title, onViewAll, empty, emptyIcon, children }) {
   return (
     <Surface className="p-5">
@@ -289,9 +287,9 @@ export default function Dashboard() {
   useEffect(() => {
     if (workspaceLoading || !activeWorkspaceId) return
     Promise.allSettled([
-      getCompanies({ size: 1000 }), getApplications({ size: 1000 }), getRecruiters({ size: 1000 }),
+      getCompanies({ size: 1000 }), getApplications({ size: 1000 }), getContacts({ size: 1000 }),
       getUpcomingFollowUps(7), getUpcomingDeadlines(7), getWeeklyTrend(14),
-      getCompanyStats(), getApplicationStats(), getRecruiterStats(),
+      getCompanyStats(), getApplicationStats(), getContactStats(),
     ]).then(([c, a, r, f, d, wt, cs, as, rs]) => {
       if (c.status === 'fulfilled') setCompanies(c.value.data  || [])
       if (a.status === 'fulfilled') setApplications(a.value.data || [])
@@ -455,9 +453,9 @@ export default function Dashboard() {
           sparkline={sparkline14}
           onClick={() => navigate('/applications')} />
         <KpiWidget
-          icon={<PeopleOutlined sx={{ fontSize: 18 }} />} label="Recruiters" value={totalRecruiters}
+          icon={<PeopleOutlined sx={{ fontSize: 18 }} />} label="Contacts" value={totalRecruiters}
           trend={null} tint="#8184F5"
-          onClick={() => navigate('/recruiters')} />
+          onClick={() => navigate('/contacts')} />
         <KpiWidget
           icon={<EmojiEventsOutlined sx={{ fontSize: 18 }} />} label="Offers" value={statusCounts['OFFER_RECEIVED'] || 0}
           trend={null} tint="#22C55E"

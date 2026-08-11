@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Alert, CircularProgress } from '@mui/material'
+import { CircularProgress } from '@mui/material'
 import PageSpinner from '../components/PageSpinner'
 import PageAlert from '../components/PageAlert'
 import {
   Search, KeyboardArrowDown, LinkedIn, Email, Phone,
-  Close, Send, Check, Clear, EditNote, FilterListRounded,
+  Send, Check, Clear, EditNote, FilterListRounded,
   VisibilityOutlined, EditOutlined, DeleteOutlineRounded,
   FormatBoldRounded, FormatItalicRounded, FormatListBulletedRounded,
   AttachFileRounded, InsertEmoticonOutlined, CalendarTodayOutlined,
@@ -14,7 +14,12 @@ import Pagination from '../components/Pagination'
 import ViewToggle from '../components/ViewToggle'
 import StatusSummaryBar from '../components/StatusSummaryBar'
 import { ConfirmDeleteModal } from '../components/ModalShell'
-import { getRecruiters, getRecruiter, addRecruiter, updateRecruiter, deleteRecruiter, getRecruiterStats, getRecruiterSources } from '../api/recruiter'
+import {
+  getContacts, getContact, addContact, updateContact, deleteContact,
+  getContactStats, getSources, getRelationshipTypes,
+} from '../api/contact'
+import OutreachLogSection from '../components/OutreachLogSection'
+import ContactFollowUpRecommendations from '../components/ContactFollowUpRecommendations'
 import EmptyState from '../components/EmptyState'
 import InlineStatusChanger from '../components/InlineStatusChanger'
 import { EntityDirectoryCard, CardMenu } from '../components/EntityCard'
@@ -47,71 +52,79 @@ const SOURCE_LABELS = {
   COMPANY_WEBSITE: 'Company Website', OTHER: 'Other',
 }
 
+const RELATIONSHIP_TYPE_LABELS = {
+  RECRUITER: 'Recruiter', HIRING_MANAGER: 'Hiring Manager', EMPLOYEE: 'Employee',
+  ALUMNI: 'Alumni', FRIEND: 'Friend', REFERRAL_SOURCE: 'Referral Source',
+  INTERVIEWER: 'Interviewer', OTHER: 'Other',
+}
+
+const RELATIONSHIP_STRENGTH_LABELS = { WEAK: 'Weak', MODERATE: 'Moderate', STRONG: 'Strong' }
+
 const SORT_OPTIONS = [
-  { value: 'createdAt',       label: 'Date Added' },
-  { value: 'name',            label: 'Name' },
-  { value: 'company',         label: 'Company' },
-  { value: 'status',          label: 'Status' },
-  { value: 'lastContactedAt', label: 'Last Contacted' },
-  { value: 'updatedAt',       label: 'Last Updated' },
+  { value: 'createdAt',           label: 'Date Added' },
+  { value: 'name',                label: 'Name' },
+  { value: 'companyName',         label: 'Company' },
+  { value: 'status',              label: 'Status' },
+  { value: 'lastInteractionDate', label: 'Last Interaction' },
+  { value: 'updatedAt',           label: 'Last Updated' },
 ]
 
 const EMPTY_FORM = {
   name: '', email: '', phone: '', linkedIn: '',
-  company: '', jobTitle: '', status: 'NEW', source: '',
-  lastContactedAt: '', notes: '',
+  companyName: '', jobTitle: '', status: 'NEW', relationshipType: '', relationshipStrength: '', source: '',
+  lastInteractionDate: '', notes: '',
 }
 
 const NOTE_MAX = 1000
 
-function RecruiterStatusChanger({ recruiter, onStatusChanged }) {
+function ContactStatusChanger({ contact, onStatusChanged }) {
   return (
     <InlineStatusChanger
-      item={recruiter}
+      item={contact}
       statusConfig={STATUS_CONFIG}
       defaultStatus="NEW"
-      updateFn={(id, payload) => updateRecruiter(id, payload)}
+      updateFn={(id, payload) => updateContact(id, payload)}
       onStatusChanged={onStatusChanged}
     />
   )
 }
 
-function RecruiterListRow({ recruiter, drawerOpen, onView, onEdit, onDelete, onNotes, onStatusChanged }) {
-  const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
-  const noteCount = recruiter.noteCount ?? 0
+function ContactListRow({ contact, drawerOpen, onView, onEdit, onDelete, onNotes, onStatusChanged }) {
+  const cfg = STATUS_CONFIG[contact.status] || STATUS_CONFIG.NEW
+  const noteCount = contact.noteCount ?? 0
 
   return (
     <EntityListRow
-      onClick={() => onView(recruiter)}
+      onClick={() => onView(contact)}
       accentBorder={cfg.border}
       avatarColor={cfg.dot}
-      name={recruiter.name}
-      subtitle={recruiter.jobTitle}
-      statusSlot={<RecruiterStatusChanger recruiter={recruiter} onStatusChanged={onStatusChanged} />}
-      email={recruiter.email}
-      linkedIn={recruiter.linkedIn}
+      name={contact.name}
+      subtitle={contact.jobTitle}
+      statusSlot={<ContactStatusChanger contact={contact} onStatusChanged={onStatusChanged} />}
+      email={contact.email}
+      linkedIn={contact.linkedIn}
       menuItems={[
-        { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(recruiter) },
-        { key: 'notes', label: `Notes${noteCount > 0 ? ` (${noteCount})` : ''}`, icon: <EditNote sx={{ fontSize: 16 }} />, onClick: () => onNotes(recruiter) },
-        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(recruiter) },
-        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(recruiter), tone: 'danger' },
+        { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(contact) },
+        { key: 'notes', label: `Notes${noteCount > 0 ? ` (${noteCount})` : ''}`, icon: <EditNote sx={{ fontSize: 16 }} />, onClick: () => onNotes(contact) },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 16 }} />, onClick: () => onEdit(contact) },
+        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 16 }} />, onClick: () => onDelete(contact), tone: 'danger' },
       ]}
     >
       <div className={`w-36 min-w-0 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'md:block'}`}>
-        <p className="text-sm text-white/70 truncate">{recruiter.company || '—'}</p>
+        <p className="text-sm text-white/70 truncate">{contact.companyName || contact.companyDisplayName || '—'}</p>
       </div>
 
       <div className={`w-28 shrink-0 hidden ${drawerOpen ? 'xl:block' : 'lg:block'}`}>
-        <p className="text-[11px] text-white/35">Source</p>
+        <p className="text-[11px] text-white/35">Relationship</p>
         <p className="text-sm font-medium text-white/70 truncate mt-0.5">
-          {recruiter.source ? (SOURCE_LABELS[recruiter.source] || recruiter.source) : '—'}
+          {contact.relationshipType ? (RELATIONSHIP_TYPE_LABELS[contact.relationshipType] || contact.relationshipType) : '—'}
         </p>
       </div>
 
       <div className={`w-28 shrink-0 hidden ${drawerOpen ? '2xl:block' : 'xl:block'}`}>
-        <p className="text-[11px] text-white/35">Last Contact</p>
+        <p className="text-[11px] text-white/35">Last Interaction</p>
         <p className="text-sm font-medium text-white/70 mt-0.5">
-          {recruiter.lastContactedAt ? fmtDate(recruiter.lastContactedAt) : '—'}
+          {contact.lastInteractionDate ? fmtDate(contact.lastInteractionDate) : '—'}
         </p>
       </div>
 
@@ -127,73 +140,73 @@ function RecruiterListRow({ recruiter, drawerOpen, onView, onEdit, onDelete, onN
   )
 }
 
-function DirectoryCard({ recruiter, onView, onEdit, onDelete, onNotes }) {
-  const cfg = STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW
-  const noteCount = recruiter.noteCount ?? 0
-  const sourceLabel = recruiter.source ? (SOURCE_LABELS[recruiter.source] || recruiter.source) : null
+function DirectoryCard({ contact, onView, onEdit, onDelete, onNotes }) {
+  const cfg = STATUS_CONFIG[contact.status] || STATUS_CONFIG.NEW
+  const noteCount = contact.noteCount ?? 0
+  const sourceLabel = contact.source ? (SOURCE_LABELS[contact.source] || contact.source) : null
 
   return (
     <EntityDirectoryCard
-      onClick={() => onView(recruiter)}
+      onClick={() => onView(contact)}
       statusBarColor={cfg.dot}
       avatarColor={cfg.dot}
-      avatarText={initials(recruiter.name)}
+      avatarText={initials(contact.name)}
       titleSlot={
         <>
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-bold text-white/90 truncate leading-tight">{recruiter.name}</p>
+            <p className="text-sm font-bold text-white/90 truncate leading-tight">{contact.name}</p>
             <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.badge}`}>
               {cfg.label}
             </span>
           </div>
-          {(recruiter.jobTitle || recruiter.company) && (
+          {(contact.jobTitle || contact.companyName) && (
             <p className="text-xs text-white/50 truncate mt-0.5">
-              {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
+              {[contact.jobTitle, contact.companyName].filter(Boolean).join(' @ ')}
             </p>
           )}
         </>
       }
       actionsSlot={
         <CardMenu items={[
-          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(recruiter) },
+          { key: 'view', label: 'View Details', icon: <VisibilityOutlined sx={{ fontSize: 16 }} />, onClick: () => onView(contact) },
         ]} />
       }
       chips={
         <div className="flex flex-col gap-2 w-full">
-          {recruiter.email && (
-            <a href={`mailto:${recruiter.email}`}
+          {contact.email && (
+            <a href={`mailto:${contact.email}`}
               className="flex items-center gap-2 text-[13px] text-app-accent-soft hover:underline min-w-0">
               <Email sx={{ fontSize: 15 }} className="shrink-0" />
-              <span className="truncate">{recruiter.email}</span>
+              <span className="truncate">{contact.email}</span>
             </a>
           )}
-          {recruiter.phone && (
-            <a href={`tel:${recruiter.phone}`}
+          {contact.phone && (
+            <a href={`tel:${contact.phone}`}
               className="flex items-center gap-2 text-[13px] text-white/70 hover:text-white min-w-0">
               <Phone sx={{ fontSize: 15 }} className="shrink-0 text-white/40" />
-              <span className="truncate">{recruiter.phone}</span>
+              <span className="truncate">{contact.phone}</span>
             </a>
           )}
-          {recruiter.linkedIn && (
-            <a href={recruiter.linkedIn} target="_blank" rel="noreferrer"
+          {contact.linkedIn && (
+            <a href={contact.linkedIn} target="_blank" rel="noreferrer"
               className="flex items-center gap-2 text-[13px] text-app-accent-soft hover:underline min-w-0">
               <LinkedIn sx={{ fontSize: 15 }} className="shrink-0" />
               <span className="truncate">View Profile</span>
               {sourceLabel && <span className="text-white/30 shrink-0">via {sourceLabel}</span>}
             </a>
           )}
-          {recruiter.lastContactedAt && (
+          {contact.lastInteractionDate && (
             <p className="flex items-center gap-2 text-[13px] text-white/40">
               <CalendarTodayOutlined sx={{ fontSize: 13 }} className="shrink-0" />
-              Last contact: {fmtDate(recruiter.lastContactedAt)}
+              Last interaction: {fmtDate(contact.lastInteractionDate)}
             </p>
           )}
         </div>
       }
       actions={[
-        { key: 'notes', label: `Notes${noteCount > 0 ? ` (${noteCount})` : ''}`, icon: <EditNote sx={{ fontSize: 14 }} />, onClick: () => onNotes(recruiter), tone: 'info' },
-        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 14 }} />, onClick: () => onEdit(recruiter) },
-        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 14 }} />, onClick: () => onDelete(recruiter), tone: 'danger' },
+        { key: 'notes', label: `Notes${noteCount > 0 ? ` (${noteCount})` : ''}`, icon: <EditNote sx={{ fontSize: 14 }} />, onClick: () => onNotes(contact), tone: 'info' },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined sx={{ fontSize: 14 }} />, onClick: () => onEdit(contact) },
+        { key: 'delete', label: 'Delete', icon: <DeleteOutlineRounded sx={{ fontSize: 14 }} />, onClick: () => onDelete(contact), tone: 'danger' },
       ]}
     />
   )
@@ -246,8 +259,8 @@ function ComposerToolbar({ textareaRef, value, onChange }) {
   )
 }
 
-function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete, onStatusChanged, onNotesChanged }) {
-  const [recruiter, setRecruiter] = useState(null)
+function DetailDrawer({ open, contactId, focusNotes, onClose, onEdit, onDelete, onStatusChanged, onNotesChanged }) {
+  const [contact, setContact] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -263,30 +276,30 @@ function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete
   const notesSectionRef = useRef(null)
 
   useEffect(() => {
-    if (!open || !recruiterId) return
+    if (!open || !contactId) return
     setLoading(true)
     setError('')
-    setRecruiter(null)
+    setContact(null)
     setDraft('')
     setAddError('')
     setEditing({})
     setDeleteConfirm(null)
-    getRecruiter(recruiterId)
-      .then((res) => setRecruiter(res.data[0] ?? null))
-      .catch(() => setError('Failed to load recruiter details.'))
+    getContact(contactId)
+      .then((res) => setContact(res.data[0] ?? null))
+      .catch(() => setError('Failed to load contact details.'))
       .finally(() => setLoading(false))
-  }, [open, recruiterId])
+  }, [open, contactId])
 
   useEffect(() => {
-    if (!open || !focusNotes || loading || !recruiter) return
+    if (!open || !focusNotes || loading || !contact) return
     notesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     textareaRef.current?.focus()
-  }, [open, focusNotes, loading, recruiter])
+  }, [open, focusNotes, loading, contact])
 
   if (!open) return null
 
-  const cfg = recruiter ? (STATUS_CONFIG[recruiter.status] || STATUS_CONFIG.NEW) : STATUS_CONFIG.NEW
-  const notes = recruiter?.interactionNotes ?? []
+  const cfg = contact ? (STATUS_CONFIG[contact.status] || STATUS_CONFIG.NEW) : STATUS_CONFIG.NEW
+  const notes = contact?.interactionNotes ?? []
 
   const Row = ({ label, value }) =>
     value ? (
@@ -297,10 +310,10 @@ function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete
     ) : null
 
   const patchAndSync = async (payload) => {
-    const res = await updateRecruiter(recruiter.id, payload)
+    const res = await updateContact(contact.id, payload)
     const updated = res.data
-    setRecruiter(updated)
-    onNotesChanged?.(recruiter.id, updated.noteCount)
+    setContact(updated)
+    onNotesChanged?.(contact.id, updated.noteCount)
     return updated
   }
 
@@ -362,22 +375,22 @@ function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete
           <div className="flex justify-center py-4"><CircularProgress size={24} /></div>
         ) : error ? (
           <p className="text-sm text-app-danger">{error}</p>
-        ) : recruiter ? (
+        ) : contact ? (
           <div className="flex items-start gap-3">
             <div className={`relative w-11 h-11 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-inner-highlight ${cfg.dot}`}>
-              {initials(recruiter.name)}
+              {initials(contact.name)}
               <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-app-success border-2 border-app-surface" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-bold text-white leading-tight truncate">{recruiter.name}</h2>
+                <h2 className="text-base font-bold text-white leading-tight truncate">{contact.name}</h2>
                 <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.badge}`}>
                   {cfg.label}
                 </span>
               </div>
-              {(recruiter.jobTitle || recruiter.company) && (
+              {(contact.jobTitle || contact.companyName) && (
                 <p className="text-sm text-white/50 mt-0.5 truncate">
-                  {[recruiter.jobTitle, recruiter.company].filter(Boolean).join(' @ ')}
+                  {[contact.jobTitle, contact.companyName].filter(Boolean).join(' @ ')}
                 </p>
               )}
             </div>
@@ -386,33 +399,33 @@ function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete
         ) : null}
       </div>
 
-      {recruiter && !loading && (
+      {contact && !loading && (
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 no-scrollbar">
 
-          <RecruiterStatusChanger recruiter={recruiter} onStatusChanged={(updated) => { setRecruiter(updated); onStatusChanged?.(updated) }} />
+          <ContactStatusChanger contact={contact} onStatusChanged={(updated) => { setContact(updated); onStatusChanged?.(updated) }} />
 
           <div>
             <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Contact</p>
             <div className="space-y-2">
               <Row label="Email"
-                value={recruiter.email && (
-                  <a href={`mailto:${recruiter.email}`}
+                value={contact.email && (
+                  <a href={`mailto:${contact.email}`}
                     className="text-app-accent-soft hover:underline flex items-center gap-1.5 truncate">
-                    <Email sx={{ fontSize: 14 }} className="shrink-0" /><span className="truncate">{recruiter.email}</span>
+                    <Email sx={{ fontSize: 14 }} className="shrink-0" /><span className="truncate">{contact.email}</span>
                   </a>
                 )}
               />
               <Row label="Phone"
-                value={recruiter.phone && (
-                  <a href={`tel:${recruiter.phone}`}
+                value={contact.phone && (
+                  <a href={`tel:${contact.phone}`}
                     className="text-white/80 hover:text-app-accent-soft flex items-center gap-1.5">
-                    <Phone sx={{ fontSize: 14 }} className="shrink-0" />{recruiter.phone}
+                    <Phone sx={{ fontSize: 14 }} className="shrink-0" />{contact.phone}
                   </a>
                 )}
               />
               <Row label="LinkedIn"
-                value={recruiter.linkedIn && (
-                  <a href={recruiter.linkedIn} target="_blank" rel="noreferrer"
+                value={contact.linkedIn && (
+                  <a href={contact.linkedIn} target="_blank" rel="noreferrer"
                     className="text-app-accent-soft hover:underline flex items-center gap-1.5">
                     <LinkedIn sx={{ fontSize: 14 }} className="shrink-0" />View Profile
                   </a>
@@ -424,12 +437,16 @@ function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete
           <div>
             <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-2">Details</p>
             <div className="space-y-2">
-              <Row label="Source" value={recruiter.source ? (SOURCE_LABELS[recruiter.source] || recruiter.source) : null} />
-              <Row label="Added on" value={recruiter.createdAt ? fmtDate(recruiter.createdAt) : null} />
-              <Row label="Last contacted" value={recruiter.lastContactedAt ? fmtDate(recruiter.lastContactedAt) : null} />
-              <Row label="Last updated" value={recruiter.updatedAt ? fmt(recruiter.updatedAt) : null} />
+              <Row label="Relationship" value={contact.relationshipType ? (RELATIONSHIP_TYPE_LABELS[contact.relationshipType] || contact.relationshipType) : null} />
+              <Row label="Relationship Strength" value={contact.relationshipStrength ? (RELATIONSHIP_STRENGTH_LABELS[contact.relationshipStrength] || contact.relationshipStrength) : null} />
+              <Row label="Source" value={contact.source ? (SOURCE_LABELS[contact.source] || contact.source) : null} />
+              <Row label="Added on" value={contact.createdAt ? fmtDate(contact.createdAt) : null} />
+              <Row label="Last interaction" value={contact.lastInteractionDate ? fmtDate(contact.lastInteractionDate) : null} />
+              <Row label="Last updated" value={contact.updatedAt ? fmt(contact.updatedAt) : null} />
             </div>
           </div>
+
+          <OutreachLogSection contactId={contact.id} />
 
           <div ref={notesSectionRef}>
             <div className="flex items-center justify-between mb-2">
@@ -556,16 +573,16 @@ function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete
         </div>
       )}
 
-      {recruiter && !loading && (
+      {contact && !loading && (
         <div className="flex gap-3 px-5 py-3.5 border-t border-white/[0.06] bg-white/[0.02] shrink-0">
           <button
-            onClick={() => { onClose(); onEdit(recruiter) }}
+            onClick={() => { onClose(); onEdit(contact) }}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white/70 bg-white/[0.03] border border-white/[0.08] rounded-xl hover:bg-white/[0.10] hover:text-white transition">
             <EditOutlined sx={{ fontSize: 16 }} />
             Edit
           </button>
           <button
-            onClick={() => { onClose(); onDelete(recruiter) }}
+            onClick={() => { onClose(); onDelete(contact) }}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-app-danger bg-white/[0.03] border border-app-danger/20 rounded-xl hover:bg-app-danger hover:text-white hover:border-app-danger transition ml-auto">
             <DeleteOutlineRounded sx={{ fontSize: 16 }} />
             Delete
@@ -576,25 +593,19 @@ function DetailDrawer({ open, recruiterId, focusNotes, onClose, onEdit, onDelete
   )
 }
 
-function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
-  const [form, setForm] = useState(EMPTY_FORM)
+function AddEditDrawer({ open, contact, onClose, onSaved }) {
+  const [form, setForm] = useState(() => contact ? {
+    name: contact.name || '', email: contact.email || '',
+    phone: contact.phone || '', linkedIn: contact.linkedIn || '',
+    companyName: contact.companyName || '', jobTitle: contact.jobTitle || '',
+    status: contact.status || 'NEW',
+    relationshipType: contact.relationshipType || '', relationshipStrength: contact.relationshipStrength || '',
+    source: contact.source || '',
+    lastInteractionDate: contact.lastInteractionDate || '', notes: contact.notes || '',
+  } : EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-
-  useEffect(() => {
-    if (open) {
-      setForm(recruiter ? {
-        name: recruiter.name || '', email: recruiter.email || '',
-        phone: recruiter.phone || '', linkedIn: recruiter.linkedIn || '',
-        company: recruiter.company || '', jobTitle: recruiter.jobTitle || '',
-        status: recruiter.status || 'NEW', source: recruiter.source || '',
-        lastContactedAt: recruiter.lastContactedAt || '', notes: recruiter.notes || '',
-      } : EMPTY_FORM)
-      setError('')
-      setFieldErrors({})
-    }
-  }, [open, recruiter])
 
   if (!open) return null
 
@@ -620,12 +631,14 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
     const payload = {
       name: form.name.trim(), email: form.email.trim() || null,
       phone: form.phone.trim() || null, linkedIn: form.linkedIn.trim() || null,
-      company: form.company.trim() || null, jobTitle: form.jobTitle.trim() || null,
-      status: form.status || 'NEW', source: form.source || null,
-      lastContactedAt: form.lastContactedAt || null, notes: form.notes.trim() || null,
+      companyName: form.companyName.trim() || null, jobTitle: form.jobTitle.trim() || null,
+      status: form.status || 'NEW',
+      relationshipType: form.relationshipType || null, relationshipStrength: form.relationshipStrength || null,
+      source: form.source || null,
+      lastInteractionDate: form.lastInteractionDate || null, notes: form.notes.trim() || null,
     }
     try {
-      recruiter ? await updateRecruiter(recruiter.id, payload) : await addRecruiter(payload)
+      contact ? await updateContact(contact.id, payload) : await addContact(payload)
       onSaved()
     } catch (err) {
       const data = err.response?.data
@@ -637,11 +650,10 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
   }
 
   const inputCls = (field) => fieldInputCls(!!fieldErrors[field])
-  const FieldError = ({ field }) => <FieldErrorText error={fieldErrors[field]} />
 
   return (
     <DrawerShell>
-      <DrawerHeader onClose={onClose} title={recruiter ? 'Edit Recruiter Contact' : 'Add Recruiter Contact'} subtitle={recruiter ? 'Update contact information' : 'Add a new recruiter to your network'} />
+      <DrawerHeader onClose={onClose} title={contact ? 'Edit Contact' : 'Add Contact'} subtitle={contact ? 'Update contact information' : 'Add a new contact to your network'} />
       <div className="px-6 py-5 overflow-y-auto flex-1 no-scrollbar">
         {error && <div className="mb-4 p-3 rounded-xl bg-app-danger/10 border border-app-danger/20 text-app-danger text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -651,40 +663,40 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
             </FieldLabel>
             <input type="text" value={form.name} onChange={set('name')}
               placeholder="e.g. Priya Sharma" className={inputCls('name')} />
-            <FieldError field="name" />
+            <FieldErrorText error={fieldErrors.name} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel>Job Title</FieldLabel>
               <input type="text" value={form.jobTitle} onChange={set('jobTitle')}
                 placeholder="Technical Recruiter" className={inputCls('jobTitle')} />
-              <FieldError field="jobTitle" />
+              <FieldErrorText error={fieldErrors.jobTitle} />
             </div>
             <div>
               <FieldLabel>Company</FieldLabel>
-              <input type="text" value={form.company} onChange={set('company')}
-                placeholder="e.g. Google" className={inputCls('company')} />
-              <FieldError field="company" />
+              <input type="text" value={form.companyName} onChange={set('companyName')}
+                placeholder="e.g. Google" className={inputCls('companyName')} />
+              <FieldErrorText error={fieldErrors.companyName} />
             </div>
           </div>
           <div>
             <FieldLabel>Email</FieldLabel>
             <input type="email" value={form.email} onChange={set('email')}
               placeholder="priya@google.com" className={inputCls('email')} />
-            <FieldError field="email" />
+            <FieldErrorText error={fieldErrors.email} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel>Phone</FieldLabel>
               <input type="tel" value={form.phone} onChange={set('phone')}
                 placeholder="+91 98765 43210" className={inputCls('phone')} />
-              <FieldError field="phone" />
+              <FieldErrorText error={fieldErrors.phone} />
             </div>
             <div>
               <FieldLabel>LinkedIn URL</FieldLabel>
               <input type="url" value={form.linkedIn} onChange={set('linkedIn')}
                 placeholder="https://linkedin.com/in/..." className={inputCls('linkedIn')} />
-              <FieldError field="linkedIn" />
+              <FieldErrorText error={fieldErrors.linkedIn} />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -709,10 +721,32 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
               />
             </div>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <FieldLabel>Relationship Type</FieldLabel>
+              <FilterSelect
+                value={form.relationshipType}
+                onChange={setVal('relationshipType')}
+                allLabel="— Select —"
+                options={Object.entries(RELATIONSHIP_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <FieldLabel>Relationship Strength</FieldLabel>
+              <FilterSelect
+                value={form.relationshipStrength}
+                onChange={setVal('relationshipStrength')}
+                allLabel="— Select —"
+                options={Object.entries(RELATIONSHIP_STRENGTH_LABELS).map(([value, label]) => ({ value, label }))}
+                className="w-full"
+              />
+            </div>
+          </div>
           <div>
-            <FieldLabel>Last Contacted</FieldLabel>
-            <input type="date" value={form.lastContactedAt} onChange={set('lastContactedAt')}
-              max={new Date().toISOString().split('T')[0]} className={inputCls('lastContactedAt')} />
+            <FieldLabel>Last Interaction Date</FieldLabel>
+            <input type="date" value={form.lastInteractionDate} onChange={set('lastInteractionDate')}
+              max={new Date().toISOString().split('T')[0]} className={inputCls('lastInteractionDate')} />
           </div>
           <div>
             <FieldLabel>General Notes</FieldLabel>
@@ -721,23 +755,23 @@ function AddEditDrawer({ open, recruiter, onClose, onSaved }) {
               className={`${inputCls('notes')} resize-none`} />
             <p className="text-xs text-white/35 mt-1 text-right">{form.notes.length}/2000</p>
           </div>
-          <FormFooterButtons saving={saving} onCancel={onClose} saveLabel={recruiter ? 'Save Changes' : 'Add Recruiter'} saveFirst heightCls="py-2.5" />
+          <FormFooterButtons saving={saving} onCancel={onClose} saveLabel={contact ? 'Save Changes' : 'Add Contact'} saveFirst heightCls="py-2.5" />
         </form>
       </div>
     </DrawerShell>
   )
 }
 
-function DeleteModal({ open, recruiter, onClose, onDeleted }) {
+function DeleteModal({ open, contact, onClose, onDeleted }) {
   return (
     <ConfirmDeleteModal
-      open={open && !!recruiter}
+      open={open && !!contact}
       onClose={onClose}
-      onConfirm={async () => { await deleteRecruiter(recruiter.id); onDeleted() }}
-      title="Delete Recruiter Contact"
+      onConfirm={async () => { await deleteContact(contact.id); onDeleted() }}
+      title="Delete Contact"
       message={
         <>
-          Remove <span className="font-semibold text-white/80">{recruiter?.name}</span> and all interaction notes?
+          Remove <span className="font-semibold text-white/80">{contact?.name}</span> and all interaction notes?
           <span className="block text-xs text-app-danger mt-1">This action cannot be undone.</span>
         </>
       }
@@ -745,11 +779,12 @@ function DeleteModal({ open, recruiter, onClose, onDeleted }) {
   )
 }
 
-export default function Recruiters() {
+export default function Contacts() {
   const [success, setSuccess] = useTransientMessage()
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [relationshipTypeFilter, setRelationshipTypeFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
   const [sortBy, setSortBy] = useState('createdAt')
   const [order, setOrder] = useState('desc')
@@ -761,33 +796,37 @@ export default function Recruiters() {
   const [viewFocusNotes, setViewFocusNotes] = useState(false)
 
   const {
-    items: recruiters, setItems: setRecruiters, loading, error, setError,
-    setPage, size, setSize, refetch: fetchRecruiters,
+    items: contacts, setItems: setContacts, loading, error, setError,
+    setPage, setSize, refetch: fetchContacts,
   } = usePagedList(
     useCallback(
-      (page, size) => getRecruiters({ search: search.trim() || undefined, status: statusFilter || undefined, sortBy, order, page, size }),
-      [search, statusFilter, sortBy, order]
+      (page, size) => getContacts({
+        search: search.trim() || undefined, status: statusFilter || undefined,
+        relationshipType: relationshipTypeFilter || undefined, sortBy, order, page, size,
+      }),
+      [search, statusFilter, relationshipTypeFilter, sortBy, order]
     ),
-    'Failed to load recruiter contacts.'
+    'Failed to load contacts.'
   )
 
-  const { data: allRecruiters, setData: setAllRecruiters, refetch: fetchAllRecruiters } = useFetchOnce(
-    useCallback(() => getRecruiters({ sortBy, order, size: 1000 }), [sortBy, order]), []
+  const { data: allContacts, setData: setAllContacts, refetch: fetchAllContacts } = useFetchOnce(
+    useCallback(() => getContacts({ sortBy, order, size: 1000 }), [sortBy, order]), []
   )
-  const { data: stats, refetch: fetchStats } = useFetchOnce(getRecruiterStats)
-  const { data: sourceOptions, refetch: fetchSourceOptions } = useFetchOnce(getRecruiterSources, [])
+  const { data: stats, refetch: fetchStats } = useFetchOnce(getContactStats)
+  const { data: sourceOptions, refetch: fetchSourceOptions } = useFetchOnce(getSources, [])
+  const { data: relationshipTypeOptions } = useFetchOnce(getRelationshipTypes, [])
 
   useSearchShortcut(searchInputRef)
 
-  const filteredRecruiters = useMemo(
-    () => sourceFilter ? recruiters.filter((r) => r.source === sourceFilter) : recruiters,
-    [recruiters, sourceFilter]
+  const filteredContacts = useMemo(
+    () => sourceFilter ? contacts.filter((c) => c.source === sourceFilter) : contacts,
+    [contacts, sourceFilter]
   )
 
   const {
     modalOpen, setModalOpen, editTarget, setEditTarget, deleteTarget, setDeleteTarget,
     handleSaved, handleDeleted,
-  } = useCrudModals('Recruiter contact', setSuccess, [fetchRecruiters, fetchAllRecruiters, fetchStats, fetchSourceOptions])
+  } = useCrudModals('Contact', setSuccess, [fetchContacts, fetchAllContacts, fetchStats, fetchSourceOptions])
 
   const openAdd   = () => { setViewTarget(null); setEditTarget(null); setModalOpen(true) }
   const openEdit  = (r) => { setViewTarget(null); setEditTarget(r); setModalOpen(true) }
@@ -796,19 +835,20 @@ export default function Recruiters() {
 
   useAddQueryParam(openAdd)
 
-  const handleNotesChanged = (recruiterId, newCount) => {
-    setRecruiters((prev) => prev.map((r) => r.id === recruiterId ? { ...r, noteCount: newCount } : r))
-    setAllRecruiters((prev) => prev.map((r) => r.id === recruiterId ? { ...r, noteCount: newCount } : r))
+  const handleNotesChanged = (contactId, newCount) => {
+    setContacts((prev) => prev.map((c) => c.id === contactId ? { ...c, noteCount: newCount } : c))
+    setAllContacts((prev) => prev.map((c) => c.id === contactId ? { ...c, noteCount: newCount } : c))
   }
 
   const handleStatusChanged = (updated) => {
-    setRecruiters(prev => prev.map(r => r.id === updated.id ? updated : r))
-    setAllRecruiters(prev => prev.map(r => r.id === updated.id ? updated : r))
+    setContacts(prev => prev.map(c => c.id === updated.id ? updated : c))
+    setAllContacts(prev => prev.map(c => c.id === updated.id ? updated : c))
     fetchStats()
   }
 
   const { activeFilterCount, isFiltered, clearAllFilters } = useFilterState(search, setSearch, [
     [statusFilter, setStatusFilter],
+    [relationshipTypeFilter, setRelationshipTypeFilter],
     [sourceFilter, setSourceFilter],
   ])
 
@@ -826,16 +866,18 @@ export default function Recruiters() {
   return (
     <Layout
       drawerOpen={drawerOpen}
-      headerAction={<HeaderAddButton label="Add Recruiter" onClick={openAdd} drawerOpen={drawerOpen} />}
+      headerAction={<HeaderAddButton label="Add Contact" onClick={openAdd} drawerOpen={drawerOpen} />}
     >
       <div className={`overflow-x-hidden transition-[margin] duration-300 ease-out ${drawerOpen ? 'lg:mr-[26rem]' : ''}`}>
       <PageAlert severity="success" message={success} onClose={() => setSuccess('')} />
       <PageAlert severity="error" message={error} onClose={() => setError('')} />
 
+      <ContactFollowUpRecommendations onViewContact={(id) => openView({ id })} />
+
       {!loading && stats && stats.total > 0 && (
         <div className="relative overflow-hidden rounded-card border border-white/[0.04] bg-app-surface shadow-card px-5 py-4 mb-6 [&>div]:mb-0">
           <StatusSummaryBar
-            items={allRecruiters}
+            items={allContacts}
             counts={stats.byStatus}
             total={stats.total}
             statusConfig={STATUS_CONFIG}
@@ -892,6 +934,9 @@ export default function Recruiters() {
             <FilterSelect value={statusFilter} onChange={setStatusFilter} allLabel="All Statuses" className="flex-1 min-w-[9rem]"
               options={Object.entries(STATUS_CONFIG).map(([value, { label }]) => ({ value, label }))} />
 
+            <FilterSelect value={relationshipTypeFilter} onChange={setRelationshipTypeFilter} allLabel="All Relationship Types" className="flex-1 min-w-[9rem]"
+              options={relationshipTypeOptions.map((t) => ({ value: t, label: RELATIONSHIP_TYPE_LABELS[t] || t }))} />
+
             <FilterSelect value={sourceFilter} onChange={setSourceFilter} allLabel="All Sources" className="flex-1 min-w-[9rem]"
               options={sourceOptions.map((s) => ({ value: s, label: SOURCE_LABELS[s] || s }))} />
 
@@ -907,54 +952,54 @@ export default function Recruiters() {
 
       {loading ? (
         <PageSpinner />
-      ) : filteredRecruiters.length === 0 ? (
+      ) : filteredContacts.length === 0 ? (
         <EmptyState
           icon="🤝"
-          title={isFiltered ? 'No recruiters match your filters' : 'No recruiter contacts yet'}
-          description={isFiltered ? 'Try adjusting your search or filter.' : 'Start building your recruiter network.'}
+          title={isFiltered ? 'No contacts match your filters' : 'No contacts yet'}
+          description={isFiltered ? 'Try adjusting your search or filter.' : 'Start building your network.'}
           action={!isFiltered && (
             <button onClick={openAdd}
               className="px-6 py-2.5 text-sm font-semibold text-white bg-app-accent rounded-xl hover:brightness-110 transition shadow-glow shadow-app-accent/40">
-              Add your first recruiter
+              Add your first contact
             </button>
           )}
         />
       ) : viewMode === 'list' ? (
         <div>
           <h2 className="text-[18px] font-semibold text-white mb-4">
-            {filteredRecruiters.length} {filteredRecruiters.length === 1 ? 'Recruiter' : 'Recruiters'}
+            {filteredContacts.length} {filteredContacts.length === 1 ? 'Contact' : 'Contacts'}
           </h2>
           <div className="space-y-3">
-            {filteredRecruiters.map((r) => (
-              <RecruiterListRow key={r.id} recruiter={r} {...cardProps} />
+            {filteredContacts.map((r) => (
+              <ContactListRow key={r.id} contact={r} {...cardProps} />
             ))}
           </div>
-          <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
-            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} onSizeChange={setSize} />
+          <Pagination page={contacts.page} totalPages={contacts.totalPages}
+            totalElements={contacts.totalElements} size={contacts.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       ) : (
         <div>
           <h2 className="text-[18px] font-semibold text-white mb-4">
-            {filteredRecruiters.length} {filteredRecruiters.length === 1 ? 'Recruiter' : 'Recruiters'}
+            {filteredContacts.length} {filteredContacts.length === 1 ? 'Contact' : 'Contacts'}
           </h2>
           <div className={`grid grid-cols-1 gap-3 ${drawerOpen ? 'lg:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-3'}`}>
-            {filteredRecruiters.map((r) => (
-              <DirectoryCard key={r.id} recruiter={r} {...cardProps} />
+            {filteredContacts.map((r) => (
+              <DirectoryCard key={r.id} contact={r} {...cardProps} />
             ))}
           </div>
-          <Pagination page={recruiters.page} totalPages={recruiters.totalPages}
-            totalElements={recruiters.totalElements} size={recruiters.size} onPageChange={setPage} onSizeChange={setSize} />
+          <Pagination page={contacts.page} totalPages={contacts.totalPages}
+            totalElements={contacts.totalElements} size={contacts.size} onPageChange={setPage} onSizeChange={setSize} />
         </div>
       )}
       </div>
 
-      <AddEditDrawer open={modalOpen} recruiter={editTarget}
+      <AddEditDrawer key={editTarget?.id ?? 'new'} open={modalOpen} contact={editTarget}
         onClose={() => setModalOpen(false)} onSaved={handleSaved} />
-      <DeleteModal open={!!deleteTarget} recruiter={deleteTarget}
+      <DeleteModal open={!!deleteTarget} contact={deleteTarget}
         onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />
       <DetailDrawer
         open={!!viewTarget}
-        recruiterId={viewTarget}
+        contactId={viewTarget}
         focusNotes={viewFocusNotes}
         onClose={() => setViewTarget(null)}
         onEdit={(r) => { setEditTarget(r); setModalOpen(true) }}
