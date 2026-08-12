@@ -16,6 +16,11 @@ import Applications from './pages/Applications'
 import Contacts from './pages/Contacts'
 import FollowUps from './pages/FollowUps'
 import Referrals from './pages/Referrals'
+import ActionItems from './pages/ActionItems'
+import Timeline from './pages/Timeline'
+import Deadlines from './pages/Deadlines'
+import FollowUpRules from './pages/FollowUpRules'
+import Today from './pages/Today'
 import Goals from './pages/Goals'
 import ResumeLibrary from './pages/ResumeLibrary'
 import CoverLetterLibrary from './pages/CoverLetterLibrary'
@@ -50,6 +55,14 @@ export default function App() {
         <Route path="/oauth-callback" element={<OAuthCallback />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          path="/today"
+          element={
+            <PrivateRoute>
+              <Today />
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/dashboard"
           element={
@@ -119,6 +132,38 @@ export default function App() {
           element={
             <PrivateRoute>
               <Referrals />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/action-items"
+          element={
+            <PrivateRoute>
+              <ActionItems />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/timeline"
+          element={
+            <PrivateRoute>
+              <Timeline />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/deadlines"
+          element={
+            <PrivateRoute>
+              <Deadlines />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/follow-up-rules"
+          element={
+            <PrivateRoute>
+              <FollowUpRules />
             </PrivateRoute>
           }
         />
