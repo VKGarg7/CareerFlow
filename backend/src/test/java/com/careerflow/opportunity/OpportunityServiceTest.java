@@ -25,6 +25,7 @@ import com.careerflow.resume.Resume;
 import com.careerflow.resume.ResumeLinkHistoryRepository;
 import com.careerflow.resume.ResumeLinkService;
 import com.careerflow.resume.ResumeRepository;
+import com.careerflow.timeline.TimelineService;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,6 +67,8 @@ class OpportunityServiceTest {
     private ResumeLinkHistoryRepository resumeLinkHistoryRepository;
     @Mock
     private CoverLetterRepository coverLetterRepository;
+    @Mock
+    private TimelineService timelineService;
 
     private ResumeLinkService resumeLinkService;
     private OpportunityService opportunityService;
@@ -83,7 +86,7 @@ class OpportunityServiceTest {
         opportunityService = new OpportunityService(
                 opportunityRepository, companyRepository, workspaceAccessUtils, securityUtils,
                 auditLogService, applicationService, applicationRepository, resumeRepository, resumeLinkService,
-                coverLetterRepository);
+                coverLetterRepository, timelineService);
     }
 
     private Workspace workspace() {

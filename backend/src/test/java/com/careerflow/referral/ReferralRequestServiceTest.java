@@ -15,6 +15,8 @@ import com.careerflow.referral.dto.ReferralNoteActionRequest;
 import com.careerflow.referral.dto.ReferralRequestDto;
 import com.careerflow.referral.dto.ReferralResponse;
 import com.careerflow.referral.dto.ReferralUpdateRequest;
+import com.careerflow.followuprule.FollowUpRuleService;
+import com.careerflow.timeline.TimelineService;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +58,10 @@ class ReferralRequestServiceTest {
     private SecurityUtils securityUtils;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private TimelineService timelineService;
+    @Mock
+    private FollowUpRuleService followUpRuleService;
 
     @InjectMocks
     private ReferralRequestService referralRequestService;

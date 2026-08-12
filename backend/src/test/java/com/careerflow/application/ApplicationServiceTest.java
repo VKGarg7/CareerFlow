@@ -16,13 +16,16 @@ import com.careerflow.document.DocumentRepository;
 import com.careerflow.exception.BadRequestException;
 import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.followup.FollowUpRepository;
+import com.careerflow.followuprule.FollowUpRuleService;
 import com.careerflow.resume.Resume;
 import com.careerflow.resume.ResumeLinkHistoryRepository;
 import com.careerflow.resume.ResumeLinkService;
 import com.careerflow.resume.ResumeRepository;
+import com.careerflow.timeline.TimelineService;
 import com.careerflow.user.User;
 import com.careerflow.user.UserResumeRepository;
 import com.careerflow.workspace.Workspace;
+import com.careerflow.workspace.WorkspaceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -69,6 +72,12 @@ class ApplicationServiceTest {
     private CoverLetterRepository coverLetterRepository;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private WorkspaceRepository workspaceRepository;
+    @Mock
+    private TimelineService timelineService;
+    @Mock
+    private FollowUpRuleService followUpRuleService;
 
     private ResumeLinkService resumeLinkService;
     private ApplicationService applicationService;
@@ -92,7 +101,8 @@ class ApplicationServiceTest {
         applicationService = new ApplicationService(
                 applicationRepository, companyRepository, workspaceAccessUtils, followUpRepository,
                 fileStorageService, documentRepository, securityUtils, userResumeRepository,
-                resumeRepository, resumeLinkService, coverLetterRepository, auditLogService);
+                resumeRepository, resumeLinkService, coverLetterRepository, auditLogService,
+                workspaceRepository, timelineService, followUpRuleService);
     }
 
     private Workspace workspace() {
