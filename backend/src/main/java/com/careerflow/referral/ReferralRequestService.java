@@ -22,6 +22,11 @@ import com.careerflow.referral.dto.ReferralRequestDto;
 import com.careerflow.referral.dto.ReferralResponse;
 import com.careerflow.referral.dto.ReferralStatusHistoryResponse;
 import com.careerflow.referral.dto.ReferralUpdateRequest;
+import com.careerflow.actionitem.ActionableEntityType;
+import com.careerflow.timeline.TimelineEventType;
+import com.careerflow.timeline.TimelineService;
+import com.careerflow.followuprule.FollowUpRuleService;
+import com.careerflow.followuprule.FollowUpTriggerEvent;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +56,8 @@ public class ReferralRequestService {
     private final WorkspaceAccessUtils workspaceAccessUtils;
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
+    private final TimelineService timelineService;
+    private final FollowUpRuleService followUpRuleService;
 
 
     @Transactional
@@ -87,6 +94,12 @@ public class ReferralRequestService {
 
         recordHistory(referral, user, null, initialStatus, null);
         auditLogService.log(user, AuditAction.REFERRAL_CREATED, "Requested referral for " + describe(referral));
+        if (workspace != null) {
+            timelineService.record(user, workspace, ActionableEntityType.REFERRAL, referral.getId(),
+                    describe(referral), TimelineEventType.REFERRAL_REQUESTED, "Referral requested");
+            followUpRuleService.onEvent(FollowUpTriggerEvent.AFTER_REFERRAL_REQUESTED, user, workspace,
+                    ActionableEntityType.REFERRAL, referral.getId(), describe(referral));
+        }
 
         return toResponse(referral, null);
     }
@@ -158,6 +171,11 @@ public class ReferralRequestService {
             referral.setStatus(req.getStatus());
             referral = referralRepository.save(referral);
             recordHistory(referral, user, previousStatus, req.getStatus(), blank(req.getStatusNote()));
+            if (referral.getWorkspace() != null) {
+                timelineService.record(user, referral.getWorkspace(), ActionableEntityType.REFERRAL, referral.getId(),
+                        describe(referral), TimelineEventType.REFERRAL_STATUS_CHANGED,
+                        previousStatus + " → " + req.getStatus());
+            }
         } else {
             referral = referralRepository.save(referral);
         }

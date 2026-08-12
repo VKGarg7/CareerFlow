@@ -29,4 +29,5 @@ public class WorkspaceRequest {
     private Integer goalInterviewsTarget;
     private Integer goalOffersTarget;
     private WorkspaceStatus status;
+    private Integer staleApplicationThresholdDays;
 }

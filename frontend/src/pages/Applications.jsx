@@ -43,6 +43,8 @@ import useFetchOnce from '../hooks/useFetchOnce'
 import { useWorkspace } from '../context/WorkspaceContext'
 import ApplicationSourcesCard from '../components/ApplicationSourcesCard'
 import AnalyticsCard from '../components/AnalyticsCard'
+import TimelineFeed from '../components/TimelineFeed'
+import { getEntityTimeline } from '../api/timeline'
 import { DrawerShell, CloseIconButton } from '../components/DrawerShell'
 import { FieldLabel, FormFooterButtons } from '../components/formKit'
 import { APP_STATUS_CONFIG as STATUS_CONFIG, appStatusHex as dotHex } from '../constants/applicationStatus'
@@ -122,8 +124,13 @@ function ApplicationDirectoryCard({ app, company, onView, onEdit, onDelete, onFo
         </div>
       </div>
 
-      <div onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
         <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
+        {app.stale && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-app-warning/10 px-2 py-0.5 text-[10px] font-semibold text-app-warning" title={`No update in ${app.daysSinceUpdate} days`}>
+            Stale
+          </span>
+        )}
       </div>
 
       {(company?.location || app.source) && (
@@ -248,8 +255,13 @@ function ApplicationTableRow({ app, company, onView, onEdit, onDelete, onFollowU
         </div>
       </div>
 
-      <div className="w-24 sm:w-36 min-w-0 shrink-0" onClick={(e) => e.stopPropagation()}>
+      <div className="w-24 sm:w-36 min-w-0 shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
         <AppStatusChanger app={app} onStatusChanged={onStatusChanged} />
+        {app.stale && (
+          <span className="shrink-0 inline-flex items-center rounded-full bg-app-warning/10 px-1.5 py-0.5 text-[9px] font-semibold text-app-warning" title={`No update in ${app.daysSinceUpdate} days`}>
+            Stale
+          </span>
+        )}
       </div>
 
       <div className="w-44 min-w-0 shrink-0 hidden md:block">
@@ -434,17 +446,6 @@ function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete
   const fmtDateTime = (dt) => fmt(dt) || '—'
 
   const inputCls = 'w-full px-3 py-2 border border-white/[0.08] rounded-xl text-sm text-white/85 bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-app-accent/40 hover:border-white/[0.14] transition placeholder:text-white/25'
-
-  const timelineEvents = app ? [
-    app.updatedAt && app.updatedAt !== app.createdAt && {
-      label: 'Application Updated',
-      at: app.updatedAt,
-    },
-    app.createdAt && {
-      label: 'Application Created',
-      at: app.createdAt,
-    },
-  ].filter(Boolean) : []
 
   return (
     <DrawerShell>
@@ -658,25 +659,14 @@ function DetailModal({ open, app: initialApp, company, onClose, onEdit, onDelete
               )}
             </div>
 
-            {timelineEvents.length > 0 && (
+            {app && (
               <div>
                 <p className="text-[11px] font-bold text-white/35 uppercase tracking-widest mb-3">Activity Timeline</p>
-                <div className="relative">
-                  {timelineEvents.length > 1 && (
-                    <div className="absolute left-[3px] top-[6px] bottom-[6px] w-px bg-white/[0.08]" />
-                  )}
-                  <div className="space-y-3">
-                    {timelineEvents.map((ev, i) => (
-                      <div key={i} className="relative flex gap-3 pl-0.5">
-                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-app-accent-soft shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm text-white/75">{ev.label}</p>
-                          <p className="text-xs text-white/35 mt-0.5">{fmtDateTime(ev.at)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <TimelineFeed
+                  fetchFn={(params) => getEntityTimeline('APPLICATION', app.id, params)}
+                  emptyMessage="No activity recorded yet."
+                  pageSize={10}
+                />
               </div>
             )}
 

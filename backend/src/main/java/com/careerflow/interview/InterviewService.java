@@ -9,6 +9,11 @@ import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.interview.dto.InterviewRequest;
 import com.careerflow.interview.dto.InterviewResponse;
 import com.careerflow.interview.dto.InterviewUpdateRequest;
+import com.careerflow.actionitem.ActionableEntityType;
+import com.careerflow.timeline.TimelineEventType;
+import com.careerflow.timeline.TimelineService;
+import com.careerflow.followuprule.FollowUpRuleService;
+import com.careerflow.followuprule.FollowUpTriggerEvent;
 import com.careerflow.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +29,8 @@ public class InterviewService {
     private final ApplicationRepository applicationRepository;
     private final SecurityUtils securityUtils;
     private final AuditLogService auditLogService;
+    private final TimelineService timelineService;
+    private final FollowUpRuleService followUpRuleService;
 
     public InterviewResponse create(Long applicationId, InterviewRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
@@ -44,6 +51,9 @@ public class InterviewService {
 
         interview = interviewRepository.save(interview);
         auditLogService.log(user, AuditAction.INTERVIEW_CREATED, describeInterview(interview));
+        timelineService.record(user, application.getWorkspace(), ActionableEntityType.INTERVIEW, interview.getId(),
+                describeInterview(interview), TimelineEventType.INTERVIEW_SCHEDULED,
+                "Scheduled for " + interview.getScheduledAt());
         return toResponse(interview);
     }
 
@@ -58,6 +68,7 @@ public class InterviewService {
     public InterviewResponse update(Long id, InterviewUpdateRequest request) {
         User user = securityUtils.getCurrentUser();
         Interview interview = findOwned(id, user.getId());
+        InterviewOutcome previousOutcome = interview.getOutcome();
 
         if (request.getScheduledAt() != null)    interview.setScheduledAt(request.getScheduledAt());
         if (request.getRound() != null)           interview.setRound(request.getRound());
@@ -70,6 +81,13 @@ public class InterviewService {
 
         interview = interviewRepository.save(interview);
         auditLogService.log(user, AuditAction.INTERVIEW_UPDATED, describeInterview(interview));
+        if (interview.getOutcome() != previousOutcome && interview.getOutcome() != InterviewOutcome.AWAITING_RESPONSE) {
+            timelineService.record(user, interview.getApplication().getWorkspace(), ActionableEntityType.INTERVIEW, interview.getId(),
+                    describeInterview(interview), TimelineEventType.INTERVIEW_COMPLETED,
+                    "Outcome: " + interview.getOutcome());
+            followUpRuleService.onEvent(FollowUpTriggerEvent.AFTER_INTERVIEW_COMPLETED, user, interview.getApplication().getWorkspace(),
+                    ActionableEntityType.INTERVIEW, interview.getId(), describeInterview(interview));
+        }
         return toResponse(interview);
     }
 

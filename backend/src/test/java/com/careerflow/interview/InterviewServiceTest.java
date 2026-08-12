@@ -9,7 +9,9 @@ import com.careerflow.exception.ResourceNotFoundException;
 import com.careerflow.interview.dto.InterviewRequest;
 import com.careerflow.interview.dto.InterviewResponse;
 import com.careerflow.interview.dto.InterviewUpdateRequest;
+import com.careerflow.followuprule.FollowUpRuleService;
 import com.careerflow.resume.Resume;
+import com.careerflow.timeline.TimelineService;
 import com.careerflow.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +42,10 @@ class InterviewServiceTest {
     private SecurityUtils securityUtils;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private TimelineService timelineService;
+    @Mock
+    private FollowUpRuleService followUpRuleService;
 
     @InjectMocks
     private InterviewService interviewService;

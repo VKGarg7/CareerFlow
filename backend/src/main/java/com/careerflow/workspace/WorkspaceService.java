@@ -50,6 +50,8 @@ public class WorkspaceService {
                 .goalInterviewsTarget(request.getGoalInterviewsTarget())
                 .goalOffersTarget(request.getGoalOffersTarget())
                 .status(request.getStatus() != null ? request.getStatus() : WorkspaceStatus.ACTIVE)
+                .staleApplicationThresholdDays(request.getStaleApplicationThresholdDays() != null
+                        ? request.getStaleApplicationThresholdDays() : 14)
                 .build();
         workspace = workspaceRepository.save(workspace);
         auditLogService.log(user, AuditAction.WORKSPACE_CREATED, "Created workspace " + workspace.getName());
@@ -99,6 +101,8 @@ public class WorkspaceService {
         if (request.getGoalInterviewsTarget() != null) workspace.setGoalInterviewsTarget(request.getGoalInterviewsTarget());
         if (request.getGoalOffersTarget() != null) workspace.setGoalOffersTarget(request.getGoalOffersTarget());
         if (request.getStatus() != null) workspace.setStatus(request.getStatus());
+        if (request.getStaleApplicationThresholdDays() != null)
+            workspace.setStaleApplicationThresholdDays(request.getStaleApplicationThresholdDays());
 
         workspace = workspaceRepository.save(workspace);
         auditLogService.log(user, AuditAction.WORKSPACE_UPDATED, "Updated workspace " + workspace.getName());
@@ -137,6 +141,7 @@ public class WorkspaceService {
                 .goalOffersTarget(workspace.getGoalOffersTarget())
                 .status(workspace.getStatus())
                 .isDefault(workspace.getIsDefault())
+                .staleApplicationThresholdDays(workspace.getStaleApplicationThresholdDays())
                 .createdAt(workspace.getCreatedAt())
                 .updatedAt(workspace.getUpdatedAt())
                 .build();

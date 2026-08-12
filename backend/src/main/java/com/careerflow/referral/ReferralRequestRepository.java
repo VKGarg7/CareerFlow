@@ -71,4 +71,7 @@ public interface ReferralRequestRepository extends JpaRepository<ReferralRequest
 
         interface StatusCount extends GroupedCountRow<ReferralStatus> {
     }
+
+    List<ReferralRequest> findAllByUserIdAndWorkspaceIdAndStatusIn(
+            Long userId, Long workspaceId, List<ReferralStatus> statuses);
 }

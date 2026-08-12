@@ -130,7 +130,7 @@ public final class FitScoreCalculator {
     private static Set<String> splitSkills(String csv) {
         if (csv == null || csv.isBlank()) return Set.of();
         return java.util.Arrays.stream(csv.split(","))
-                .map(String::trim)
+                .map(s -> s.trim())
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }

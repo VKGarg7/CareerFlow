@@ -7,6 +7,7 @@ import {
   AdminPanelSettingsOutlined, FolderOutlined, KeyboardArrowDownRounded,
   BusinessCenterOutlined, HandshakeOutlined, PersonAddAltOutlined,
   FlagOutlined, BookmarkAddedOutlined, DescriptionOutlined, ArticleOutlined,
+  TaskAltRounded, TimelineRounded, EventBusyRounded, RuleRounded, TodayRounded,
 } from '@mui/icons-material'
 import { useProfile } from '../context/ProfileContext'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -15,6 +16,7 @@ import { profileInitial } from '../utils/followup'
 import ChatWidgetButton from './ChatWidgetButton'
 
 const PAGE_META = {
+  '/today':        { title: 'Today',        sub: 'What to do next in your job search' },
   '/dashboard':    { title: 'Dashboard',    sub: 'Your job search, at a glance' },
   '/companies':    { title: 'Companies',    sub: 'Every employer you’re pursuing' },
   '/opportunities': { title: 'Opportunities', sub: 'Roles you’re evaluating before you apply' },
@@ -22,6 +24,10 @@ const PAGE_META = {
   '/follow-ups':   { title: 'Follow-Ups',   sub: 'Stay ahead of every thread' },
   '/contacts':     { title: 'Contacts',     sub: 'Your network of contacts' },
   '/referrals':    { title: 'Referrals',    sub: 'Who’s vouching for you' },
+  '/action-items': { title: 'Action Items', sub: 'What to do next in your job search' },
+  '/timeline':     { title: 'Timeline',     sub: 'The full story of your search, in order' },
+  '/deadlines':    { title: 'Deadlines',    sub: 'OAs, assignments, and acceptance windows' },
+  '/follow-up-rules': { title: 'Follow-Up Rules', sub: 'Automate reminders after key events' },
   '/goals':        { title: 'Goals',        sub: 'Track progress toward your targets' },
   '/resumes':      { title: 'Resume Library', sub: 'Your resume versions, ready to attach' },
   '/cover-letters': { title: 'Cover Letter Library', sub: 'Your cover letter versions, ready to attach' },
@@ -32,7 +38,12 @@ const PAGE_META = {
 }
 
 const NAV = [
+  { to: '/today',        Icon: TodayRounded,             label: 'Today'        },
   { to: '/dashboard',    Icon: DashboardOutlined,        label: 'Dashboard'    },
+  { to: '/action-items', Icon: TaskAltRounded,           label: 'Action Items' },
+  { to: '/timeline',     Icon: TimelineRounded,          label: 'Timeline'     },
+  { to: '/deadlines',    Icon: EventBusyRounded,         label: 'Deadlines'    },
+  { to: '/follow-up-rules', Icon: RuleRounded,           label: 'Follow-Up Rules' },
   { to: '/workspaces',   Icon: FolderOutlined,            label: 'Workspaces'   },
   { to: '/companies',    Icon: BusinessOutlined,          label: 'Companies'    },
   { to: '/opportunities', Icon: BookmarkAddedOutlined,    label: 'Opportunities' },
