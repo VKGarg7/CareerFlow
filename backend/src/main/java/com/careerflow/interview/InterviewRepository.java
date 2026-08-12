@@ -33,4 +33,11 @@ public interface InterviewRepository extends JpaRepository<Interview, Long> {
     long countByUserIdAndWorkspaceIdAndScheduledAtBetween(
             @Param("userId") Long userId, @Param("workspaceId") Long workspaceId,
             @Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate);
+
+    @Query("SELECT i FROM Interview i JOIN FETCH i.application a JOIN FETCH a.company " +
+            "WHERE i.user.id = :userId AND a.workspace.id = :workspaceId " +
+            "AND i.scheduledAt BETWEEN :from AND :until ORDER BY i.scheduledAt ASC")
+    List<Interview> findAllByUserIdAndWorkspaceIdAndScheduledAtBetweenOrderByScheduledAtAsc(
+            @Param("userId") Long userId, @Param("workspaceId") Long workspaceId,
+            @Param("from") java.time.LocalDateTime from, @Param("until") java.time.LocalDateTime until);
 }

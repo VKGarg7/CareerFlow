@@ -28,6 +28,9 @@ import com.careerflow.resume.ResumeLinkService;
 import com.careerflow.resume.dto.ResumeLinkHistoryResponse;
 import com.careerflow.application.ApplicationRepository;
 import com.careerflow.application.JobApplication;
+import com.careerflow.actionitem.ActionableEntityType;
+import com.careerflow.timeline.TimelineEventType;
+import com.careerflow.timeline.TimelineService;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +61,7 @@ public class OpportunityService {
     private final ResumeRepository resumeRepository;
     private final ResumeLinkService resumeLinkService;
     private final CoverLetterRepository coverLetterRepository;
+    private final TimelineService timelineService;
 
     public OpportunityResponse addOpportunity(OpportunityRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
@@ -90,6 +94,8 @@ public class OpportunityService {
 
         opportunity = opportunityRepository.save(opportunity);
         auditLogService.log(user, AuditAction.OPPORTUNITY_CREATED, "Saved opportunity for " + describe(opportunity));
+        timelineService.record(user, workspace, ActionableEntityType.OPPORTUNITY, opportunity.getId(),
+                describe(opportunity), TimelineEventType.OPPORTUNITY_SAVED, "Opportunity saved");
         return toResponse(opportunity);
     }
 
@@ -226,6 +232,10 @@ public class OpportunityService {
         opportunityRepository.save(opportunity);
         auditLogService.log(user, AuditAction.OPPORTUNITY_CONVERTED,
                 "Converted opportunity to application for " + describe(opportunity));
+        timelineService.record(user, opportunity.getWorkspace(), ActionableEntityType.OPPORTUNITY, opportunity.getId(),
+                describe(opportunity), TimelineEventType.OPPORTUNITY_CONVERTED, "Converted to application");
+        timelineService.record(user, opportunity.getWorkspace(), ActionableEntityType.APPLICATION, applicationResponse.getId(),
+                describe(opportunity), TimelineEventType.APPLICATION_SUBMITTED, "Application submitted (from opportunity)");
 
         return applicationResponse;
     }

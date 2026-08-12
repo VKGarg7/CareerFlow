@@ -143,4 +143,13 @@ public interface ApplicationRepository extends JpaRepository<JobApplication, Lon
     long countByUserIdAndWorkspaceIdAndApplicationDateBetween(
             @Param("userId") Long userId, @Param("workspaceId") Long workspaceId,
             @Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate);
+
+    @Query(value = "SELECT a FROM JobApplication a JOIN FETCH a.company " +
+            "WHERE a.user.id = :userId AND a.workspace.id = :workspaceId " +
+            "AND a.status NOT IN :excludedStatuses AND a.updatedAt <= :staleBefore " +
+            "ORDER BY a.updatedAt ASC")
+    List<JobApplication> findStaleCandidates(
+            @Param("userId") Long userId, @Param("workspaceId") Long workspaceId,
+            @Param("excludedStatuses") List<ApplicationStatus> excludedStatuses,
+            @Param("staleBefore") LocalDateTime staleBefore);
 }

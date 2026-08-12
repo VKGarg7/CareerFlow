@@ -28,6 +28,7 @@ public class WorkspaceResponse {
     private Integer goalOffersTarget;
     private WorkspaceStatus status;
     private Boolean isDefault;
+    private Integer staleApplicationThresholdDays;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

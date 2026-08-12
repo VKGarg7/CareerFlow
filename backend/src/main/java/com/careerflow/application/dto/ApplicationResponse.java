@@ -41,6 +41,8 @@ public class ApplicationResponse {
     private String questionnaireAnswers;
     private LocalDate nextFollowUpDate;
     private LocalDate nextUpcomingFollowUpDate;
+    private boolean stale;
+    private long daysSinceUpdate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

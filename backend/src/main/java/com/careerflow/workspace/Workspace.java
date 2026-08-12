@@ -55,6 +55,10 @@ public class Workspace extends SoftDeleteEntity {
     private Integer goalInterviewsTarget;
     private Integer goalOffersTarget;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer staleApplicationThresholdDays = 14;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

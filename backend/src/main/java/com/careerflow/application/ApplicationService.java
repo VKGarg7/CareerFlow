@@ -33,6 +33,12 @@ import com.careerflow.resume.ResumeRepository;
 import com.careerflow.resume.dto.ResumeLinkHistoryResponse;
 import com.careerflow.user.User;
 import com.careerflow.workspace.Workspace;
+import com.careerflow.workspace.WorkspaceRepository;
+import com.careerflow.actionitem.ActionableEntityType;
+import com.careerflow.timeline.TimelineEventType;
+import com.careerflow.timeline.TimelineService;
+import com.careerflow.followuprule.FollowUpRuleService;
+import com.careerflow.followuprule.FollowUpTriggerEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
@@ -71,6 +77,12 @@ public class ApplicationService {
     private final ResumeLinkService resumeLinkService;
     private final CoverLetterRepository coverLetterRepository;
     private final AuditLogService auditLogService;
+    private final WorkspaceRepository workspaceRepository;
+    private final TimelineService timelineService;
+    private final FollowUpRuleService followUpRuleService;
+
+    private static final Set<ApplicationStatus> NEVER_STALE_STATUSES = Set.of(
+            ApplicationStatus.REJECTED, ApplicationStatus.JOINED);
 
     public ApplicationResponse addApplication(ApplicationRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
@@ -103,6 +115,10 @@ public class ApplicationService {
 
         application = applicationRepository.save(application);
         auditLogService.log(user, AuditAction.APPLICATION_CREATED, "Applied to " + describe(application));
+        timelineService.record(user, workspace, ActionableEntityType.APPLICATION, application.getId(),
+                describe(application), TimelineEventType.APPLICATION_SUBMITTED, "Application submitted");
+        followUpRuleService.onEvent(FollowUpTriggerEvent.AFTER_APPLICATION_SUBMITTED, user, workspace,
+                ActionableEntityType.APPLICATION, application.getId(), describe(application));
         return toResponse(application);
     }
 
@@ -125,7 +141,8 @@ public class ApplicationService {
         List<JobApplication> content = results.getContent();
         Map<Long, LocalDate> nearestFollowUps = buildNearestFollowUpMap(content);
         Map<Long, LocalDate> upcomingFollowUps = buildUpcomingFollowUpMap(content);
-        return PageResponse.of(results.map(a -> toResponse(a, nearestFollowUps.get(a.getId()), upcomingFollowUps.get(a.getId()))));
+        int staleThresholdDays = staleThresholdDays(workspaceId, user.getId());
+        return PageResponse.of(results.map(a -> toResponse(a, nearestFollowUps.get(a.getId()), upcomingFollowUps.get(a.getId()), staleThresholdDays)));
     }
 
     public ApplicationStatsResponse getMyApplicationStats(Long workspaceId) {
@@ -226,6 +243,43 @@ public class ApplicationService {
                 .toList();
     }
 
+    public List<ApplicationResponse> getStaleApplications(Long workspaceId) {
+        User user = securityUtils.getCurrentUser();
+        int thresholdDays = staleThresholdDays(workspaceId, user.getId());
+        LocalDateTime staleBefore = LocalDateTime.now().minusDays(thresholdDays);
+        List<JobApplication> stale = applicationRepository.findStaleCandidates(
+                user.getId(), workspaceId, List.copyOf(NEVER_STALE_STATUSES), staleBefore);
+        Map<Long, LocalDate> nearestFollowUps = buildNearestFollowUpMap(stale);
+        Map<Long, LocalDate> upcomingFollowUps = buildUpcomingFollowUpMap(stale);
+        return stale.stream()
+                .map(a -> toResponse(a, nearestFollowUps.get(a.getId()), upcomingFollowUps.get(a.getId()), thresholdDays))
+                .toList();
+    }
+
+    public ApplicationResponse dismissStale(Long id, Long workspaceId) {
+        User user = securityUtils.getCurrentUser();
+        JobApplication application = findOwned(id, user.getId(), workspaceId);
+        application = applicationRepository.save(application); // bumps updatedAt so it stops re-flagging until the threshold elapses again
+        auditLogService.log(user, AuditAction.STALE_APPLICATION_DISMISSED, "Dismissed stale flag for " + describe(application));
+        return toResponse(application);
+    }
+
+    public ApplicationResponse markStaleNoResponse(Long id, Long workspaceId) {
+        User user = securityUtils.getCurrentUser();
+        JobApplication application = findOwned(id, user.getId(), workspaceId);
+        application.setStatus(ApplicationStatus.REJECTED);
+        application = applicationRepository.save(application);
+        auditLogService.log(user, AuditAction.STALE_APPLICATION_MARKED_NO_RESPONSE, "Marked no response for " + describe(application));
+        return toResponse(application);
+    }
+
+    private int staleThresholdDays(Long workspaceId, Long userId) {
+        return workspaceRepository.findByIdAndUserId(workspaceId, userId)
+                .map(Workspace::getStaleApplicationThresholdDays)
+                .filter(d -> d != null && d > 0)
+                .orElse(14);
+    }
+
     public List<SourceAnalysisItem> getMySourceAnalysis(Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         return applicationRepository.countBySourceGroupedForUser(user.getId(), workspaceId).stream()
@@ -238,9 +292,6 @@ public class ApplicationService {
                 .toList();
     }
 
-    // Grouped from JobApplication.resumeLibrary, not from an active-only resume list,
-    // so a Resume that's since been archived (INACTIVE) still appears here if it was
-    // ever used on an application — intentional, do not filter by resume status.
     public List<com.careerflow.application.dto.ResumeAnalysisItem> getMyResumeAnalysis(Long workspaceId, String roleCategory) {
         User user = securityUtils.getCurrentUser();
         return applicationRepository.countByResumeGroupedForUser(user.getId(), workspaceId, roleCategory).stream()
@@ -264,6 +315,7 @@ public class ApplicationService {
     public ApplicationResponse updateApplication(Long id, ApplicationUpdateRequest request, Long workspaceId) {
         User user = securityUtils.getCurrentUser();
         JobApplication application = findOwned(id, user.getId(), workspaceId);
+        ApplicationStatus previousStatus = application.getStatus();
 
         if (request.getCompanyId() != null) {
             Company company = findOwnedCompany(request.getCompanyId(), user.getId(), workspaceId);
@@ -308,6 +360,17 @@ public class ApplicationService {
 
         application = applicationRepository.save(application);
         auditLogService.log(user, AuditAction.APPLICATION_UPDATED, "Updated application for " + describe(application));
+        if (application.getStatus() != previousStatus) {
+            timelineService.record(user, application.getWorkspace(), ActionableEntityType.APPLICATION, application.getId(),
+                    describe(application), TimelineEventType.APPLICATION_STATUS_CHANGED,
+                    previousStatus + " → " + application.getStatus());
+            if (application.getStatus() == ApplicationStatus.OFFER_RECEIVED) {
+                timelineService.record(user, application.getWorkspace(), ActionableEntityType.APPLICATION, application.getId(),
+                        describe(application), TimelineEventType.OFFER_RECEIVED, "Offer received");
+                followUpRuleService.onEvent(FollowUpTriggerEvent.AFTER_OFFER_RECEIVED, user, application.getWorkspace(),
+                        ActionableEntityType.APPLICATION, application.getId(), describe(application));
+            }
+        }
         return toResponse(application);
     }
 
@@ -459,6 +522,15 @@ public class ApplicationService {
     }
 
     private ApplicationResponse toResponse(JobApplication app, LocalDate nextFollowUpDate, LocalDate nextUpcomingFollowUpDate) {
+        int staleThresholdDays = app.getWorkspace() != null
+                ? staleThresholdDays(app.getWorkspace().getId(), app.getUser().getId()) : 14;
+        return toResponse(app, nextFollowUpDate, nextUpcomingFollowUpDate, staleThresholdDays);
+    }
+
+    private ApplicationResponse toResponse(JobApplication app, LocalDate nextFollowUpDate, LocalDate nextUpcomingFollowUpDate, int staleThresholdDays) {
+        long daysSinceUpdate = app.getUpdatedAt() != null
+                ? java.time.Duration.between(app.getUpdatedAt(), LocalDateTime.now()).toDays() : 0;
+        boolean stale = !NEVER_STALE_STATUSES.contains(app.getStatus()) && daysSinceUpdate >= staleThresholdDays;
         return ApplicationResponse.builder()
                 .id(app.getId())
                 .companyId(app.getCompany().getId())
@@ -489,6 +561,8 @@ public class ApplicationService {
                 .questionnaireAnswers(app.getQuestionnaireAnswers())
                 .nextFollowUpDate(nextFollowUpDate)
                 .nextUpcomingFollowUpDate(nextUpcomingFollowUpDate)
+                .stale(stale)
+                .daysSinceUpdate(daysSinceUpdate)
                 .createdAt(app.getCreatedAt())
                 .updatedAt(app.getUpdatedAt())
                 .build();

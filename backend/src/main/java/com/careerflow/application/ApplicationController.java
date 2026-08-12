@@ -87,6 +87,25 @@ public class ApplicationController {
         return ResponseEntity.ok(applicationService.getMyUpcomingDeadlines(withinDays, workspaceId));
     }
 
+    @GetMapping("/stale")
+    public ResponseEntity<List<ApplicationResponse>> getStaleApplications(@RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.getStaleApplications(workspaceId));
+    }
+
+    @PatchMapping("/{id}/stale/dismiss")
+    public ResponseEntity<ApplicationResponse> dismissStale(
+            @PathVariable Long id,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.dismissStale(id, workspaceId));
+    }
+
+    @PatchMapping("/{id}/stale/no-response")
+    public ResponseEntity<ApplicationResponse> markStaleNoResponse(
+            @PathVariable Long id,
+            @RequestParam Long workspaceId) {
+        return ResponseEntity.ok(applicationService.markStaleNoResponse(id, workspaceId));
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<ApplicationResponse> updateApplication(
             @PathVariable Long id,
